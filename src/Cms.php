@@ -225,6 +225,10 @@ final class Cms
      */
     public function renderPage(array $page): string
     {
+        // Resolved once and hung on the page, so `page.seo` is the same shape
+        // in the layout as in any component that wants to read it.
+        $page['seo'] = $this->seo($page);
+
         // Not addGlobal(): a global is built when the environment is, which
         // would read every page file on every admin request too. Here it costs
         // exactly one list() and only on the path that renders a menu.
@@ -291,6 +295,202 @@ final class Cms
     }
 
     /**
+     * The page's SEO values as a template should see them.
+     *
+     * Read on the render path only: the stored map is what the panel edits and
+     * what Fields::map() validated on the way in, and this is the resolved
+     * shape templates ask questions of. The fallbacks live here and nowhere
+     * else, so no template has to know them:
+     *
+     *   - `title` falls back to the page title
+     *   - `description` falls back to the page's first prose field
+     *   - `og_image` falls back to the page's first image, then to
+     *     site.og_default, and is made absolute — a social scraper does not
+     *     resolve a relative URL
+     *   - `url` is the page's own absolute address, for og:url
+     *
+     * Every one of them is resolved at render and never written back. A
+     * derived description stored in the file would look filled in from the
+     * panel, so nobody would ever replace it with a real one, and it would go
+     * stale the moment the copy above it changed.
+     *
+     * @param  array<string, mixed> $page
+     * @return array<string, mixed>
+     */
+    public function seo(array $page): array
+    {
+        $base = rtrim((string) $this->config['site']['base_url'], '/');
+
+        // withDefaults() rather than the raw map: a key dropped from
+        // Fields::SEO stops reaching the head on the next request rather than
+        // lingering in every page file that still has it.
+        $seo = $this->withDefaults(['fields' => Components::seoFields()], (array) ($page['seo'] ?? []));
+        $src = (string) (((array) $seo['og_image'])['src'] ?? '');
+
+        // One walk over the blocks, and only when there is something left to
+        // fill in — a page whose SEO is fully written costs nothing here.
+        $from = $seo['description'] === '' || $src === ''
+            ? $this->pageSummary($page)
+            : ['description' => '', 'src' => ''];
+
+        $seo['title']       = $seo['title'] ?: (string) ($page['title'] ?? '');
+        $seo['description'] = $seo['description'] ?: $from['description'];
+
+        // og_image is decorative by declaration, so there is no alt here and no
+        // og:image:alt in the head: the share card carries the title and the
+        // description as text beside it.
+        $src = $src ?: ($from['src'] ?: (string) $this->config['site']['og_default']);
+        $seo['og_image'] = [
+            'src' => $src === '' || str_starts_with($src, 'http') ? $src : $base . '/' . ltrim($src, '/'),
+        ];
+
+        $seo['url'] = $base . (string) ($page['slug'] ?? '/');
+
+        return $seo;
+    }
+
+    /**
+     * What a page can say about itself when its `seo` block says nothing.
+     *
+     * Both answers come off the **schema** rather than off a heuristic: the
+     * first `textarea` or `richtext` value in block order, and the first
+     * `image`. "The first long text field" would need a length to tune and
+     * would pick a different field the day someone edited the copy; the field
+     * type is a question the component already answered, once, in schema.yml.
+     *
+     * Top-level fields only. An image inside a list row is one of many by
+     * construction, and "the first row of the gallery" is not a considered
+     * choice of share image — it is whichever one happens to be first.
+     *
+     * @param  array<string, mixed> $page
+     * @return array{description: string, src: string}
+     */
+    private function pageSummary(array $page): array
+    {
+        $out = ['description' => '', 'src' => ''];
+
+        foreach ((array) ($page['blocks'] ?? []) as $block) {
+            $schema = $this->components->get((string) ($block['type'] ?? ''));
+            if ($schema === null) {
+                continue;
+            }
+
+            foreach ($schema['fields'] as $name => $def) {
+                $value = ($block['fields'] ?? [])[$name] ?? null;
+                $type  = (string) ($def['type'] ?? '');
+
+                if ($out['src'] === '' && $type === 'image' && is_array($value)) {
+                    $out['src'] = (string) ($value['src'] ?? '');
+                }
+
+                if ($out['description'] === '' && in_array($type, ['textarea', 'richtext'], true)) {
+                    $out['description'] = self::summarise((string) (is_scalar($value) ? $value : ''));
+                }
+            }
+
+            if ($out['src'] !== '' && $out['description'] !== '') {
+                break;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * A meta description's worth of prose out of a content field.
+     *
+     * Richtext is HTML, so the tags come out and the entities come back — a
+     * snippet reading "drag &amp;amp; drop" is worse than no snippet. The cut
+     * is on a word boundary because Google shows what it is given: an
+     * autogenerated description that stops mid-word looks like a broken site
+     * rather than a busy one.
+     */
+    private static function summarise(string $html, int $max = 155): string
+    {
+        $text = trim((string) preg_replace(
+            '/\s+/u',
+            ' ',
+            html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8')
+        ));
+
+        if ($text === '' || mb_strlen($text) <= $max) {
+            return $text;
+        }
+
+        $cut = mb_substr($text, 0, $max - 1);
+        $space = mb_strrpos($cut, ' ');
+
+        // preg with /u rather than rtrim(): rtrim's mask is a set of *bytes*,
+        // so trimming a multibyte character eats one byte off the end of a
+        // Greek word and leaves invalid UTF-8 in the head of every page.
+        return preg_replace(
+            '/[\s,.·—-]+$/u',
+            '',
+            $space !== false ? mb_substr($cut, 0, $space) : $cut
+        ) . '…';
+    }
+
+    /**
+     * `/sitemap.xml`, generated from the content files.
+     *
+     * `lastmod` is the page file's mtime — the only honest answer a flat CMS
+     * has, and one every save updates for free. No `changefreq` or `priority`:
+     * Google has ignored both for years, and a value invented to fill the
+     * element is a wrong claim on record rather than a missing one.
+     *
+     * The `xhtml:link` alternates carry one entry today because one locale is
+     * resolved. That is the correct single-language output rather than a
+     * placeholder — a page must list *itself* among its own alternates for the
+     * group to be valid at all — and Phase 9 adds the second entry beside it.
+     */
+    public function sitemap(): string
+    {
+        $base = rtrim((string) $this->config['site']['base_url'], '/');
+        $locale = (string) $this->config['site']['locale'];
+
+        $out = [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"'
+                . ' xmlns:xhtml="http://www.w3.org/1999/xhtml">',
+        ];
+
+        foreach ($this->content->list() as $page) {
+            if ($page['noindex']) {
+                // Asking a crawler not to index a page and then submitting it
+                // in the sitemap is asking twice and answering differently.
+                continue;
+            }
+
+            $loc = htmlspecialchars($base . $page['slug'], ENT_XML1 | ENT_QUOTES, 'UTF-8');
+
+            $out[] = '  <url>';
+            $out[] = '    <loc>' . $loc . '</loc>';
+            $out[] = '    <lastmod>' . date('c', $page['mtime']) . '</lastmod>';
+            $out[] = sprintf('    <xhtml:link rel="alternate" hreflang="%s" href="%s"/>', $locale, $loc);
+            $out[] = '  </url>';
+        }
+
+        $out[] = '</urlset>';
+
+        return implode("\n", $out) . "\n";
+    }
+
+    /**
+     * `/robots.txt`, pointing at the sitemap.
+     *
+     * SITE_NOINDEX is honoured here as well as in the X-Robots-Tag header,
+     * because they are one policy said in the two places a crawler looks. A
+     * pre-launch domain whose pages say "noindex" while its robots.txt says
+     * "help yourself" is one crawler away from being in the index anyway.
+     */
+    public function robotsTxt(): string
+    {
+        return "User-agent: *\n"
+            . ($this->config['site']['noindex'] ? "Disallow: /\n" : "Allow: /\n")
+            . "\nSitemap: " . rtrim((string) $this->config['site']['base_url'], '/') . "/sitemap.xml\n";
+    }
+
+    /**
      * The X-Robots-Tag value for this site, or null.
      *
      * Returned rather than emitted, for the same reason cacheHeaders() is:
@@ -336,13 +536,22 @@ final class Cms
 
         $c = $this->config['cache'];
 
+        // A response with no page behind it — the sitemap, robots.txt — carries
+        // `site` alone. Tagging the sitemap page:<id> would mean nothing ever
+        // purged it, because the page that changed is never the sitemap; `site`
+        // is the tag every save already purges, which is the whole point.
+        $tags = array_filter([
+            isset($page['id']) ? Cloudflare::tagFor((string) $page['id']) : '',
+            'site',
+        ]);
+
         return [
             sprintf(
                 'Cache-Control: public, max-age=%d, s-maxage=%d',
                 (int) $c['browser_max_age'],
                 (int) $c['edge_max_age']
             ),
-            'Cache-Tag: ' . Cloudflare::tagFor((string) $page['id']) . ',site',
+            'Cache-Tag: ' . implode(',', $tags),
         ];
     }
 }

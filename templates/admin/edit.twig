@@ -40,6 +40,27 @@
        overwrite what the first one saved. #}
     <input type="hidden" name="baseline" value="{{ baseline }}">
 
+    {# Collapsed, and <details> rather than a script: SEO is the one part of
+       this form an editor is entitled to ignore completely. Every field in it
+       is optional, the inputs post whether or not the card was ever opened,
+       and the save path writes the stored values straight back — so "never
+       touched it" and "cannot save" must not be the same thing. #}
+    <details class="card">
+      <summary>
+        <h2>SEO και κοινοποίηση</h2>
+        <span class="pill">προαιρετικό</span>
+      </summary>
+      <div class="body">
+        {# The same renderer as every other field, so a locked one is locked
+           here too and the alt input appears exactly where the save path
+           demands one. #}
+        {% for name, def in seo_fields %}
+          {{ _self.field(def, 'seo-' ~ name, 'seo[' ~ name ~ ']', seo[name]|default(''),
+                         not may_edit(def.editable, user.role), pages, page_ids) }}
+        {% endfor %}
+      </div>
+    </details>
+
     <div class="card">
       <header><h2>Σελίδα</h2></header>
       <div class="body">
@@ -112,7 +133,12 @@
                 </label>
 
                 {% if def.type == 'textarea' %}
+                  {# A placeholder here is not decoration: seo.description
+                     carries the line the head will publish if this is left
+                     empty, so the client can read it and decide whether they
+                     can do better. #}
                   <textarea id="{{ id }}" name="{{ fname }}" {{ locked ? 'readonly' : '' }}
+                            {% if def.placeholder is defined and def.placeholder %}placeholder="{{ def.placeholder }}"{% endif %}
                             {% if def.max is defined %}data-max="{{ def.max }}"{% endif %}>{{ value }}</textarea>
 
                 {% elseif def.type == 'richtext' %}

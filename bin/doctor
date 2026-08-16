@@ -75,6 +75,22 @@ foreach ([
     }
 }
 
+// Every absolute URL the site publishes is built from this: the sitemap's
+// <loc>, og:image, the Sitemap: line in robots.txt. A production box still
+// carrying the development default submits a sitemap full of localhost, and
+// nothing about that is visible until months of nothing being indexed.
+$baseUrl = (string) $config['site']['base_url'];
+if ($baseUrl === '' || preg_match('#^https?://(localhost|127\.|\[?::1)#i', $baseUrl) === 1) {
+    $where = 'site.base_url is ' . ($baseUrl ?: 'empty')
+        . ' — sitemap.xml and og:image URLs are built from it';
+
+    if (getenv('APP_ENV') === 'prod') {
+        $fail($where);
+    } else {
+        $warn($where);
+    }
+}
+
 // Disk, because every failure mode of a full one is silent and awful: a save
 // writes a truncated page, the derivative cache stops filling, git commits
 // nothing. Run from cron with --quiet this is the disk monitor.
@@ -308,6 +324,12 @@ foreach (glob($pagesDir . '/*.yml') ?: [] as $file) {
 
     if (isset($data['nav']) && !is_array($data['nav'])) {
         $fail(sprintf('page "%s": nav: must be a mapping of label and order', $id));
+    }
+
+    // A `seo:` of the wrong shape is read as `$data['seo']['noindex']` on the
+    // sitemap path and as a value map by the panel; both quietly get nothing.
+    if (isset($data['seo']) && (!is_array($data['seo']) || array_is_list($data['seo']))) {
+        $fail(sprintf('page "%s": seo: must be a mapping', $id));
     }
 }
 

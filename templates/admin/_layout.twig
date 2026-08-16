@@ -28,6 +28,12 @@
   .card > header{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
   .card > header h2{font-size:1rem;margin:0}
   .card > .body{padding:18px}
+  details.card > summary{padding:14px 18px;display:flex;align-items:center;gap:10px;cursor:pointer;list-style:none}
+  details.card > summary::-webkit-details-marker{display:none}
+  details.card > summary::before{content:"▸";color:var(--muted)}
+  details.card[open] > summary{border-bottom:1px solid var(--line)}
+  details.card[open] > summary::before{content:"▾"}
+  details.card > summary h2{font-size:1rem;margin:0}
   .pill{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
         background:var(--soft);border:1px solid var(--line);padding:3px 8px;border-radius:99px}
   .hint{color:var(--muted);font-size:13px;margin:2px 0 0}

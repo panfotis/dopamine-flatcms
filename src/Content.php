@@ -68,7 +68,10 @@ final class Content
         return $this->pagesDir() . '/' . $this->id($id) . '.yml';
     }
 
-    /** @return list<array{id:string, title:string, slug:string, nav:array<string,mixed>|null}> */
+    /**
+     * @return list<array{id:string, title:string, slug:string,
+     *                    nav:array<string,mixed>|null, noindex:bool, mtime:int}>
+     */
     public function list(): array
     {
         $out = [];
@@ -82,6 +85,12 @@ final class Content
                 // Developer-owned, like every other structural key: the menu is
                 // not something a client reorders from the panel.
                 'nav'   => is_array($data['nav'] ?? null) ? $data['nav'] : null,
+                // Both are here rather than in a second pass because the file
+                // is already open: the sitemap needs to know which pages to
+                // leave out and when each was last written, and load()ing every
+                // page again to ask would parse the whole site twice.
+                'noindex' => ($data['seo']['noindex'] ?? false) === true,
+                'mtime'   => (int) filemtime($file),
             ];
         }
 

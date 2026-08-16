@@ -68,12 +68,29 @@ final class Components
             $schema['fields'] ??= [];
             $schema['template'] = $type . '/' . $type . '.twig';
 
-            $schema['fields'] = $this->normalise($schema['fields']);
+            $schema['fields'] = self::normalise($schema['fields']);
 
             $out[$type] = $schema;
         }
 
         return $this->cache = $out;
+    }
+
+    /**
+     * The page-level `seo` map, normalised exactly like a component's fields.
+     *
+     * Through the same normaliser rather than declared already-normalised, so
+     * og_image picks up Fields::IMAGE and its `decorative` flag from the one
+     * place that decides them. A second copy is precisely how `text_image`
+     * ended up with an alt field beside its image instead of inside it.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public static function seoFields(): array
+    {
+        static $fields = null;
+
+        return $fields ??= self::normalise(Fields::SEO);
     }
 
     /**
@@ -88,7 +105,7 @@ final class Components
      * @param  array<string, mixed> $fields
      * @return array<string, array<string, mixed>>
      */
-    private function normalise(array $fields): array
+    private static function normalise(array $fields): array
     {
         $out = [];
 
@@ -125,7 +142,7 @@ final class Components
             }
 
             if ($def['type'] === 'list') {
-                $def['fields'] = $this->normalise(
+                $def['fields'] = self::normalise(
                     array_filter(
                         (array) ($def['fields'] ?? []),
                         static fn (mixed $f): bool => (is_array($f) ? ($f['type'] ?? '') : $f) !== 'list'

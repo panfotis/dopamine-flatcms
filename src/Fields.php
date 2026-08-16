@@ -27,7 +27,7 @@ use Symfony\Component\HtmlSanitizer\HtmlSanitizerConfig;
 final class Fields
 {
     public const TYPES = [
-        'text', 'textarea', 'richtext', 'image', 'link', 'select', 'boolean', 'list',
+        'text', 'textarea', 'richtext', 'image', 'link', 'url', 'select', 'boolean', 'list',
     ];
 
     /**
@@ -54,7 +54,71 @@ final class Fields
             'type'  => 'text',
             'max'   => 120,
             'label' => 'Περιγραφή εικόνας',
-            'hint'  => 'Για άτομα που χρησιμοποιούν αναγνώστη οθόνης. Βοηθά και το SEO.',
+            'hint'  => 'Τι δείχνει η εικόνα, σε μία φράση. Διαβάζεται φωναχτά σε '
+                     . 'όσους χρησιμοποιούν αναγνώστη οθόνης, εμφανίζεται στη θέση '
+                     . 'της αν δεν φορτώσει, και το διαβάζει η Google.',
+        ],
+    ];
+
+    /**
+     * The page-level `seo` map, built in for the same reason IMAGE is: every
+     * page on every site carries the same five keys, and the panel builds the
+     * inputs the save path validates against rather than a parallel set.
+     *
+     * It is not a component — no template, never repeats — but it *is* a field
+     * map, so it goes through Components::normalise() and Fields::map() like
+     * any other. That it lives in the per-locale page file is what makes
+     * per-language SEO free rather than a second mechanism to keep in step.
+     *
+     * `canonical` is `editable: admin` deliberately. Every other field here
+     * costs a client a worse search result if they get it wrong; a canonical
+     * pointing at the wrong URL deindexes the page, silently, for weeks.
+     *
+     * Every hint says what the field *does*, in the terms of what the client
+     * will see happen. "Βοηθά το SEO" is the hint that gets a field left empty
+     * on twenty sites, because it does not tell anyone what to type.
+     */
+    public const SEO = [
+        'title' => [
+            'type'  => 'text',
+            'max'   => 60,
+            'label' => 'Τίτλος στη Google',
+            'hint'  => 'Η μπλε γραμμή που πατάει ο κόσμος στα αποτελέσματα '
+                     . 'αναζήτησης. Κενό = ο τίτλος της σελίδας.',
+        ],
+        'description' => [
+            'type'  => 'textarea',
+            'max'   => 155,
+            'label' => 'Περιγραφή στη Google',
+            'hint'  => 'Οι δύο γραμμές κάτω από τον τίτλο στα αποτελέσματα '
+                     . 'αναζήτησης. Κενό = το πρώτο κείμενο της σελίδας.',
+        ],
+        'og_image' => [
+            'type'  => 'image',
+            'label' => 'Εικόνα κοινοποίησης',
+            // Decorative, so no alt input and no og:image:alt. The share card
+            // already carries the title and the description as text, and this
+            // image is a banner beside them — asking the client to describe it
+            // a second time buys "εικόνα" typed to clear a field.
+            'decorative' => true,
+            'hint'  => 'Η εικόνα στην προεπισκόπηση όταν κάποιος στέλνει τον '
+                     . 'σύνδεσμο σε Facebook, LinkedIn, Viber ή WhatsApp. '
+                     . 'Κενό = η πρώτη εικόνα της σελίδας.',
+        ],
+        'noindex' => [
+            'type'  => 'boolean',
+            'label' => 'Απόκρυψη από τις μηχανές αναζήτησης',
+            'hint'  => 'Ζητά από Google και Bing να μην δείχνουν τη σελίδα στα '
+                     . 'αποτελέσματα, και τη βγάζει από το sitemap. Όποιος έχει '
+                     . 'τον σύνδεσμο τη βλέπει κανονικά — δεν είναι κλείδωμα.',
+        ],
+        'canonical' => [
+            'type'     => 'url',
+            'editable' => 'admin',
+            'label'    => 'Canonical URL',
+            'hint'     => 'Λέει στη Google ότι το κανονικό αντίγραφο αυτού του '
+                        . 'περιεχομένου βρίσκεται σε άλλη διεύθυνση, και να '
+                        . 'μετράει τη δημοτικότητα εκεί. Κενό αν δεν είστε βέβαιοι.',
         ],
     ];
 
@@ -170,6 +234,10 @@ final class Fields
             'image'    => self::image($def, $raw, $context),
             'media'    => self::mediaPath($value, (array) ($context['media_bases'] ?? [])),
             'link'     => self::pageId($value),
+            // The same href rule richtext uses, exposed as a type for the one
+            // field that really is a URL the client types. A second URL rule
+            // beside link() is how the two would come to disagree.
+            'url'      => self::link($value),
             'select'   => self::select($def, $value),
             'boolean'  => self::boolean($raw),
             'list'     => self::items($def, $raw, $context),

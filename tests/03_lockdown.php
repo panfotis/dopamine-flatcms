@@ -118,6 +118,109 @@ contains($imgForm, 'name="blocks[intro][image][alt]"', 'a meaningful image gets 
 missing($imgForm, 'name="blocks[hero][image][alt]"', 'a decorative one gets none — asking would produce "photo"');
 contains($imgForm, 'name="blocks[hero][image][src]"', 'but it still gets its file picker');
 
+section('The seo block goes through the same walk as a component');
+// `seo` is not a component — no template, never repeats — so the risk is that
+// it quietly grows a second, softer save path. Every case here is one the block
+// walk already refuses, asked again of the page-level map.
+$saveSeo = static fn (array $seo, string $csrf = 'test-token'): array => [
+    'action'   => 'save',
+    'csrf'     => $csrf,
+    'page'     => 'home',
+    'baseline' => (string) hash_file('sha256', $file),
+    'seo'      => $seo,
+];
+$seoOf = static fn (): array => (array) (Yaml::parseFile($file)['seo'] ?? []);
+
+$hostileSeo = admin_post($saveSeo([
+    'title'       => 'Τίτλος <script>alert(1)</script> με ' . str_repeat('π', 100),
+    'description' => "Περιγραφή\n\n\n<b>με tags</b>",
+    'noindex'     => 'definitely-not-a-boolean',
+    'canonical'   => 'javascript:alert(document.cookie)',
+    'og_image'    => ['src' => 'https://evil.tld/x.jpg', 'alt' => 'Δεν έχει σημασία'],
+    'evil'        => 'undeclared page-level key',
+]));
+ok($hostileSeo->getStatusCode() === 303, 'the save is accepted — these are forged values, not a forged request');
+
+$seo = $seoOf();
+ok(array_keys($seo) === ['title', 'description', 'og_image', 'noindex', 'canonical'],
+    'the stored map holds the schema key set and nothing else: ' . implode(', ', array_keys($seo)));
+ok(!array_key_exists('evil', $seo), 'an undeclared key is dropped, exactly as inside a block');
+missing($seo['title'], '<script', 'seo.title is plain text');
+ok(mb_strlen($seo['title']) <= 60, 'and cut to its 60-character max (' . mb_strlen($seo['title']) . ')');
+missing($seo['description'], '<b>', 'seo.description is plain text too');
+ok($seo['noindex'] === false, 'a value that is not a truthy literal stores false, not the string itself');
+ok($seo['og_image']['src'] === '', 'an og_image src outside media_bases is rejected — the open-proxy guard is the same one');
+ok(array_keys($seo['og_image']) === ['src', 'alt', 'width', 'height'], 'and og_image is an image map, with the server-owned half intact');
+
+section('A url field rejects everything link() rejects');
+// A new field type, so a hostile case per CLAUDE.md. `canonical` is the only
+// place a typed URL is stored, and it goes straight into a <link> in the head:
+// a canonical pointing at a host the client does not own hands that host the
+// page's ranking, silently.
+foreach ([
+    'javascript:alert(1)'  => 'a javascript: URL',
+    'data:text/html,x'     => 'a data: URL',
+    '//evil.gr/x'          => 'a protocol-relative host',
+    '/\\evil.gr'           => 'the backslash variant browsers normalise to //',
+] as $bad => $why) {
+    as_user('fotis@wearedope.com', 'POST', $saveSeo(['canonical' => $bad]));
+    ok($seoOf()['canonical'] === '', 'refused: ' . $why . ' (stored: "' . $seoOf()['canonical'] . '")');
+}
+
+as_user('fotis@wearedope.com', 'POST', $saveSeo(['canonical' => 'https://pelatis.gr/selida']));
+ok($seoOf()['canonical'] === 'https://pelatis.gr/selida', 'while a real absolute URL is stored');
+as_user('fotis@wearedope.com', 'POST', $saveSeo(['canonical' => '/selida']));
+ok($seoOf()['canonical'] === '/selida', 'and so is a site-relative path');
+
+section('seo.canonical is admin-only, and forging it does not help');
+// The rest of the block costs a client a worse search result if they get it
+// wrong. A canonical pointing at the wrong URL deindexes the page.
+ok(\Dopamine\FlatCms\Components::seoFields()['canonical']['editable'] === 'admin',
+    'canonical is declared editable: admin');
+
+$editorSeo = as_user('pelatis@example.gr', 'POST', $saveSeo(['canonical' => 'https://evil.gr/']));
+ok($editorSeo->getStatusCode() === 303, 'an editor\'s save is accepted');
+ok($seoOf()['canonical'] === '/selida', 'but the canonical is unchanged (' . $seoOf()['canonical'] . '), even though it was posted');
+
+$editorForm = (string) as_user('pelatis@example.gr', 'GET', ['action' => 'edit', 'page' => 'home'])->getContent();
+ok((bool) preg_match('/id="seo-canonical"[^>]*readonly/', $editorForm), 'and the form locks it for them, as the save path would');
+$adminForm = (string) as_user('fotis@wearedope.com', 'GET', ['action' => 'edit', 'page' => 'home'])->getContent();
+ok(!preg_match('/id="seo-canonical"[^>]*readonly/', $adminForm), 'while an admin may type in it');
+
+// The client half of the block is still theirs.
+as_user('pelatis@example.gr', 'POST', $saveSeo(['description' => 'Γραμμένο από τον πελάτη']));
+ok($seoOf()['description'] === 'Γραμμένο από τον πελάτη', 'the fields that are the client\'s really are editable by them');
+
+section('The share image is decorative, so it never blocks a save');
+// og_image declares decorative: true — the share card carries the title and
+// the description as text beside it. That makes alt empty by declaration, and
+// a forged one no more effective than a forged `decorative` on a block image.
+ok(\Dopamine\FlatCms\Components::seoFields()['og_image']['decorative'] === true,
+    'og_image is declared decorative');
+
+$ogAlt = as_user('fotis@wearedope.com', 'POST', $saveSeo([
+    'og_image' => [
+        'src'    => (string) $storedImage['src'],
+        'alt'    => 'Κείμενο που δεν πρέπει να αποθηκευτεί',
+        'width'  => 99999,
+        'height' => 99999,
+    ],
+]));
+ok($ogAlt->getStatusCode() === 303, 'an og_image with a src and no description saves rather than being refused');
+ok($seoOf()['og_image']['src'] === (string) $storedImage['src'], 'the src is stored');
+ok($seoOf()['og_image']['alt'] === '', 'while a posted alt lands nowhere — it is empty by declaration');
+// This field has no upload record and nothing previously on disk beside that
+// src, so the honest answer is 0 rather than the forged pair or a guess copied
+// from another field's image. picture.twig renders 0 as no attribute at all.
+ok($seoOf()['og_image']['width'] === 0 && $seoOf()['og_image']['height'] === 0,
+    'and a forged 99999x99999 stores 0 — dimensions are server-derived here too ('
+    . $seoOf()['og_image']['width'] . 'x' . $seoOf()['og_image']['height'] . ')');
+
+// A block image is a different question and still refuses: that one carries
+// information, and this is the case the decorative flag exists to distinguish.
+$blockNoAlt = admin_post($withImage(['src' => (string) $storedImage['src'], 'alt' => '   ']));
+ok($blockNoAlt->getStatusCode() === 400, 'while a meaningful block image with no description is still refused');
+
 section('A list is bounded before it is walked, not after');
 $faq = $after['blocks'][$blockNo($after, 'faq')]['fields'];
 ok(count($faq['questions']) === 20, '200 posted rows into a max: 20 list truncates to 20, not 200');

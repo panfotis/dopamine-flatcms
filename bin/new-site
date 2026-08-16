@@ -41,8 +41,16 @@ slug: /
 nav:
   label: Αρχική
   order: 10
-meta:
+seo:
+  title: ''
   description: ''
+  og_image:
+    src: ''
+    alt: ''
+    width: 0
+    height: 0
+  noindex: false
+  canonical: ''
 blocks:
   -
     id: hero

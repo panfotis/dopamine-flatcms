@@ -3,8 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ page.title }} — {{ site('name') }}</title>
-{% if page.meta.description is defined %}<meta name="description" content="{{ page.meta.description }}">{% endif %}
+{#
+  Everything here comes from the page's `seo:` map, resolved by Cms::seo() —
+  which is where the fallbacks live, so nothing below has to branch on an empty
+  value that has a perfectly good default sitting one key away.
+#}
+<title>{{ page.seo.title }} — {{ site('name') }}</title>
+{% if page.seo.description %}<meta name="description" content="{{ page.seo.description }}">{% endif %}
+{% if page.seo.noindex %}<meta name="robots" content="noindex, nofollow">{% endif %}
+{% if page.seo.canonical %}<link rel="canonical" href="{{ page.seo.canonical }}">{% endif %}
+<meta property="og:type" content="website">
+<meta property="og:title" content="{{ page.seo.title }}">
+<meta property="og:url" content="{{ page.seo.url }}">
+{% if page.seo.description %}<meta property="og:description" content="{{ page.seo.description }}">{% endif %}
+{# No og:image:alt — the share image is declared decorative, and the card
+   already carries the title and description as text beside it. #}
+{% if page.seo.og_image.src %}
+<meta property="og:image" content="{{ page.seo.og_image.src }}">
+<meta name="twitter:card" content="summary_large_image">
+{% endif %}
 {% if site('favicon') %}<link rel="icon" href="{{ site('favicon') }}">{% endif %}
 <style>
   :root{

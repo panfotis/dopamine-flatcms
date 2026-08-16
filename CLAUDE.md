@@ -112,7 +112,7 @@ that happens, or every portrait on the site is sideways. `bin/doctor` checks the
 same list against the *running* interpreter, since Composer resolves under the
 CLI php and the site runs under php-fpm.
 
-Test suite: 523 checks across seven files. Run all of them, not just the new ones.
+Test suite: 660 checks across seven files. Run all of them, not just the new ones.
 
 Planned, per the build plan: `symfony/mailer`, `symfony/dotenv`.
 
@@ -133,6 +133,8 @@ src/          Cms Admin Auth Components Content Fields Locks Media R2
 config/       roles.yml — email -> admin|editor, committed, no secrets
 components/   <name>/schema.yml + <name>.twig — one folder per component
 content/      pages/<locale>/*.yml, uploads/, .revisions/, redirects.yml
+              A page carries `seo:` beside `title`/`slug`/`nav`; `/sitemap.xml`
+              and `/robots.txt` are generated from those files, never stored.
               All of it tracked in git — that is the backup. Submissions live
               in var/. The locale directory is the permanent shape; Phase 9
               resolves a second one beside it rather than migrating.

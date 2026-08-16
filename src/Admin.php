@@ -223,6 +223,30 @@ final class Admin
             ];
         }
 
+        // The page's own SEO, filled in from the schema so a page file that has
+        // never carried a `seo:` key still renders every input.
+        $seoFields = Components::seoFields();
+        $seo = $this->cms->withDefaults(['fields' => $seoFields], (array) ($page['seo'] ?? []));
+
+        // What the head will publish if these are left empty, shown as the
+        // input's placeholder. Without it an empty box reads as "this page has
+        // no description", which is the opposite of what is true — and an
+        // editor cannot decide whether to improve on something they cannot see.
+        $seoFields['description']['placeholder'] = $this->cms->seo($page)['description'];
+
+        // Same rule as a block after a conflict: what the editor typed comes
+        // back rather than being discarded, through the same sanitiser.
+        if (isset($opts['posted_seo'])) {
+            $seo = $this->cleanValues(
+                $this->seoSchema(),
+                $seo,
+                (array) $opts['posted_seo'],
+                $context,
+                $user['role'],
+                false
+            );
+        }
+
         // Advisory only — see Locks. Read before touching, or you always find
         // yourself.
         $heldBy = $this->cms->locks->heldByOther($id, $user['email']);
@@ -236,6 +260,8 @@ final class Admin
         return $this->html($this->cms->twig->render('admin/edit.twig', [
             'page'     => $page,
             'blocks'   => $blocks,
+            'seo'      => $seo,
+            'seo_fields' => $seoFields,
             'pages'    => $pages,
             'page_ids' => array_column($pages, 'id'),
             'csrf'     => $this->csrf($request),
@@ -287,6 +313,21 @@ final class Admin
         ] + $context);
     }
 
+    /**
+     * `seo` in the shape cleanValues() takes a component in.
+     *
+     * It is not a component — no template, never repeats — but it is a field
+     * map, and running it through the same walk is what gives it `editable:
+     * admin` on the canonical, undeclared keys dropped, and og_image's
+     * dimensions server-derived, without a line of code that is only about SEO.
+     *
+     * @return array<string, mixed>
+     */
+    private function seoSchema(): array
+    {
+        return ['label' => 'SEO', 'fields' => Components::seoFields()];
+    }
+
     /** @param array{email: string, role: string} $user */
     private function save(Request $request, array $user): Response
     {
@@ -294,6 +335,7 @@ final class Admin
 
         $id = (string) $request->request->get('page', '');
         $posted = (array) $request->request->all('blocks');
+        $postedSeo = (array) $request->request->all('seo');
         $context = $this->context();
 
         // The whole read-modify-write runs under an exclusive lock on the page
@@ -305,7 +347,7 @@ final class Admin
             $this->cms->content->transaction(
                 $id,
                 (string) $request->request->get('baseline', ''),
-                function (array $page) use ($request, $user, $posted, $context): array {
+                function (array $page) use ($request, $user, $posted, $postedSeo, $context): array {
                     foreach ($page['blocks'] as $i => $block) {
                         $schema = $this->cms->components->get((string) $block['type']);
                         if ($schema === null) {
@@ -325,6 +367,18 @@ final class Admin
                         );
                     }
 
+                    // The page's own SEO, through the identical walk. A card the
+                    // editor never opened still posts every input, and every
+                    // field in it is optional — so an ignored card writes the
+                    // stored values straight back rather than refusing a save.
+                    $page['seo'] = $this->cleanValues(
+                        $this->seoSchema(),
+                        (array) ($page['seo'] ?? []),
+                        $postedSeo,
+                        $context,
+                        $user['role']
+                    );
+
                     // Page title is the one non-block field a client may edit.
                     if ($request->request->has('title')) {
                         $page['title'] = Fields::sanitise(
@@ -341,8 +395,9 @@ final class Admin
             // not — re-render the form holding their values against the new
             // version of the page, and let them save again deliberately.
             return $this->edit($request, $user, $id, [
-                'posted'   => $posted,
-                'conflict' => $e->getMessage(),
+                'posted'     => $posted,
+                'posted_seo' => $postedSeo,
+                'conflict'   => $e->getMessage(),
             ]);
         }
 
@@ -439,6 +494,17 @@ final class Admin
                         $user['role']
                     );
                 }
+
+                // A revision's SEO is untrusted input like the rest of it: the
+                // canonical in a file written last month has never been through
+                // the current URL rule, and it goes into a <link> in the head.
+                $page['seo'] = $this->cleanValues(
+                    $this->seoSchema(),
+                    (array) ($page['seo'] ?? []),
+                    (array) ($revision['seo'] ?? []),
+                    $context,
+                    $user['role']
+                );
 
                 if (isset($revision['title'])) {
                     $page['title'] = Fields::sanitise(

@@ -162,6 +162,7 @@ fall back to `default` (or an empty string) rather than erroring.
 | `richtext` | small contenteditable with B / I / list / link | only `p br strong b em i u a ul ol li`, all attributes stripped except `href` |
 | `image` | thumbnail + upload button + alt input | a map: `src` (must be under `media_bases`), `alt`, and server-derived `width`/`height` |
 | `link` | page picker | a page id — the filename. The slug is resolved at render time |
+| `url` | single-line input | an absolute `http(s)` URL, a site-relative path, a fragment, `mailto:` or `tel:`. Everything else becomes empty — the same rule richtext hrefs use |
 | `select` | dropdown | must match a declared option |
 | `boolean` | checkbox | a real YAML `true`/`false` |
 | `list` | repeater over a fixed sub-schema | `array_values()`, cut to `max`, then each row walked against `fields` |
@@ -390,9 +391,14 @@ rebill it per client.
 
 ### 4. Cache
 
-The site sends `Cache-Control: s-maxage=31536000` and `Cache-Tag: page:<id>`,
+The site sends `Cache-Control: s-maxage=31536000` and `Cache-Tag: page:<id>,site`,
 so Cloudflare holds pages at the edge and PHP is barely touched. On save, the
-CMS purges just that page's tag — landing in roughly 150ms.
+CMS purges that page's tag and `site` — landing in roughly 150ms.
+
+`site` is the tag on everything that renders **cross-page** data: the sitemap,
+the navigation, hreflang alternates, resolved links. `/sitemap.xml` and
+`/robots.txt` carry `site` and *only* `site` — a sitemap tagged `page:<id>`
+would never be purged, because the page that changed is never the sitemap.
 
 Create an API token with **Zone → Cache Purge → Purge** on the zone, set
 `CF_ZONE_ID` and `CF_API_TOKEN`. Set `CF_PURGE_STRATEGY=everything` if you
@@ -421,6 +427,67 @@ curl -sI https://pelatis.gr/epikoinonia | grep -i cf-cache-status # want BYPASS 
 A contact page served from a shared cache hands one visitor's CSRF token to the
 next, which is why form pages are `private: true` and send `no-store`. The
 bypass rule is what makes that survive a cache rule somebody adds later.
+
+---
+
+## SEO
+
+Every page carries a `seo:` map beside its `title` and `slug`. It renders in the
+panel as a **collapsed** card at the top of the edit form, and every field in it
+is optional: an editor who never opens it can still save.
+
+```yaml
+seo:
+  title: ''                        # max 60
+  description: ''                  # max 155
+  og_image: { src: '', alt: '', width: 0, height: 0 }
+  noindex: false                   # keeps the page out of the sitemap too
+  canonical: ''                    # editable: admin
+```
+
+**Nothing here has to be filled in.** Each empty field falls back, at render
+time, to something the page already has:
+
+| Empty field | Falls back to |
+|---|---|
+| `title` | the page title |
+| `description` | the page's first `textarea` or `richtext` value, tags stripped, cut to 155 on a word boundary |
+| `og_image` | the page's first `image`, then `site.og_default` |
+
+Both derived answers come off the **schema** — the first field of that *type* in
+block order — not off a "first long text field" heuristic with a length to tune.
+And both are resolved on the way out, never written back: a derived description
+sitting in the page file would look filled in from the panel, so nobody would
+ever replace it with a real one, and it would go stale the moment the copy above
+it changed. The panel shows it as the description input's **placeholder**, so an
+empty box does not read as "this page has no description".
+
+It lives in the per-locale page file, so per-language SEO comes free when Phase
+9 resolves a second locale directory — there is no separate SEO store to keep in
+step. `og_image` is an ordinary `image` field, which means its `src` is
+restricted to `media_bases` and its dimensions are server-derived. It is
+declared `decorative: true`, so it asks for no alt and emits no `og:image:alt`:
+the share card already carries the title and the description as text beside it,
+and asking a client to describe the same banner on every page buys "εικόνα"
+typed to clear a field.
+
+`canonical` is admin-only on purpose. Every other field here costs a client a
+worse search result if they get it wrong; a canonical pointing at a URL they do
+not own hands that URL the page's ranking, silently, for weeks.
+
+`/sitemap.xml` is generated from the content files on request — `lastmod` from
+each page's mtime, `xhtml:link` alternates for the resolved locale, no
+`changefreq` or `priority`, and `noindex` pages left out. `/robots.txt` points
+at it, and honours `SITE_NOINDEX` with `Disallow: /` so a pre-launch domain says
+the same thing in both places a crawler looks.
+
+Both are ordinary routes through `index.php`. Any server config that intercepts
+`/robots.txt` as a static file breaks them — `.ddev/nginx_full/nginx-site.conf`
+is taken over from the DDEV default for exactly that reason.
+
+`bin/doctor` refuses a production box whose `site.base_url` is still
+`localhost`: every absolute URL the site publishes is built from it, and the
+only symptom of getting it wrong is months of nothing being indexed.
 
 ---
 
@@ -472,11 +539,12 @@ tests/06_production.php  production contracts: paths, atomic release, derivative
 ```
 
 ```
-tests/07_shipkit.php     nav, redirects, 500.twig, SITE_NOINDEX, bin/doctor,
-                         release switching and rollback, backup and restore drill
+tests/07_shipkit.php     nav, redirects, 500.twig, SITE_NOINDEX, sitemap and
+                         robots routes, bin/doctor, release switching and
+                         rollback, backup and restore drill
 ```
 
-523 checks: `ddev exec bash tests/run.sh`. Run all of them after touching
+660 checks: `ddev exec bash tests/run.sh`. Run all of them after touching
 `Fields`, `Admin`, `Components`, `Media` or anything in `bin/`.
 
 CI (`.github/workflows/ci.yml`) runs the lint, `composer audit`, `bin/doctor`

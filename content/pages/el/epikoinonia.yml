@@ -11,8 +11,16 @@ private: true
 nav:
   label: Επικοινωνία
   order: 20
-meta:
+seo:
+  title: ''
   description: 'Στοιχεία επικοινωνίας.'
+  og_image:
+    src: ''
+    alt: ''
+    width: 0
+    height: 0
+  noindex: false
+  canonical: ''
 blocks:
   -
     id: hero

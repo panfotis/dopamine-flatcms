@@ -155,6 +155,55 @@ foreach (['0', 'false', 'off', ''] as $off) {
 }
 putenv('SITE_NOINDEX');
 
+// ── SEO routes over real HTTP ───────────────────────────────────────────────
+
+section('/sitemap.xml and /robots.txt are served, and tagged for purging');
+
+// Over nginx, because both are paths with no page file behind them: they only
+// work if the server hands anything that is not a real file to index.php. The
+// DDEV default config carried a `location = /robots.txt` that served it as a
+// static file and 404'd — right in production, broken on every dev machine.
+$sitemapLive = $curl('/sitemap.xml');
+contains($sitemapLive, '200', '/sitemap.xml serves 200 over HTTP');
+contains($sitemapLive, 'content-type: application/xml', 'as XML');
+contains($sitemapLive, '<urlset', 'with a urlset');
+contains($sitemapLive, '<loc>https://dopamine-flatcms.ddev.site/</loc>', 'listing the home page at this host');
+
+$robotsLive = $curl('/robots.txt');
+contains($robotsLive, '200', '/robots.txt serves 200 over HTTP');
+contains($robotsLive, 'content-type: text/plain', 'as plain text');
+contains($robotsLive, 'Sitemap: https://dopamine-flatcms.ddev.site/sitemap.xml', 'and points at the sitemap');
+
+// The tag is the whole reason this is not stale a minute after a client adds a
+// page: `site` is what every save purges, and a per-page tag never would be.
+foreach (['/sitemap.xml' => $sitemapLive, '/robots.txt' => $robotsLive] as $path => $head) {
+    contains($head, 'cache-tag: site', $path . ' carries the site cache tag');
+    missing($head, 'cache-tag: page:', '...and no page tag (' . $path . ')');
+    contains($head, 's-maxage=31536000', '...while still being held at the edge (' . $path . ')');
+}
+
+// Nothing caches the sitemap on this side of the edge, so a page added right
+// now is in it on the next request. Everything after that is Cloudflare's, and
+// the `site` tag above is what makes the purge reach it.
+$newPage = $root . '/content/pages/el/_sitemap.yml';
+register_shutdown_function(static fn (): bool => @unlink($newPage));
+file_put_contents($newPage, Yaml::dump([
+    'title' => 'Νέα', 'slug' => '/nea-selida', 'blocks' => [],
+], 6, 2));
+contains($curl('/sitemap.xml'), '<loc>https://dopamine-flatcms.ddev.site/nea-selida</loc>',
+    'a page added a second ago is already in the sitemap — it is generated, not stored');
+unlink($newPage);
+
+// And every write path purges `site` alongside the page tag, which is the half
+// Cloudflare needs. Mechanical, because "remember to add the tag" is not a
+// mechanism: a third mutating flow that forgot it would leave a stale sitemap
+// at the edge for a year, and nothing would say so.
+$adminSrc = (string) file_get_contents($root . '/src/Admin.php');
+ok(substr_count($adminSrc, "purge([Cloudflare::tagFor(\$id), 'site'])") === 2,
+    'both save and restore purge page:<id> together with `site`');
+ok(!preg_match("/purge\(\[Cloudflare::tagFor\(\\\$id\)\]\)/", $adminSrc),
+    'and neither purges the page tag alone, which would leave the sitemap stale at the edge');
+
 // ── bin/doctor ──────────────────────────────────────────────────────────────
 
 section('bin/doctor passes a healthy site');
@@ -277,6 +326,16 @@ foreach ([
         ['pages/el/home.yml' => "title: T\nslug: /\nnav: yes\nblocks: []\n"],
         'nav: must be a mapping',
     ],
+    // Read as $data['seo']['noindex'] on the sitemap path and as a value map by
+    // the panel; the wrong shape quietly gives both of them nothing.
+    'a seo: that is not a mapping' => [
+        ['pages/el/home.yml' => "title: T\nslug: /\nseo: yes\nblocks: []\n"],
+        'seo: must be a mapping',
+    ],
+    'a seo: that is a list' => [
+        ['pages/el/home.yml' => "title: T\nslug: /\nseo:\n  - noindex\nblocks: []\n"],
+        'seo: must be a mapping',
+    ],
     'redirects.yml that is not a mapping' => [
         ['pages/el/home.yml' => $goodPage('/'), 'redirects.yml' => "- /a\n- /b\n"],
         'must be a mapping',
@@ -363,6 +422,27 @@ foreach ([
 
 array_map('unlink', glob($tmpDir . '/*') ?: []);
 @rmdir($tmpDir);
+
+// Every absolute URL the site publishes — sitemap <loc>, og:image, the
+// Sitemap: line — is built from site.base_url. A production box still carrying
+// the development default submits a sitemap full of localhost, and the only
+// symptom is months of nothing being indexed.
+[$s, $o] = $doctor(['pages/el/home.yml' => $goodPage('/')], ['SITE_BASE_URL' => 'http://localhost:8080']);
+ok($s === 0, 'a localhost base_url is only a warning off production');
+contains($o, 'sitemap.xml and og:image URLs are built from it', '...but it does say so');
+
+[$s, $o] = $doctor(['pages/el/home.yml' => $goodPage('/')], [
+    'SITE_BASE_URL'   => 'http://localhost:8080',
+    'APP_ENV'         => 'prod',
+    'AUTH_MODE'       => 'cf_access',
+    'AUTH_DEV_BYPASS' => '0',
+    'CF_ACCESS_AUD'   => str_repeat('a', 64),
+]);
+ok($s === 1, 'while in production it is a refusal');
+contains($o, 'site.base_url is http://localhost:8080', '...naming the value that would ship');
+
+[$s, $o] = $doctor(['pages/el/home.yml' => $goodPage('/')], ['SITE_BASE_URL' => 'https://pelatis.gr']);
+missing($o, 'base_url', 'a real domain says nothing at all');
 
 // A missing roles file denies every address, so a box in that state serves a
 // panel nobody can get into — and says nothing about why.

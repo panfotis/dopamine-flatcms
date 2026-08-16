@@ -31,7 +31,7 @@ contains($edit, 'name="blocks[intro][body]"', 'richtext field present for the se
 contains($edit, 'data-max="70"', 'max length exposed to the character counter');
 contains($edit, 'name="csrf"', 'CSRF token embedded in the form');
 contains($edit, 'Κεντρική ενότητα', 'component label from schema.yml shown as the card title');
-contains($edit, 'Για άτομα που χρησιμοποιούν αναγνώστη οθόνης', 'field hint rendered');
+contains($edit, 'Διαβάζεται φωναχτά σε όσους χρησιμοποιούν αναγνώστη οθόνης', 'field hint rendered');
 
 section('A component built from schema.yml alone round-trips');
 // faq is two files and no registration step: a list, a boolean and a richtext,
@@ -77,6 +77,79 @@ contains($rendered, "<strong>απ' ό,τι νομίζετε</strong>", 'with its
 missing($rendered, '<details open>', 'open_first: false leaves the first row closed');
 
 rename($faqFile . '.admin.bak', $faqFile);
+array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/home.*.yml') ?: []);
+
+section('SEO is a collapsed card an editor can ignore entirely');
+// Collapsed matters: it is the one card on the form that is optional from top
+// to bottom, and an open one pushes the client's actual copy below the fold.
+ok((bool) preg_match('/<details class="card">\s*<summary>/', $edit), 'the seo block renders as a <details> card');
+missing($edit, '<details class="card" open', 'which is collapsed — no `open` attribute anywhere on it');
+ok(strpos($edit, 'name="seo[title]"') < strpos($edit, 'name="blocks[hero][heading]"'),
+    'and it sits at the top of the form, above the content blocks');
+
+foreach ([
+    'seo[title]', 'seo[description]', 'seo[og_image][src]', 'seo[noindex]', 'seo[canonical]',
+] as $field) {
+    contains($edit, 'name="' . $field . '"', $field . ' has an input');
+}
+// The share image is declared decorative: the card already carries the title
+// and the description as text, so asking the client to describe the banner
+// beside them a second time buys "εικόνα" typed to clear a field.
+missing($edit, 'name="seo[og_image][alt]"', 'the share image asks for no description of its own');
+contains($edit, 'Κενό = η πρώτη εικόνα της σελίδας', 'and says what happens if it is left empty');
+contains($edit, 'Κενό = το πρώτο κείμενο της σελίδας', 'as does the description');
+contains($edit, 'δεν είναι κλείδωμα', 'and every hint says what the field does, not that it "helps SEO"');
+contains($edit, 'type="hidden" name="seo[noindex]" value="0"',
+    'noindex has the hidden partner every boolean gets, so unchecking really posts');
+
+// The whole point of collapsed-and-optional: a save that never opened the card
+// must go through. The og_image posts as an empty map, and alt is required only
+// when src is set — an unconditional rule would make every page unsaveable.
+$_SESSION['csrf'] = 'the-real-token';
+$seoFile = dirname(__DIR__) . '/content/pages/el/home.yml';
+copy($seoFile, $seoFile . '.seo.bak');
+
+$ignored = admin_post([
+    'action'   => 'save',
+    'csrf'     => 'the-real-token',
+    'page'     => 'home',
+    'baseline' => (string) hash_file('sha256', $seoFile),
+    'title'    => 'Αρχική',
+    'seo'      => [
+        'title'       => '',
+        'description' => 'Δείγμα σελίδας για το FlatCMS.',
+        'og_image'    => ['src' => '', 'alt' => ''],
+        'noindex'     => '0',
+        'canonical'   => '',
+    ],
+]);
+ok($ignored->getStatusCode() === 303, 'a save that leaves every seo field alone is accepted');
+
+$storedSeo = \Symfony\Component\Yaml\Yaml::parseFile($seoFile)['seo'];
+ok(array_keys($storedSeo) === ['title', 'description', 'og_image', 'noindex', 'canonical'],
+    'and writes the whole map, in schema order: ' . implode(', ', array_keys($storedSeo)));
+ok($storedSeo['noindex'] === false, 'noindex lands as a real YAML bool');
+ok($storedSeo['og_image'] === ['src' => '', 'alt' => '', 'width' => 0, 'height' => 0],
+    'og_image is an empty image map, not an empty string — the shape a template can branch on');
+ok($storedSeo['og_image']['alt'] === '', 'with an alt that is empty by declaration, never by the client typing one');
+
+// A page file that has never carried a `seo:` key at all is the state every
+// existing site is in the moment this ships.
+$noSeo = \Symfony\Component\Yaml\Yaml::parseFile($seoFile);
+unset($noSeo['seo']);
+file_put_contents($seoFile, \Symfony\Component\Yaml\Yaml::dump($noSeo, 6, 2));
+$legacy = render(['action' => 'edit', 'page' => 'home']);
+contains($legacy, 'name="seo[title]"', 'a page with no seo: key still renders every input');
+$adopted = admin_post([
+    'action' => 'save', 'csrf' => 'the-real-token', 'page' => 'home',
+    'baseline' => (string) hash_file('sha256', $seoFile),
+    'seo' => ['description' => 'Γράφτηκε τώρα'],
+]);
+ok($adopted->getStatusCode() === 303, 'and saving it is accepted');
+ok(\Symfony\Component\Yaml\Yaml::parseFile($seoFile)['seo']['description'] === 'Γράφτηκε τώρα',
+    'the block is adopted on the first save rather than needing a migration');
+
+rename($seoFile . '.seo.bak', $seoFile);
 array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/home.*.yml') ?: []);
 
 section('No structural controls exist in the UI');
