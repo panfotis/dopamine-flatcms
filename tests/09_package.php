@@ -59,6 +59,12 @@ $target = sys_get_temp_dir() . '/dopamine-package-' . bin2hex(random_bytes(5));
 register_shutdown_function(static fn () => packageRemove($target));
 packageCopy($root . '/skeleton', $target);
 
+// Portable mode intentionally clears HOME so tests cannot inherit a
+// developer's credentials or configuration. Composer requires either HOME or
+// COMPOSER_HOME, so give this package test its own disposable, isolated home.
+$composerHome = $target . '/.composer';
+$composerEnv = 'COMPOSER_HOME=' . escapeshellarg($composerHome) . ' ';
+
 $manifestFile = $target . '/composer.json';
 $manifest = json_decode((string) file_get_contents($manifestFile), true, flags: JSON_THROW_ON_ERROR);
 $manifest['repositories'] = [[
@@ -76,7 +82,7 @@ file_put_contents(
 
 [$installStatus, $installOutput] = packageRun(
     $target,
-    'composer update --no-interaction --no-progress --prefer-dist'
+    $composerEnv . 'composer update --no-interaction --no-progress --prefer-dist'
 );
 ok($installStatus === 0, 'Composer resolves the skeleton in an empty directory: ' . $installOutput);
 
@@ -91,7 +97,7 @@ $archiveDir = $target . '/artifact';
 mkdir($archiveDir, 0775, true);
 [$archiveStatus, $archiveOutput] = packageRun(
     $root,
-    'COMPOSER_ROOT_VERSION=1.0.0 composer archive --format=zip --dir=' . escapeshellarg($archiveDir)
+    $composerEnv . 'COMPOSER_ROOT_VERSION=1.0.0 composer archive --format=zip --dir=' . escapeshellarg($archiveDir)
 );
 ok($archiveStatus === 0, 'Composer can build the distributable archive: ' . $archiveOutput);
 
