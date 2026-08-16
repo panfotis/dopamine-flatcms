@@ -73,6 +73,34 @@
                  courtesy to the editor; cleanValues() is what enforces it. #}
               {% set locked = not may_edit(def.editable, user.role) %}
 
+              {% if def.type == 'list' %}
+                {{ _self.repeater(def, id, fname, value, locked, pages, page_ids, user.role) }}
+              {% else %}
+                {{ _self.field(def, id, fname, value, locked, pages, page_ids) }}
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+
+    <div class="savebar"><div class="inner">
+      <button class="btn" type="submit">Αποθήκευση</button>
+      <a class="btn ghost" href="{{ page.slug }}" target="_blank" rel="noopener">Προβολή σελίδας</a>
+      {% if user.role == 'admin' %}
+        <a class="btn ghost" href="?action=revisions&amp;page={{ page.id }}">Προηγούμενες εκδόσεις</a>
+      {% endif %}
+      <span class="status" id="status">Οι αλλαγές δημοσιεύονται αμέσως μετά την αποθήκευση.</span>
+    </div></div>
+  </form>
+{% endblock %}
+
+{#
+  One input renderer, called at the top level and once per row of a list. Two
+  copies of this chain would drift, and the copy inside the repeater is exactly
+  where a locked field or a missing alt would stop being enforced in the UI.
+#}
+{% macro field(def, id, fname, value, locked, pages, page_ids) %}
               <div class="field">
                 <label for="{{ id }}">
                   {{ def.label }}
@@ -102,19 +130,35 @@
                   <textarea id="{{ id }}" name="{{ fname }}" hidden>{{ value }}</textarea>
 
                 {% elseif def.type == 'image' %}
+                  {% set src = value.src|default('') %}
                   <div class="media">
                     <div class="thumb" id="{{ id }}-thumb"
-                         style="{% if value %}background-image:url('{{ value }}'){% endif %}"></div>
+                         style="{% if src %}background-image:url('{{ src }}'){% endif %}"></div>
                     <div class="controls">
                       {% if not locked %}
-                        <input type="file" id="{{ id }}-file" accept="image/*" hidden>
+                        <input type="file" id="{{ id }}-file" accept="image/jpeg,image/png,image/webp" hidden>
                         <button type="button" class="btn ghost" data-upload="{{ id }}">Αλλαγή εικόνας</button>
                         <button type="button" class="btn ghost" data-clear="{{ id }}">Αφαίρεση</button>
                       {% endif %}
-                      <input type="hidden" id="{{ id }}" name="{{ fname }}" value="{{ value }}">
-                      <p class="path" id="{{ id }}-path">{{ value ?: 'Καμία εικόνα' }}</p>
+                      <input type="hidden" id="{{ id }}" name="{{ fname }}[src]" value="{{ src }}">
+                      <p class="path" id="{{ id }}-path">{{ src ?: 'Καμία εικόνα' }}</p>
                     </div>
                   </div>
+                  {# alt comes with the image field rather than beside it, so a
+                     new component cannot ship without one. A decorative image
+                     is declared as such in schema.yml and shows no input at
+                     all — an empty alt is the right markup for it, and asking
+                     for one produces "photo" and "logo123.jpg". #}
+                  {% if not def.decorative %}
+                    <div class="field" style="margin-top:12px">
+                      <label for="{{ id }}-alt">{{ def.fields.alt.label }}</label>
+                      <input type="text" id="{{ id }}-alt" name="{{ fname }}[alt]"
+                             value="{{ value.alt|default('') }}"
+                             {{ locked ? 'readonly' : '' }}
+                             maxlength="{{ def.fields.alt.max }}" data-max="{{ def.fields.alt.max }}">
+                      <p class="hint">{{ def.fields.alt.hint }}</p>
+                    </div>
+                  {% endif %}
 
                 {% elseif def.type == 'select' %}
                   <select id="{{ id }}" name="{{ fname }}" {{ locked ? 'disabled' : '' }}>
@@ -123,6 +167,31 @@
                     {% endfor %}
                   </select>
                   {% if locked %}<input type="hidden" name="{{ fname }}" value="{{ value }}">{% endif %}
+
+                {% elseif def.type == 'boolean' %}
+                  {# The hidden field first, so an unchecked box still posts —
+                     otherwise "off" is indistinguishable from "not sent", and
+                     the save path would keep the stored value forever. #}
+                  <input type="hidden" name="{{ fname }}" value="0">
+                  <input type="checkbox" id="{{ id }}" name="{{ fname }}" value="1"
+                         {{ value ? 'checked' : '' }} {{ locked ? 'disabled' : '' }}>
+
+                {% elseif def.type == 'link' %}
+                  {# A page picker, not a URL box: it stores the page id, and
+                     the slug is resolved at render time — so renaming a slug
+                     cannot leave a dead href behind. #}
+                  <select id="{{ id }}" name="{{ fname }}" {{ locked ? 'disabled' : '' }}>
+                    <option value="">— Καμία σελίδα —</option>
+                    {% for p in pages|default([]) %}
+                      <option value="{{ p.id }}" {{ value == p.id ? 'selected' : '' }}>{{ p.title }} ({{ p.slug }})</option>
+                    {% endfor %}
+                  </select>
+                  {% if locked %}<input type="hidden" name="{{ fname }}" value="{{ value }}">{% endif %}
+                  {% if value and value not in page_ids|default([]) %}
+                    <p class="hint" style="color:#b4232a">
+                      Η σελίδα «{{ value }}» δεν υπάρχει πια. Ο σύνδεσμος εμφανίζεται ως απλό κείμενο.
+                    </p>
+                  {% endif %}
 
                 {% else %}
                   <input type="text" id="{{ id }}" name="{{ fname }}" value="{{ value }}"
@@ -133,22 +202,73 @@
 
                 {% if def.hint is defined %}<p class="hint">{{ def.hint }}</p>{% endif %}
               </div>
-            {% endfor %}
-          {% endif %}
-        </div>
-      </div>
-    {% endfor %}
+{% endmacro %}
 
-    <div class="savebar"><div class="inner">
-      <button class="btn" type="submit">Αποθήκευση</button>
-      <a class="btn ghost" href="{{ page.slug }}" target="_blank" rel="noopener">Προβολή σελίδας</a>
-      {% if user.role == 'admin' %}
-        <a class="btn ghost" href="?action=revisions&amp;page={{ page.id }}">Προηγούμενες εκδόσεις</a>
-      {% endif %}
-      <span class="status" id="status">Οι αλλαγές δημοσιεύονται αμέσως μετά την αποθήκευση.</span>
-    </div></div>
-  </form>
-{% endblock %}
+{#
+  A repeater over a fixed sub-schema. The client adds and removes *rows*, which
+  is content; the fields inside a row are the developer's, which is structure.
+  Rows carry no id — the save path re-indexes with array_values() and cuts to
+  `max` before it sanitises anything, so a reordered or renumbered form is not
+  something this has to keep straight.
+#}
+{% macro repeater(def, id, fname, rows, locked, pages, page_ids, role) %}
+  <div class="field">
+    <label>
+      {{ def.label }}
+      {% if locked %}<span class="pill" style="margin-inline-start:6px">κλειδωμένο</span>{% endif %}
+      <span class="pill" style="margin-inline-start:6px">έως {{ def.max }}</span>
+    </label>
+    {% if def.hint is defined %}<p class="hint">{{ def.hint }}</p>{% endif %}
+
+    <div class="repeater" id="{{ id }}-rows" data-repeater="{{ id }}" data-max="{{ def.max }}">
+      {% for i, row in (rows is iterable ? rows : []) %}
+        <div class="repeater-row" data-row>
+          <header>
+            <strong>{{ row[def.item_label]|default('')|striptags|slice(0, 60) ?: def.label }}</strong>
+            {% if not locked %}<button type="button" class="btn ghost" data-row-remove>Αφαίρεση</button>{% endif %}
+          </header>
+          {% for subName, subDef in def.fields %}
+            {{ _self.field(
+                 subDef,
+                 id ~ '-' ~ i ~ '-' ~ subName,
+                 fname ~ '[' ~ i ~ '][' ~ subName ~ ']',
+                 row[subName]|default(''),
+                 locked or not may_edit(subDef.editable, role),
+                 pages,
+                 page_ids
+               ) }}
+          {% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+
+    {% if not locked %}
+      <button type="button" class="btn ghost" data-row-add="{{ id }}">Προσθήκη</button>
+      {# __INDEX__ is replaced on insert. A <template> keeps the blank row out
+         of the form until it is wanted — an empty row that posts is an empty
+         row the save path has to refuse. #}
+      <template id="{{ id }}-template">
+        <div class="repeater-row" data-row>
+          <header>
+            <strong>{{ def.label }}</strong>
+            <button type="button" class="btn ghost" data-row-remove>Αφαίρεση</button>
+          </header>
+          {% for subName, subDef in def.fields %}
+            {{ _self.field(
+                 subDef,
+                 id ~ '-__INDEX__-' ~ subName,
+                 fname ~ '[__INDEX__][' ~ subName ~ ']',
+                 '',
+                 not may_edit(subDef.editable, role),
+                 pages,
+                 page_ids
+               ) }}
+          {% endfor %}
+        </div>
+      </template>
+    {% endif %}
+  </div>
+{% endmacro %}
 
 {% block foot %}
 <script>
@@ -249,6 +369,38 @@
       document.getElementById(id + '-path').textContent = 'Καμία εικόνα';
       touch();
     });
+  });
+
+  /* ---- list repeaters -------------------------------------------------
+     Rows are content, so the client adds and removes them. The fields inside
+     a row are not, so they come from the template and nothing here invents
+     one. Indices need no tidying on remove: the server re-keys with
+     array_values() and cuts to `max` before it sanitises anything. */
+  document.querySelectorAll('[data-row-add]').forEach(btn => {
+    const id = btn.dataset.rowAdd;
+    const rows = document.getElementById(id + '-rows');
+    const tpl = document.getElementById(id + '-template');
+    const max = parseInt(rows.dataset.max, 10);
+    let next = rows.querySelectorAll('[data-row]').length;
+
+    const paint = () => { btn.disabled = rows.querySelectorAll('[data-row]').length >= max; };
+
+    btn.addEventListener('click', () => {
+      if (rows.querySelectorAll('[data-row]').length >= max) return;
+      const html = tpl.innerHTML.replaceAll('__INDEX__', String(next++));
+      rows.insertAdjacentHTML('beforeend', html);
+      paint();
+      touch();
+    });
+
+    rows.addEventListener('click', e => {
+      if (!e.target.closest('[data-row-remove]')) return;
+      e.target.closest('[data-row]').remove();
+      paint();
+      touch();
+    });
+
+    paint();
   });
 
   /* ---- don't lose work ------------------------------------------------ */

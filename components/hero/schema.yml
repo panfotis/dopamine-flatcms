@@ -14,9 +14,15 @@ fields:
     max: 180
     hint: Μία ή δύο προτάσεις. Κρατήστε το σύντομο.
 
+  # It sits behind the heading, carries no information of its own, and alt=""
+  # is the correct markup for it. Declared here because whether an image is
+  # meaningful or decorative is a design decision — the client cannot know it,
+  # and a forged `decorative` in a request is dropped like any other undeclared
+  # key.
   image:
     type: image
     label: Εικόνα φόντου
+    decorative: true
 
   cta_label:
     type: text

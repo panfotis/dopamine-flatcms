@@ -4,21 +4,59 @@ declare(strict_types=1);
 
 namespace Dopamine\FlatCms;
 
+use RuntimeException;
 use Symfony\Component\HtmlSanitizer\HtmlSanitizer;
 use Symfony\Component\HtmlSanitizer\HtmlSanitizerAction;
 use Symfony\Component\HtmlSanitizer\HtmlSanitizerConfig;
 
 /**
- * The five and a half field types that cover a brochure site.
+ * The field types that cover a brochure site.
  *
  * Every value the client submits goes through sanitise() before it is written
  * to disk. In particular richtext is whitelisted down to a handful of inline
  * tags, so a paste from Word cannot smuggle <style>, <font> or a <script> into
  * the page and wreck the design.
+ *
+ * Two of those types — `image` and `list` — hold maps rather than strings, so
+ * they need the schema walk applied to their contents as well as to
+ * themselves. map() is that walk, and it is the *only* one: the top level, an
+ * image's src/alt pair and a list's rows all reach their schema through it, so
+ * "undeclared keys are dropped" and "editable is enforced" are one rule with
+ * one implementation rather than one per nesting depth.
  */
 final class Fields
 {
-    public const TYPES = ['text', 'textarea', 'richtext', 'image', 'link', 'select'];
+    public const TYPES = [
+        'text', 'textarea', 'richtext', 'image', 'link', 'select', 'boolean', 'list',
+    ];
+
+    /**
+     * A list with no `max` in its schema is a developer typo, not a licence to
+     * store an unbounded repeater. 20 rows is the plan's own example and far
+     * more than a FAQ or a team grid needs.
+     */
+    private const LIST_MAX = 20;
+
+    /**
+     * The sub-schema of every `image` field, whatever the component calls it.
+     *
+     * It is built in rather than declared per component precisely so it cannot
+     * drift: `text_image` used to carry a separate `image_alt` beside its
+     * image and `hero` carried none at all, which is how "add an image, forget
+     * the alt" happened in the first place.
+     *
+     * Public so the panel can build the same two inputs it validates against;
+     * a component copies it, it never declares its own.
+     */
+    public const IMAGE = [
+        'src' => ['type' => 'media', 'label' => 'Εικόνα'],
+        'alt' => [
+            'type'  => 'text',
+            'max'   => 120,
+            'label' => 'Περιγραφή εικόνας',
+            'hint'  => 'Για άτομα που χρησιμοποιούν αναγνώστη οθόνης. Βοηθά και το SEO.',
+        ],
+    ];
 
     /** Tags a client is allowed to produce in a richtext field. */
     private const ALLOWED_TAGS = ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'ul', 'ol', 'li'];
@@ -36,13 +74,92 @@ final class Fields
     private const RICHTEXT_LIMIT = 100_000;
 
     /**
+     * Walk a field map over a value map. **The** schema walk, at every depth.
+     *
+     * Whatever arrives that the schema does not declare is not copied, and
+     * whatever the schema declares that did not arrive keeps what is on disk.
+     * That is the product rule — structure is developer-owned — and running it
+     * inside image and list as well as at the top level is what stops a nested
+     * value from being the one place it does not hold.
+     *
+     * @param  array<string, array<string, mixed>> $fields schema.yml, normalised
+     * @param  array<string, mixed>                $in     untrusted input
+     * @param  array<string, mixed>                $stored what is on disk now
+     * @param  array<string, mixed>                $context media_bases, role,
+     *                                                      section, require,
+     *                                                      uploads
+     * @return array<string, mixed>
+     */
+    public static function map(array $fields, array $in, array $stored, array $context): array
+    {
+        $out = [];
+
+        foreach ($fields as $name => $def) {
+            $current = $stored[$name] ?? $def['default'] ?? self::blank((string) ($def['type'] ?? 'text'));
+
+            // A field the role may not edit, or simply did not send, keeps its
+            // stored value — whether that input came from a form, a forged POST
+            // or an old revision, and whether it sits at the top level or
+            // inside a list row.
+            if (!Components::mayEdit($def['editable'] ?? true, (string) ($context['role'] ?? ''))
+                || !array_key_exists($name, $in)) {
+                $out[$name] = $current;
+                continue;
+            }
+
+            $out[$name] = self::sanitise($def, $in[$name], ['stored' => $current] + $context);
+            self::demand($def, $out[$name], $context);
+        }
+
+        return $out;
+    }
+
+    /**
+     * The one required check. Called from map() at every depth, so an image's
+     * alt is refused by the same machinery that refuses an empty heading —
+     * there is no second validation system to keep in step with this one.
+     *
+     * @param array<string, mixed> $def
+     * @param array<string, mixed> $context
+     */
+    public static function demand(array $def, mixed $value, array $context): void
+    {
+        if (($context['require'] ?? true) !== true || ($def['required'] ?? false) !== true) {
+            return;
+        }
+
+        if ($value === '' || $value === [] || $value === false) {
+            throw new RuntimeException(sprintf(
+                'Το πεδίο «%s» στην ενότητα «%s» δεν μπορεί να είναι κενό.',
+                (string) ($def['label'] ?? ''),
+                (string) ($context['section'] ?? '')
+            ));
+        }
+    }
+
+    /**
+     * The empty value of a type. A field nobody has filled in yet must still
+     * have the right *shape*, or a template branches on '' where it expects a
+     * map — and Phase 6's og_image, an empty map on every page, would be
+     * indistinguishable from a missing one.
+     */
+    public static function blank(string $type): string|bool|array
+    {
+        return match ($type) {
+            'image', 'list' => [],
+            'boolean'       => false,
+            default         => '',
+        };
+    }
+
+    /**
      * @param array<string, mixed> $def     Field definition from schema.yml
      * @param array<string, mixed> $context Runtime constraints; `media_bases`
      *                                      lists the prefixes an image src may
      *                                      use. Empty means "reject everything
      *                                      that is not a relative upload path".
      */
-    public static function sanitise(array $def, mixed $raw, array $context = []): string|bool
+    public static function sanitise(array $def, mixed $raw, array $context = []): string|bool|array
     {
         $type = (string) ($def['type'] ?? 'text');
         $value = is_scalar($raw) ? (string) $raw : '';
@@ -50,12 +167,132 @@ final class Fields
         return match ($type) {
             'textarea' => self::plain($value, $def['max'] ?? null, true),
             'richtext' => self::rich($value),
-            'image'    => self::mediaPath($value, (array) ($context['media_bases'] ?? [])),
-            'link'     => self::link($value),
+            'image'    => self::image($def, $raw, $context),
+            'media'    => self::mediaPath($value, (array) ($context['media_bases'] ?? [])),
+            'link'     => self::pageId($value),
             'select'   => self::select($def, $value),
             'boolean'  => self::boolean($raw),
+            'list'     => self::items($def, $raw, $context),
             default    => self::plain($value, $def['max'] ?? null, false),
         };
+    }
+
+    /**
+     * An image is a map, not a path: `src`, `alt`, and the original's intrinsic
+     * `width`/`height`.
+     *
+     * Folding alt in is what makes it unforgettable — declare an image field
+     * and the alt field comes with it, so a new component cannot ship without
+     * one the way `hero` did. The pairing is only half of it, though: alt is
+     * *required* whenever src is set, and `decorative: true` in schema.yml is
+     * the escape hatch for an image that genuinely carries no information.
+     * Requiring it unconditionally is the classic accessibility own-goal — it
+     * buys "image", "photo" and `logo123.jpg` typed to clear a validation
+     * error, which a screen reader then reads out instead of skipping.
+     *
+     * @param  array<string, mixed> $def
+     * @param  array<string, mixed> $context
+     * @return array{src: string, alt: string, width: int, height: int}
+     */
+    private static function image(array $def, mixed $raw, array $context): array
+    {
+        $stored = is_array($context['stored'] ?? null) ? $context['stored'] : [];
+
+        $out = self::map(self::IMAGE, is_array($raw) ? $raw : [], $stored, $context);
+        $src = (string) $out['src'];
+
+        if (($def['decorative'] ?? false) === true) {
+            // alt="" is the *correct* markup here, and it is the developer who
+            // knows that — so it is declared, not typed. A forged `decorative`
+            // in the request never reaches this: it is an undeclared key inside
+            // the image map and map() has already dropped it.
+            $out['alt'] = '';
+        } else {
+            // An image field left empty saves fine; one with a file and no
+            // description does not. The condition is the point — Phase 6's
+            // og_image defaults to an empty map on every page, and an
+            // unconditional rule would make every page unsaveable.
+            self::demand(
+                ['label' => self::IMAGE['alt']['label'], 'required' => $src !== ''],
+                $out['alt'],
+                $context
+            );
+        }
+
+        return $out + self::dimensions($src, $stored, $context);
+    }
+
+    /**
+     * `width`/`height` are **server-derived**, and this is where that is true
+     * rather than merely intended: neither is ever read from $raw.
+     *
+     * A newly uploaded src carries its normalized dimensions in the record the
+     * upload wrote into the session; an unchanged src keeps what is already on
+     * disk beside it. Anything else — a src the client typed, a stored map
+     * whose src has since been replaced — is unknown, and unknown is 0, which
+     * picture.twig renders as no attribute at all. A wrong aspect ratio
+     * reserves the wrong box and is worse than reserving none.
+     *
+     * @param  array<string, mixed> $stored
+     * @param  array<string, mixed> $context
+     * @return array{width: int, height: int}
+     */
+    private static function dimensions(string $src, array $stored, array $context): array
+    {
+        $record = (array) (($context['uploads'] ?? [])[$src] ?? []);
+
+        if ($record === [] && $src !== '' && ($stored['src'] ?? null) === $src) {
+            $record = $stored;
+        }
+
+        return [
+            'width'  => max(0, (int) ($record['width'] ?? 0)),
+            'height' => max(0, (int) ($record['height'] ?? 0)),
+        ];
+    }
+
+    /**
+     * A repeater over a fixed sub-schema. One level only.
+     *
+     * The bounds are applied *before* the item loop on purpose: a posted
+     * 50 000-row list is cut to `max` before it costs 50 000 sanitiser passes,
+     * each of which may run the HTML sanitiser. array_values() is part of the
+     * same guard rather than tidiness — attacker-chosen keys would otherwise
+     * be dumped as a YAML *map*, and the next load would hand a template
+     * something that is no longer a list at all.
+     *
+     * @param  array<string, mixed> $def
+     * @param  array<string, mixed> $context
+     * @return list<array<string, mixed>>
+     */
+    private static function items(array $def, mixed $raw, array $context): array
+    {
+        if (!is_array($raw)) {
+            return [];
+        }
+
+        $max = (is_int($def['max'] ?? null) && $def['max'] > 0) ? $def['max'] : self::LIST_MAX;
+        $rows = array_slice(array_values($raw), 0, $max);
+
+        $fields = (array) ($def['fields'] ?? []);
+        $stored = is_array($context['stored'] ?? null) ? array_values($context['stored']) : [];
+
+        // Rows have no identity beyond their position, so a stored row only
+        // informs the row that lands in the same slot. Everything that depends
+        // on it — an image's server-derived dimensions — re-checks the src
+        // before trusting it, so a reordered list degrades to "unknown", never
+        // to "wrong".
+        $out = [];
+        foreach ($rows as $i => $row) {
+            $out[] = self::map(
+                $fields,
+                is_array($row) ? $row : [],
+                is_array($stored[$i] ?? null) ? $stored[$i] : [],
+                $context
+            );
+        }
+
+        return $out;
     }
 
     private static function plain(string $v, mixed $max, bool $multiline): string
@@ -197,8 +434,36 @@ final class Fields
     }
 
     /**
+     * A `link` field stores a **page id** — the filename — and nothing else.
+     *
+     * The id is deliberately the same in every locale while the slugs are not:
+     * `contact.yml` exists in both `el/` and `en/` as `/epikoinonia` and
+     * `/contact`. Resolving id → slug at render time is therefore what makes
+     * renaming a slug safe, and what makes a link work across locales. An
+     * earlier draft carried a `translation_key` inside each file instead — a
+     * second identifier for the same thing, duplicated across N files, with no
+     * enforcement and silent failure on a typo.
+     *
+     * Rejected rather than stripped: `javascript:alert(1)` reduced to its
+     * letters would be a plausible-looking id, and storing junk that happens to
+     * parse is how a dead link survives a review. Whether the id still resolves
+     * is not asked here — a page deleted later must show up in the panel as a
+     * link to fix, not vanish from the content file on the next save.
+     */
+    private static function pageId(string $v): string
+    {
+        $v = trim(strip_tags($v));
+
+        return preg_match('/^[a-z0-9_-]+$/i', $v) === 1 ? $v : '';
+    }
+
+    /**
      * Accepted: absolute http(s) URLs, site-relative paths, fragments, mailto
      * and tel. Everything else becomes an empty string.
+     *
+     * No longer a field type — `link` is a page picker now. This is the href
+     * rule inside richtext, where the client really is typing a URL, and it is
+     * the only place a URL is still accepted from input.
      */
     private static function link(string $v): string
     {

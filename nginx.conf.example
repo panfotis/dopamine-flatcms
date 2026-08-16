@@ -31,11 +31,20 @@ server {
         fastcgi_pass unix:/run/php/php8.4-fpm-pelatis.sock;
     }
 
-    # Local upload fallback (only used when R2_ENABLED=0).
+    # Uploads live in the content repository, not under the docroot, so that
+    # one `git clone` of shared/content/ restores the pages *and* the images on
+    # them. An alias rather than a symlink: nothing inside public/ then points
+    # outside it, and stored `src` values stay `/uploads/...` either way, so
+    # config.media_bases and /cdn-cgi/image are unaffected by the move.
+    #
+    # Only used when R2_ENABLED=0. With R2 on, these URLs are absolute and never
+    # reach this server at all.
     location /uploads/ {
+        alias /var/www/pelatis/shared/content/uploads/;
         expires 30d;
         add_header Cache-Control "public, immutable";
-        # Uploaded files are never executed, whatever their extension.
+        # Uploaded files are never executed, whatever their extension. This is
+        # the reason the directory must not be reachable by any other path.
         location ~ \.php$ { return 403; }
     }
 

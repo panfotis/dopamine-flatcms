@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+#
+# Scaffold a new client site from this one.
+#
+#   bin/new-site ../pelatis-gr "Πελάτης ΑΕ" pelatis.gr
+#
+# Site one is copy-paste. By site six the copies have drifted, and the drift is
+# invisible: a missing 500.twig, an old media_bases, a config that predates a
+# security fix. This exists so the copy is one command with one source, and so
+# the things a new site must NOT inherit — content, uploads, revisions, secrets
+# — are absent by construction rather than by remembering to delete them.
+
+set -euo pipefail
+
+target="${1:-}"
+name="${2:-}"
+domain="${3:-}"
+
+[ -n "$target" ] && [ -n "$name" ] && [ -n "$domain" ] \
+  || { echo 'usage: bin/new-site <path> "<Site Name>" <domain>' >&2; exit 2; }
+[ -e "$target" ] && { echo "$target already exists" >&2; exit 1; } || true
+
+src="$(cd "$(dirname "$0")/.." && pwd)"
+mkdir -p "$target"
+
+# Code, components and templates. Not content: a new site starts empty, and
+# inheriting another client's pages is how demo copy reaches production.
+for item in src public templates components bin composer.json composer.lock \
+            nginx.conf.example config.php README.md CLAUDE.md tests .gitignore; do
+  cp -R "$src/$item" "$target/$item"
+done
+
+rm -rf "$target/components/faq"          # demo component; keep hero/text_image/contact_cta
+mkdir -p "$target/content/pages/el" "$target/content/uploads" \
+         "$target/var/cache" "$target/var/locks" "$target/config"
+
+cat > "$target/content/pages/el/home.yml" <<'YAML'
+# Managed by Dopamine FlatCMS. Structure is edited here, content in /admin.
+title: Αρχική
+slug: /
+nav:
+  label: Αρχική
+  order: 10
+meta:
+  description: ''
+blocks:
+  -
+    id: hero
+    type: hero
+    fields:
+      heading: 'Νέο site'
+      subheading: ''
+      image:
+        src: ''
+        alt: ''
+        width: 0
+        height: 0
+      cta_label: ''
+      cta_url: ''
+      align: center
+YAML
+
+cat > "$target/content/redirects.yml" <<'YAML'
+# Old URL -> where it should go now. Checked before the 404, so the previous
+# site's search rankings survive the replacement. Targets may be a path, a page
+# id, or an absolute URL. bin/doctor refuses loops and dangling targets.
+YAML
+
+cat > "$target/config/roles.yml" <<'YAML'
+# email -> role. Committed, no secrets. An authenticated address that is not
+# listed here gets a 403, never an implicit editor role.
+- { email: change-me@wearedope.com, role: admin }
+YAML
+
+sed -i "s/'name'     => '[^']*'/'name'     => '$name'/" "$target/config.php"
+
+cat > "$target/.env.example" <<YAML
+# Copy to shared/.env on the server. Never committed, never inside a release.
+APP_ENV=prod
+CONTENT_PATH=/var/www/$domain/shared/content
+VAR_PATH=/var/www/$domain/shared/var
+UPLOADS_PATH=/var/www/$domain/shared/content/uploads
+ROLES_FILE=/var/www/$domain/shared/roles.yml
+SITE_BASE_URL=https://$domain
+
+# Until the client has approved the copy. Remove to allow indexing.
+SITE_NOINDEX=1
+
+AUTH_MODE=cf_access
+AUTH_DEV_BYPASS=0
+CF_ACCESS_TEAM_DOMAIN=change-me.cloudflareaccess.com
+CF_ACCESS_AUD=
+
+CF_PURGE_ENABLED=1
+CF_ZONE_ID=
+CF_API_TOKEN=
+YAML
+
+sed -i "s/pelatis\.gr/$domain/g" "$target/nginx.conf.example"
+
+echo "Scaffolded $target"
+echo
+echo "Next:"
+echo "  1. composer install            (there is no vendor/ yet)"
+echo "  2. edit $target/config/roles.yml — the placeholder address is not real"
+echo "  3. fill CF_ACCESS_AUD in .env.example, then copy it to shared/.env"
+echo "  4. git init, add the private content remote for shared/content/"
+echo "  5. bin/doctor"

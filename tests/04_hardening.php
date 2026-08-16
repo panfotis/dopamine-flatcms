@@ -181,7 +181,7 @@ $out = $cms->withDefaults($schema, ['heading' => 'ok', 'removed_unsafe_field' =>
 ok(!array_key_exists('removed_unsafe_field', $out), 'a key no longer in schema.yml is not exposed as fields.*');
 
 section('Orphaned keys are dropped from disk on save');
-$file = dirname(__DIR__) . '/content/pages/home.yml';
+$file = dirname(__DIR__) . '/content/pages/el/home.yml';
 $backup = $file . '.hardening.bak';
 copy($file, $backup);
 
@@ -189,7 +189,7 @@ $raw = Yaml::parseFile($file);
 $raw['blocks'][0]['fields']['ghost_field'] = 'should not survive a save';
 file_put_contents($file, Yaml::dump($raw, 6, 2));
 
-$content = new Content(dirname(__DIR__) . '/content');
+$content = new Content(dirname(__DIR__) . '/content', 'el');
 admin_post($hostile('test-token', (string) hash_file('sha256', $file)));
 $after = Yaml::parseFile($file);
 ok(!array_key_exists('ghost_field', $after['blocks'][0]['fields']), 'undeclared key removed from the file on the next save');
@@ -221,6 +221,20 @@ for ($i = 0; $i < 3; $i++) {
 }
 ok(count(glob(dirname(__DIR__) . '/content/.revisions/home.*.yml') ?: []) === 3, 'three snapshots in the same second produce three files');
 
+// Pruning sorts by name, and a name only carries seconds — so inside one second
+// the order is the random suffix, and the snapshot just taken could sort lowest
+// and be deleted by its own prune. That made exactly one save in a burst the
+// one that could not be undone.
+$revsOf = static fn (): array => glob(dirname(__DIR__) . '/content/.revisions/home.*.yml') ?: [];
+$kept = true;
+for ($i = 0; $i < 12; $i++) {
+    $was = $revsOf();
+    $content->snapshot('home', 5);
+    $kept = $kept && array_diff($revsOf(), $was) !== [];
+}
+ok($kept, 'and a snapshot is never pruned by its own prune, however many land in one second');
+ok(count($revsOf()) === 5, 'while the keep limit still holds (' . count($revsOf()) . ' files)');
+
 // restore
 rename($backup, $file);
 // Scoped to the fixture page: a suite run must never wipe real revision history.
@@ -247,5 +261,41 @@ $png  = "\x89PNG\r\n\x1a\n" . pack('N', 13) . 'IHDR' . $ihdr . pack('N', 0);
 $dim  = @getimagesizefromstring($png);
 ok(is_array($dim) && $dim[0] === 30000, 'crafted header parses as 30000px wide without decoding');
 ok(($dim[0] * $dim[1]) > $cfg['images']['max_pixels'], 'it exceeds the configured max_pixels guard');
+
+section('A 48 MP phone image is refused, not survived');
+// Not hostile — just a current flagship on its default setting. The rule is
+// that it either normalizes or comes back with something the client can read,
+// and never takes the worker with it.
+$phone = "\x89PNG\r\n\x1a\n" . pack('N', 13) . 'IHDR'
+    . pack('N', 8000) . pack('N', 6000) . "\x08\x02\x00\x00\x00" . pack('N', 0);
+$phoneFile = sys_get_temp_dir() . '/dopamine-48mp-' . bin2hex(random_bytes(4)) . '.png';
+file_put_contents($phoneFile, $phone);
+
+$peak = memory_get_peak_usage(true);
+$tooBig = admin(Request::create(
+    '/admin.php',
+    'POST',
+    ['action' => 'upload', 'csrf' => 'test-token'],
+    [],
+    ['file' => new \Symfony\Component\HttpFoundation\File\UploadedFile(
+        $phoneFile,
+        'IMG_9000.PNG',
+        'image/png',
+        null,
+        true
+    )]
+));
+$grew = memory_get_peak_usage(true) - $peak;
+
+ok($tooBig->getStatusCode() === 400, 'a 48 MP upload is refused');
+contains((string) $tooBig->getContent(), 'διαστάσεις', 'with a Greek message the client can act on');
+missing((string) $tooBig->getContent(), '/home/', 'and no filesystem path in it');
+// 8000x6000 at 4 bytes a pixel is 192 MB before the destination buffer. The
+// bar here is generous because this measures a whole in-process admin request,
+// error page and all; what it cannot pass is a decode.
+ok($grew < 32 * 1024 * 1024,
+    'having grown peak memory by ' . $grew . ' bytes rather than the 192 MB a decode would cost');
+
+@unlink($phoneFile);
 
 summary();

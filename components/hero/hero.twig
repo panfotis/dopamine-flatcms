@@ -1,18 +1,28 @@
 {# Component: hero — rendered for every block of type `hero`. #}
 <section class="hero" style="--align:{{ fields.align|default('center') }}">
-  {% if fields.image %}
+  {% if fields.image.src|default('') %}
     <div class="hero-media">
-      <img src="{{ img(fields.image, 1800) }}" alt="" fetchpriority="high"
-           srcset="{{ img(fields.image, 900) }} 900w, {{ img(fields.image, 1800) }} 1800w"
-           sizes="100vw">
+      {# lazy: false — this is the LCP element. The alt="" it renders now comes
+         from `decorative: true` in schema.yml rather than from a hardcoded
+         attribute nobody would have found. #}
+      {% include 'picture.twig' with {
+           image: fields.image,
+           widths: [640, 960, 1280, 1600, 2048],
+           sizes: '100vw',
+           lazy: false
+         } only %}
     </div>
   {% endif %}
 
   <div class="wrap hero-body">
     <h1>{{ fields.heading }}</h1>
     {% if fields.subheading %}<p class="lede">{{ fields.subheading|nl2br }}</p>{% endif %}
-    {% if fields.cta_label and fields.cta_url %}
-      <p><a class="btn" href="{{ fields.cta_url }}">{{ fields.cta_label }}</a></p>
+    {% if fields.cta_label %}
+      {# An id that no longer resolves renders as plain text, never as a dead
+         href. The panel flags it separately so it can actually be fixed. #}
+      {% set href = page_url(fields.cta_url) %}
+      <p>{% if href %}<a class="btn" href="{{ href }}">{{ fields.cta_label }}</a>
+         {%- else %}<span class="btn is-dead">{{ fields.cta_label }}</span>{% endif %}</p>
     {% endif %}
   </div>
 </section>

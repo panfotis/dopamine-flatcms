@@ -20,6 +20,7 @@ retype a component. This is enforced on save, not merely hidden in the UI.
 ddev start
 ddev composer install
 ddev exec bash tests/run.sh      # full suite — must be green before any phase is done
+php bin/doctor                   # health check; a deploy runs it before switching
 ddev launch                      # site
 ddev launch /admin.php           # panel
 ddev mailpit                     # outbound mail during form work
@@ -50,7 +51,10 @@ full in §10 of the build plan.
    Anything malformed in that file — unknown role, missing file, wrong shape —
    denies. Revision listing and restore are admin-only, and CSRF-protected.
 7. **An image `src` may only point at `config.media_bases`.** Anything else
-   turns the client's `/cdn-cgi/image` endpoint into an open proxy.
+   turns the client's `/cdn-cgi/image` endpoint — or `/img.php` — into an open
+   proxy. `Media::spec()` applies the identical guard to the anonymous GET, and
+   the derivative width must be in the finite allowlist: both are checked before
+   a byte of the source is read.
 8. **Saves run inside `Content::transaction()`** — lock + baseline check. Never
    load-mutate-write directly. A `StaleContentException` must re-render the
    editor's values, never discard them.
@@ -60,6 +64,18 @@ full in §10 of the build plan.
     feature pass.** If a change breaks them, the change is wrong. Assertions may
     be rewritten when an implementation legitimately changes output; a *case* may
     never be dropped.
+11. **An image's `width`/`height` are server-derived**, from the session record
+    the upload wrote or from what is already on disk beside the same `src`.
+    Never from the request body.
+12. **Every content mutation holds the site-wide content lock** (shared;
+    `Admin::MUTATIONS`). The hourly backup takes it exclusively, so a commit can
+    never capture a half-applied save. Adding a writing action means adding it
+    to that list.
+13. **`Fields::map()` is the only schema walk.** The top level, an image's
+    src/alt pair and a list's rows all go through it, so "undeclared keys are
+    dropped", "`editable` is enforced" and "`required` is checked" have one
+    implementation rather than one per nesting depth. A second recursive walk
+    is a bug, not an optimisation.
 
 ## Conventions
 
@@ -89,9 +105,14 @@ CVE-2025-45769), `symfony/html-sanitizer` (which pulls `league/uri` and two PSR
 HTTP interface packages transitively), `symfony/http-foundation` (no transitive
 dependencies; deliberately *not* `symfony/mime`, so sniff uploads with `finfo`
 rather than `UploadedFile::getMimeType()`). Extensions: `ext-curl`, `ext-dom`,
-`ext-gd`, `ext-json`, `ext-openssl` (tests mint Access tokens).
+`ext-exif`, `ext-gd`, `ext-json`, `ext-openssl` (tests mint Access tokens).
+`ext-exif` is there because uploads are re-encoded to strip GPS, which discards
+the orientation tag too — so the rotation has to be baked into the pixels before
+that happens, or every portrait on the site is sideways. `bin/doctor` checks the
+same list against the *running* interpreter, since Composer resolves under the
+CLI php and the site runs under php-fpm.
 
-Test suite: 268 checks across six files. Run all of them, not just the new ones.
+Test suite: 523 checks across seven files. Run all of them, not just the new ones.
 
 Planned, per the build plan: `symfony/mailer`, `symfony/dotenv`.
 
@@ -108,14 +129,21 @@ Planned, per the build plan: `symfony/mailer`, `symfony/dotenv`.
 ```
 src/          Cms Admin Auth Components Content Fields Locks Media R2
               Cloudflare AccessDeniedException StaleContentException
+              bootstrap.php — process-level error handlers, not a class
 config/       roles.yml — email -> admin|editor, committed, no secrets
 components/   <name>/schema.yml + <name>.twig — one folder per component
-content/      pages/*.yml, .revisions/   (locale subdirs land in Phase 9;
-              uploads move here in Phase 5; submissions live in var/)
-templates/    layout.twig, 404.twig, admin/*.twig
+content/      pages/<locale>/*.yml, uploads/, .revisions/, redirects.yml
+              All of it tracked in git — that is the backup. Submissions live
+              in var/. The locale directory is the permanent shape; Phase 9
+              resolves a second one beside it rather than migrating.
+bin/          doctor deploy.sh rollback.sh release.sh backup restore-drill
+              new-site
+templates/    layout.twig, picture.twig, 404.twig, 500.twig, admin/*.twig
+              Every image on the site renders through picture.twig. A component
+              that writes its own <img> is caught by 01_render.php.
 public/       docroot: index.php, admin.php, img.php, router.php
 tests/        01_render 02_admin 03_lockdown 04_hardening 05_concurrency
-              06_production, lib.php, fixtures/, run.sh
+              06_production 07_shipkit, lib.php, fixtures/, run.sh
               Requests run in-process: build a Request, assert on the Response.
               Only _boot.php (needs a real environment) and _img_route.php
               (measures peak memory) still fork.
@@ -125,6 +153,11 @@ Production runs an atomic-release layout: `CONTENT_PATH` and `VAR_PATH` point
 the engine at `shared/` directories outside the release, so flipping `current`
 never touches a client save. `tests/fixtures/production.env` is the concrete
 shape; `APP_ENV=prod` refuses to boot on an unsafe auth config.
+
+`bin/deploy.sh` runs every check *before* the switch and reverses it if the
+post-switch smoke test fails — that ordering is the safety property, and
+`07_shipkit.php` asserts it. `bin/backup` and `bin/restore-drill` are the pair
+that makes "we have backups" a checked claim rather than a belief.
 
 Adding a component is two files and no registration step. Keep it that way.
 

@@ -1,0 +1,66 @@
+{#
+  Every image on the site renders through here.
+
+    {% include 'picture.twig' with {
+         image: fields.image,
+         widths: [640, 960, 1280],
+         sizes: '(min-width: 1200px) 1100px, 100vw',
+         lazy: false
+       } only %}
+
+  A template rather than a PHP helper on purpose: building this markup in PHP
+  would mean marking a function `is_safe: html`, which is the exact mistake
+  §9 records removing the `|rich` filter for. As a template, autoescaping
+  handles `alt` for free, and a site overrides it by dropping a file of the
+  same name in front of it on the loader path.
+
+  There is no bare-<img> case to fall back to. Without Cloudflare's
+  `format=auto` doing content negotiation, WebP-with-a-fallback needs a
+  <source type> on every image anyway — so one markup shape, no per-component
+  branching, and art direction later is just adding `media` to a source.
+
+  `alt` goes on the <img> and never on a <source>: sources take no alt, and
+  splitting it across them is the usual way to end up with none at all. It is
+  read from the image object itself, so a component cannot forget to wire it
+  up — and a decorative image already carries alt="" by declaration.
+#}
+{% set src = image.src|default('') %}
+
+{% if src %}
+  {# img() answers '' for a width outside the derivative allowlist, so a
+     component asking for 1100px loses that srcset entry instead of shipping a
+     URL that 404s. The finite width set is the whole reason an anonymous GET
+     cannot mint arbitrary variants; it is not negotiable per component. #}
+  {# Nothing above the original's own width: a 640w descriptor on a 600px
+     source is a lie the browser acts on, and upscaling costs bytes to lose
+     detail. When the original is smaller than every allowed width there is no
+     derivative worth making, and the <img> falls back to the stored file. #}
+  {% set usable = widths|default([])
+       |filter(w => img(src, w) and (image.width|default(0) == 0 or w <= image.width))
+       |map(w => w) %}
+  {% set sizes = sizes|default('100vw') %}
+  {% set lazy = lazy is defined ? lazy : true %}
+
+  <picture>
+    {% if usable %}
+      <source type="image/webp" sizes="{{ sizes }}"
+              srcset="{{ usable|map(w => img(src, w, 'webp') ~ ' ' ~ w ~ 'w')|join(', ') }}">
+    {% endif %}
+    <img src="{{ usable ? img(src, usable|last) : src }}"
+         {% if usable %}srcset="{{ usable|map(w => img(src, w) ~ ' ' ~ w ~ 'w')|join(', ') }}"
+         sizes="{{ sizes }}"{% endif %}
+         alt="{{ image.alt|default('') }}"
+         {#- The original's intrinsic dimensions, so the browser can reserve the
+             box before a byte of image arrives. Omitted rather than guessed
+             when unknown: a wrong ratio reserves the wrong box, which is worse
+             than reserving none. -#}
+         {% if image.width|default(0) > 0 and image.height|default(0) > 0 %}
+         width="{{ image.width }}" height="{{ image.height }}"
+         {% endif %}
+         {#- Lazy by default, but the hero must pass false: lazy-loading the
+             above-the-fold image delays LCP, and it is the single most common
+             way responsive images are got wrong. #}
+         loading="{{ lazy ? 'lazy' : 'eager' }}" decoding="async"
+         {%- if not lazy %} fetchpriority="high"{% endif %}>
+  </picture>
+{% endif %}

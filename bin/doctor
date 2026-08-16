@@ -1,0 +1,412 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * Everything that can be wrong with a site without anyone noticing until a
+ * client does.
+ *
+ * Runs before the first deploy and before every one after it, against the
+ * *shared* content a release is about to be pointed at. A deploy whose doctor
+ * fails never switches `current`, which is the whole reason this exists: the
+ * failures below are the ones that produce a white page, a broken image or a
+ * silently unreachable page rather than an obvious error.
+ *
+ *   bin/doctor            check and report
+ *   bin/doctor --quiet    exit code only, for cron
+ *
+ * Exit 0 clean, 1 if anything is wrong. Warnings do not fail the run.
+ */
+
+declare(strict_types=1);
+
+use Dopamine\FlatCms\Cms;
+use Symfony\Component\Yaml\Yaml;
+
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+$quiet = in_array('--quiet', $argv, true);
+
+/** @var list<array{0: string, 1: string}> */
+$problems = [];
+$warnings = [];
+
+$fail = static function (string $what) use (&$problems): void {
+    $problems[] = $what;
+};
+$warn = static function (string $what) use (&$warnings): void {
+    $warnings[] = $what;
+};
+
+// ── Config and paths ────────────────────────────────────────────────────────
+
+try {
+    $config = require dirname(__DIR__) . '/config.php';
+} catch (Throwable $e) {
+    // The production boot guard throws here, which is the point: a box that
+    // refuses to serve must also fail its own health check rather than pass it.
+    fwrite(STDERR, "config.php refuses to load:\n" . $e->getMessage() . "\n");
+    exit(1);
+}
+
+$cms = new Cms($config);
+
+foreach (['content', 'components', 'templates'] as $key) {
+    if (!is_dir($config['paths'][$key])) {
+        $fail(sprintf('paths.%s does not exist: %s', $key, $config['paths'][$key]));
+    }
+}
+
+// Writable, not merely present: the panel writes pages, revisions, uploads,
+// locks and the derivative cache, and every one of those fails at the worst
+// possible moment — mid-save, with the client watching.
+foreach ([
+    'content'          => $config['paths']['content'],
+    'content/uploads'  => $config['paths']['uploads'],
+    'var/cache'        => $config['paths']['cache'],
+    'var/locks'        => dirname($config['paths']['cache']) . '/locks',
+] as $label => $dir) {
+    if (!is_dir($dir)) {
+        // Created on demand by the code that needs it, so only the parent has
+        // to exist — but if the parent is unwritable, it never will be.
+        $dir = dirname($dir);
+    }
+    if (!is_writable($dir)) {
+        $fail(sprintf('%s is not writable by this user: %s', $label, $dir));
+    }
+}
+
+// Disk, because every failure mode of a full one is silent and awful: a save
+// writes a truncated page, the derivative cache stops filling, git commits
+// nothing. Run from cron with --quiet this is the disk monitor.
+$free = @disk_free_space($config['paths']['content']);
+$total = @disk_total_space($config['paths']['content']);
+if (is_float($free) && is_float($total) && $total > 0) {
+    $used = 1 - ($free / $total);
+    $pct = round($used * 100);
+    if ($used > 0.95) {
+        $fail(sprintf('disk is %d%% full — saves will start truncating', $pct));
+    } elseif ($used > 0.85) {
+        $warn(sprintf('disk is %d%% full', $pct));
+    }
+}
+
+// The derivative cache is bounded by config, but only if pruning is running.
+// Well past the ceiling means it is not.
+$cacheDir = $config['paths']['cache'] . '/images';
+if (is_dir($cacheDir)) {
+    $bytes = 0;
+    foreach (glob($cacheDir . '/*') ?: [] as $file) {
+        $bytes += (int) @filesize($file);
+    }
+    $ceiling = (int) $config['images']['derivatives']['cache_max_bytes'];
+    if ($ceiling > 0 && $bytes > $ceiling * 1.5) {
+        $warn(sprintf(
+            'the derivative cache is %d MB against a %d MB ceiling — pruning is not keeping up',
+            intdiv($bytes, 1024 * 1024),
+            intdiv($ceiling, 1024 * 1024)
+        ));
+    }
+}
+
+// Checked against the *running* interpreter, not against composer.json.
+// Composer resolved these under the CLI php; php-fpm can be a different build
+// with a different extension set, and that difference only ever shows up as a
+// fatal on the one request that needs it.
+foreach (['curl', 'dom', 'exif', 'gd', 'json', 'openssl'] as $ext) {
+    if (!extension_loaded($ext)) {
+        $fail('required PHP extension missing: ext-' . $ext);
+    }
+}
+
+// ── Production auth ─────────────────────────────────────────────────────────
+//
+// config.php's boot guard already refuses to start on these, but only when
+// APP_ENV=prod is actually set. Checking here catches the box where it is not.
+
+if (getenv('APP_ENV') === 'prod') {
+    if ((bool) ini_get('display_errors')) {
+        $fail('display_errors is on in production — a stack trace is a public page');
+    }
+} else {
+    $warn('APP_ENV is not "prod": the auth boot guard is inert on this box');
+}
+
+if ($config['auth']['mode'] === 'none') {
+    $warn('auth.mode is "none" — the panel is wide open (fine locally, never in production)');
+}
+if ($config['auth']['dev_bypass'] === true) {
+    $warn('AUTH_DEV_BYPASS=1 — authentication is skipped entirely on this box');
+}
+if (!is_file((string) $config['auth']['roles_file'])) {
+    $fail('roles file missing: ' . $config['auth']['roles_file'] . ' — every address would be refused');
+}
+
+// ── Components ──────────────────────────────────────────────────────────────
+
+$types = [];
+foreach (glob($config['paths']['components'] . '/*', GLOB_ONLYDIR) ?: [] as $dir) {
+    $type = basename($dir);
+    $types[] = $type;
+
+    if (!is_file($dir . '/schema.yml')) {
+        $fail(sprintf('component "%s" has no schema.yml', $type));
+        continue;
+    }
+    if (!is_file($dir . '/' . $type . '.twig')) {
+        $fail(sprintf('component "%s" has no %s.twig — every block of it would vanish from the page', $type, $type));
+    }
+
+    try {
+        $schema = Yaml::parseFile($dir . '/schema.yml');
+    } catch (Throwable $e) {
+        $fail(sprintf('component "%s": schema.yml is not valid YAML (%s)', $type, $e->getMessage()));
+        continue;
+    }
+
+    foreach ((array) ($schema['fields'] ?? []) as $name => $def) {
+        $def = is_array($def) ? $def : ['type' => $def];
+        $fieldType = (string) ($def['type'] ?? 'text');
+
+        if (!in_array($fieldType, Dopamine\FlatCms\Fields::TYPES, true)) {
+            $fail(sprintf('component "%s", field "%s": unknown type "%s"', $type, $name, $fieldType));
+        }
+        // Silently locking a field is the fail-closed behaviour Components
+        // applies, and it is right — but it is also invisible, so say it here.
+        if (array_key_exists('editable', $def)
+            && !in_array($def['editable'], Dopamine\FlatCms\Components::EDITABLE, true)) {
+            $fail(sprintf(
+                'component "%s", field "%s": editable: %s is not one of true/false/admin, so the field is locked',
+                $type,
+                $name,
+                var_export($def['editable'], true)
+            ));
+        }
+        if ($fieldType === 'list') {
+            if (!is_array($def['fields'] ?? null) || $def['fields'] === []) {
+                $fail(sprintf('component "%s", field "%s": a list needs a `fields` sub-schema', $type, $name));
+            }
+            if (!is_int($def['max'] ?? null) || (int) $def['max'] <= 0) {
+                $warn(sprintf(
+                    'component "%s", field "%s": no `max`, so the built-in ceiling applies',
+                    $type,
+                    $name
+                ));
+            }
+        }
+        if ($fieldType === 'select' && Dopamine\FlatCms\Fields::options($def) === []) {
+            $fail(sprintf('component "%s", field "%s": a select with no options', $type, $name));
+        }
+    }
+}
+
+// A template that cannot compile is a white page on the pages that use it, and
+// nothing before this point would have noticed.
+//
+// all() parses every schema.yml, so it throws on the malformed one already
+// reported above. Catching keeps doctor a report rather than a crash — a health
+// check that dies on the first problem tells you about one problem.
+$componentsLoad = true;
+
+try {
+    $loaded = $cms->components->all();
+} catch (Throwable $e) {
+    $loaded = [];
+    $componentsLoad = false;
+    $warn('component templates and page links not checked: a schema failed to parse (' . $e->getMessage() . ')');
+}
+
+foreach ($loaded as $type => $schema) {
+    try {
+        $cms->twig->load($schema['template']);
+    } catch (Throwable $e) {
+        $fail(sprintf('component "%s": %s does not compile — %s', $type, $schema['template'], $e->getMessage()));
+    }
+}
+
+foreach (['layout.twig', '404.twig', '500.twig', 'picture.twig'] as $template) {
+    if (!is_file($config['paths']['templates'] . '/' . $template)) {
+        $fail('missing template: ' . $template);
+        continue;
+    }
+    try {
+        $cms->twig->load($template);
+    } catch (Throwable $e) {
+        $fail(sprintf('%s does not compile — %s', $template, $e->getMessage()));
+    }
+}
+
+// ── Pages ───────────────────────────────────────────────────────────────────
+
+$pagesDir = $cms->content->pagesDir();
+if (!is_dir($pagesDir)) {
+    $fail('no pages directory for the configured locale: ' . $pagesDir);
+}
+
+$stray = glob($config['paths']['content'] . '/pages/*.yml') ?: [];
+if ($stray !== []) {
+    $fail(sprintf(
+        '%d page(s) sitting outside a locale directory and therefore unreachable: %s',
+        count($stray),
+        implode(', ', array_map('basename', $stray))
+    ));
+}
+
+$slugs = [];
+$ids = [];
+foreach (glob($pagesDir . '/*.yml') ?: [] as $file) {
+    $id = basename($file, '.yml');
+    $ids[] = $id;
+
+    try {
+        $data = Yaml::parseFile($file);
+    } catch (Throwable $e) {
+        $fail(sprintf('page "%s": not valid YAML (%s)', $id, $e->getMessage()));
+        continue;
+    }
+    // A YAML *list* is an array too, so is_array() alone would wave through a
+    // file that parses fine and then hands templates nothing they expect.
+    if (!is_array($data) || array_is_list($data)) {
+        $fail(sprintf('page "%s": is not a mapping', $id));
+        continue;
+    }
+
+    $slug = (string) ($data['slug'] ?? '');
+    if ($slug === '' || !str_starts_with($slug, '/')) {
+        $fail(sprintf('page "%s": slug must start with "/" (got "%s")', $id, $slug));
+    }
+    $key = rtrim($slug, '/') ?: '/';
+    if (isset($slugs[$key])) {
+        // findBySlug returns the first match, so the second page is simply
+        // unreachable — with no error anywhere to say why.
+        $fail(sprintf('pages "%s" and "%s" share the slug "%s"', $slugs[$key], $id, $slug));
+    }
+    $slugs[$key] = $id;
+
+    $seen = [];
+    foreach ((array) ($data['blocks'] ?? []) as $i => $block) {
+        if (!is_array($block)) {
+            $fail(sprintf('page "%s": block %d is not a mapping', $id, $i));
+            continue;
+        }
+
+        $blockId = (string) ($block['id'] ?? '');
+        $type = (string) ($block['type'] ?? '');
+
+        if ($blockId === '') {
+            $fail(sprintf('page "%s": block %d has no id', $id, $i));
+        } elseif (isset($seen[$blockId])) {
+            // The panel names inputs by block id, so duplicates mean one form
+            // field silently overwrites another on save.
+            $fail(sprintf('page "%s": duplicate block id "%s"', $id, $blockId));
+        }
+        $seen[$blockId] = true;
+
+        if (!in_array($type, $types, true)) {
+            $fail(sprintf('page "%s": block "%s" is type "%s", which has no component', $id, $blockId, $type));
+        }
+    }
+
+    if (isset($data['nav']) && !is_array($data['nav'])) {
+        $fail(sprintf('page "%s": nav: must be a mapping of label and order', $id));
+    }
+}
+
+// Every `link` field on every page: an id that no longer resolves renders as
+// plain text, which is correct behaviour and invisible from the outside.
+foreach ($componentsLoad ? $ids : [] as $id) {
+    try {
+        $page = $cms->content->load($id);
+    } catch (Throwable) {
+        continue; // already reported as malformed above
+    }
+
+    foreach ((array) ($page['blocks'] ?? []) as $block) {
+        $schema = $cms->components->get((string) $block['type']);
+        if ($schema === null) {
+            continue;
+        }
+        foreach ($schema['fields'] as $name => $def) {
+            if (($def['type'] ?? '') !== 'link') {
+                continue;
+            }
+            $target = (string) ($block['fields'][$name] ?? '');
+            if ($target !== '' && !in_array($target, $ids, true)) {
+                $warn(sprintf(
+                    'page "%s", block "%s", field "%s": links to page id "%s", which does not exist',
+                    $id,
+                    $block['id'],
+                    $name,
+                    $target
+                ));
+            }
+        }
+    }
+}
+
+// ── Redirects ───────────────────────────────────────────────────────────────
+
+$redirectFile = $config['paths']['content'] . '/redirects.yml';
+if (is_file($redirectFile)) {
+    try {
+        $redirects = Yaml::parseFile($redirectFile);
+    } catch (Throwable $e) {
+        $redirects = null;
+        $fail('redirects.yml is not valid YAML: ' . $e->getMessage());
+    }
+
+    if ($redirects !== null && (!is_array($redirects) || array_is_list($redirects))) {
+        $fail('redirects.yml must be a mapping of "from: to"');
+        $redirects = [];
+    }
+
+    foreach ((array) $redirects as $from => $to) {
+        $from = '/' . trim((string) $from, '/');
+        $to = (string) $to;
+
+        if (isset($slugs[rtrim($from, '/') ?: '/'])) {
+            // The redirect is checked only after findBySlug misses, so this one
+            // can never fire — and whoever wrote it believes it does.
+            $fail(sprintf('redirect "%s" shadows a live page and can never fire', $from));
+        }
+
+        $resolved = str_starts_with($to, 'http') ? $to
+            : (str_starts_with($to, '/') ? $to : ($cms->pageUrl($to) ?: null));
+
+        if ($resolved === null) {
+            $fail(sprintf('redirect "%s" points at page id "%s", which does not exist', $from, $to));
+            continue;
+        }
+        if (str_starts_with($resolved, '/') && $resolved === $from) {
+            $fail(sprintf('redirect "%s" points at itself', $from));
+            continue;
+        }
+        // One hop only, so a target that is itself a redirect is a 301 into a
+        // 301 at best and a loop at worst.
+        if (str_starts_with($resolved, '/') && $cms->redirectFor($resolved) !== null) {
+            $fail(sprintf('redirect "%s" -> "%s" chains into another redirect', $from, $resolved));
+        }
+        if (str_starts_with($resolved, '/') && !isset($slugs[rtrim($resolved, '/') ?: '/'])) {
+            $fail(sprintf('redirect "%s" -> "%s" lands on nothing', $from, $resolved));
+        }
+    }
+}
+
+// ── Report ──────────────────────────────────────────────────────────────────
+
+if (!$quiet) {
+    foreach ($warnings as $line) {
+        fwrite(STDOUT, "  ! " . $line . "\n");
+    }
+    foreach ($problems as $line) {
+        fwrite(STDERR, "  ✗ " . $line . "\n");
+    }
+
+    fwrite(
+        $problems === [] ? STDOUT : STDERR,
+        $problems === []
+            ? sprintf("doctor: ok (%d pages, %d components, %d warnings)\n", count($ids), count($types), count($warnings))
+            : sprintf("doctor: %d problem(s)\n", count($problems))
+    );
+}
+
+exit($problems === [] ? 0 : 1);

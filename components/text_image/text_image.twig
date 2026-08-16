@@ -6,11 +6,13 @@
       {{ fields.body|raw }}
     </div>
 
-    {% if fields.image %}
+    {% if fields.image.src|default('') %}
       <figure class="media">
-        <img src="{{ img(fields.image, 900) }}" alt="{{ fields.image_alt }}" loading="lazy"
-             srcset="{{ img(fields.image, 600) }} 600w, {{ img(fields.image, 1200) }} 1200w"
-             sizes="(min-width:820px) 46vw, 100vw">
+        {% include 'picture.twig' with {
+             image: fields.image,
+             widths: [320, 640, 960, 1280],
+             sizes: '(min-width:820px) 46vw, 100vw'
+           } only %}
       </figure>
     {% endif %}
   </div>

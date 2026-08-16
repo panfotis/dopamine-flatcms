@@ -12,15 +12,11 @@ fields:
     label: Κείμενο
     hint: Επιτρέπονται έντονα, πλάγια, λίστες και σύνδεσμοι.
 
+  # No `image_alt` beside it any more: alt lives inside the image object, so it
+  # arrives with the field instead of being remembered separately.
   image:
     type: image
     label: Εικόνα
-
-  image_alt:
-    type: text
-    label: Περιγραφή εικόνας
-    max: 120
-    hint: Για άτομα που χρησιμοποιούν αναγνώστη οθόνης. Βοηθά και το SEO.
 
   media_side:
     type: select

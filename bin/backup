@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+#
+# Commit and push shared/content/ to its private repository. Hourly, from cron.
+#
+#   bin/backup
+#
+# shared/content/ is a git repository of its own — pages, revisions and uploads
+# together — so the recovery point is at most one successful interval rather
+# than "whenever someone remembered". `git clone` restores the site whole,
+# including the images on it, which is the failure the old layout had: uploads
+# were gitignored under public/ and nothing copied them anywhere, so a lost box
+# restored every page perfectly with every picture broken.
+#
+#   CONTENT_PATH   the repository to back up
+#   VAR_PATH       where the site-wide content lock lives
+#   BACKUP_ALERT   command run with a message on any failure; monitored
+#
+# Exit codes: 0 committed or nothing to do, 1 anything went wrong. A non-zero
+# exit is itself the alert of last resort — cron mails it — but BACKUP_ALERT is
+# what a monitored site should set, because a cron mail nobody reads is not
+# monitoring.
+
+set -euo pipefail
+
+content="${CONTENT_PATH:-/var/www/pelatis/shared/content}"
+var="${VAR_PATH:-/var/www/pelatis/shared/var}"
+alert="${BACKUP_ALERT:-}"
+
+fail() {
+  echo "backup: $1" >&2
+  [ -n "$alert" ] && $alert "content backup failed: $1" || true
+  exit 1
+}
+
+[ -d "$content/.git" ] || fail "$content is not a git repository"
+
+# The site-wide content lock, held exclusively for the whole commit.
+#
+# Without it `git add -A` can run mid-save and capture a page file renamed into
+# place but its revision not yet written, or an upload's bytes present and the
+# page referencing them not — a recovery point in a state the CMS never
+# produced. The CMS takes this shared on every mutation, so this waits for
+# whatever is in flight and holds off whatever arrives, for the few hundred
+# milliseconds a commit takes.
+mkdir -p "$var/locks"
+exec 9>"$var/locks/content.lock"
+flock --timeout 60 9 || fail "could not acquire the content lock within 60s"
+
+cd "$content"
+
+git add -A || fail "git add failed"
+
+if git diff --cached --quiet; then
+  # Not an error and not worth an alert: most hours nobody edits anything.
+  # Still push, in case an earlier run committed and failed to push.
+  git push --quiet 2>/dev/null || true
+  echo "backup: nothing to commit"
+  exit 0
+fi
+
+git -c user.name="Dopamine FlatCMS" -c user.email="cms@localhost" \
+    commit --quiet -m "content: $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  || fail "git commit failed"
+
+git push --quiet || fail "git push failed — the commit is local only, so the off-box recovery point has not moved"
+
+echo "backup: pushed $(git rev-parse --short HEAD)"

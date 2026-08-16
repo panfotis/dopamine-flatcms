@@ -1,6 +1,9 @@
 # Managed by Dopamine FlatCMS. Structure is edited here, content in /admin.
 title: Αρχική
 slug: /
+nav:
+  label: Αρχική
+  order: 10
 meta:
   description: 'Δείγμα σελίδας για το FlatCMS.'
 blocks:
@@ -10,9 +13,13 @@ blocks:
     fields:
       heading: 'Μικρά site, χωρίς βαρύ CMS leme!'
       subheading: 'Στατική ταχύτητα, flat αρχεία, και ένα panel που ο πελάτης δεν μπορεί να χαλάσει.'
-      image: /uploads/2026/08/fotispan-sm-7ed239.png
+      image:
+        src: /uploads/2026/08/chatgpt-image-aug-14-2026-05-53-32-pm-fca4e7.png
+        alt: ''
+        width: 1672
+        height: 941
       cta_label: Επικοινωνία
-      cta_url: /epikoinonia
+      cta_url: epikoinonia
       align: center
   -
     id: intro
@@ -20,8 +27,11 @@ blocks:
     fields:
       heading: 'Τι κάνει διαφορετικά'
       body: '<p>Κάθε ενότητα είναι ένας φάκελος με ένα <strong>schema.yml</strong> και ένα template. Το panel φτιάχνεται μόνο του από το schema.</p><ul><li>Χωρίς βάση δεδομένων</li><li>Χωρίς build step</li><li>Οι αλλαγές είναι live σε δευτερόλεπτα</li></ul>'
-      image: ''
-      image_alt: ''
+      image:
+        src: ''
+        alt: ''
+        width: 0
+        height: 0
       media_side: end
   -
     id: second
@@ -29,9 +39,25 @@ blocks:
     fields:
       heading: 'Ο πελάτης αλλάζει μόνο κείμενα'
       body: '<p>Δεν υπάρχει κουμπί «προσθήκη ενότητας». Δεν υπάρχει drag &amp; drop. Ο πελάτης βλέπει τα πεδία που του δίνεις — τίποτα άλλο.</p>'
-      image: ''
-      image_alt: ''
+      image:
+        src: ''
+        alt: ''
+        width: 0
+        height: 0
       media_side: start
+  -
+    id: faq
+    type: faq
+    fields:
+      heading: 'Συχνές ερωτήσεις'
+      open_first: true
+      questions:
+        -
+          question: 'Μπορεί ο πελάτης να χαλάσει τη σελίδα;'
+          answer: '<p>Όχι. Αλλάζει μόνο κείμενα και εικόνες μέσα στα πεδία που του δίνετε.</p>'
+        -
+          question: 'Χρειάζεται βάση δεδομένων;'
+          answer: '<p>Όχι. Κάθε σελίδα είναι ένα αρχείο YAML.</p>'
   -
     id: contact
     type: contact_cta

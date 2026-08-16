@@ -79,27 +79,34 @@ ok(($paths['roles'] ?? '') === $env['ROLES_FILE'], 'config.php resolves ROLES_FI
 
 section('Releases stay 0.x, and page storage has one permanent shape');
 
+$cmsBoot = require $root . '/config.php';
 $composer = json_decode((string) file_get_contents($root . '/composer.json'), true);
 ok(str_starts_with((string) ($composer['version'] ?? ''), '0.'),
     'the package is ' . ($composer['version'] ?? '?') . ' — no stability promise before the pilot');
 ok(($composer['license'] ?? '') === 'proprietary', 'license is still proprietary; going public is a deliberate decision, not a slip');
 
-// Single-locale storage is the permanent shape: content/pages/<id>.yml today,
-// content/pages/<locale>/<id>.yml in Phase 9. Anything else is a migration
-// nobody agreed to, so pin the resolver rather than trusting a comment.
+// content/pages/<locale>/<id>.yml is the permanent shape. Phase 5 adopts it —
+// on a single-language site too — precisely so Phase 9 is a resolver change
+// rather than a migration across twenty live sites after v1.0.0. The case is
+// unchanged: pin the resolver rather than trusting a comment, and prove the
+// real content is stored in exactly the shape the resolver expects.
 $fileOf = new ReflectionMethod(Content::class, 'file');
 $fileOf->setAccessible(true);
-$resolved = $fileOf->invoke(new Content('/CONTENT'), 'home');
-ok($resolved === '/CONTENT/pages/home.yml', 'a page id resolves to <content>/pages/<id>.yml, flat and single-locale');
-ok(glob($root . '/content/pages/*/', GLOB_ONLYDIR) === [], 'no locale directory has been invented ahead of Phase 9');
-ok(count(glob($root . '/content/pages/*.yml') ?: []) > 0, 'and the real content is stored in exactly that shape');
+$resolved = $fileOf->invoke(new Content('/CONTENT', 'el'), 'home');
+ok($resolved === '/CONTENT/pages/el/home.yml', 'a page id resolves to <content>/pages/<locale>/<id>.yml');
+ok(glob($root . '/content/pages/*.yml') === [], 'no page is left at the old flat path — one shape, not two');
+$dirs = array_map('basename', glob($root . '/content/pages/*', GLOB_ONLYDIR) ?: []);
+ok($dirs === [(string) $cmsBoot['site']['locale']],
+    'and exactly one locale directory exists, the configured default: ' . implode(', ', $dirs));
+ok(count(glob($root . '/content/pages/' . $cmsBoot['site']['locale'] . '/*.yml') ?: []) > 0,
+    'with the real content inside it');
 
 // ── 3. Atomic release spike ─────────────────────────────────────────────────
 
 section('An atomic release preserves shared state across two releases');
 
 $spike = $root . '/var/cache/spike-' . bin2hex(random_bytes(4));
-foreach (['releases/r1', 'releases/r2', 'shared/content/pages', 'shared/var/cache', 'shared/var/locks'] as $d) {
+foreach (['releases/r1', 'releases/r2', 'shared/content/pages/el', 'shared/var/cache', 'shared/var/locks'] as $d) {
     mkdir($spike . '/' . $d, 0775, true);
 }
 // Each release is code only. Nothing a client can write lives inside one.
@@ -115,7 +122,7 @@ $deploy = static function (string $target) use ($spike): void {
     rename($tmp, $spike . '/current');
 };
 
-$shared = new Content($spike . '/shared/content');
+$shared = new Content($spike . '/shared/content', 'el');
 
 $deploy($spike . '/releases/r1');
 ok(readlink($spike . '/current') === $spike . '/releases/r1', 'current points at release r1');
@@ -126,8 +133,8 @@ $shared->snapshot('home');
 file_put_contents($spike . '/shared/var/locks/home.json', '{"who":"client"}');
 file_put_contents($spike . '/shared/var/cache/warm.txt', 'warm');
 
-ok(is_file($spike . '/shared/content/pages/home.yml'), 'the save landed in shared/content, not in the release');
-ok(!is_file($spike . '/releases/r1/content/pages/home.yml'), 'the release directory holds no content at all');
+ok(is_file($spike . '/shared/content/pages/el/home.yml'), 'the save landed in shared/content, not in the release');
+ok(!is_file($spike . '/releases/r1/content/pages/el/home.yml'), 'the release directory holds no content at all');
 
 $deploy($spike . '/releases/r2');
 
@@ -158,7 +165,13 @@ ok($d['sources'] === ['uploads', 'r2'], 'source adapters are named: local upload
 ok(is_int($d['memory_budget']) && $d['memory_budget'] > 0, 'a per-decode memory budget exists (' . $d['memory_budget'] . ' bytes)');
 ok($d['memory_budget'] < $cms->config['images']['max_pixels'] * 4, 'the anonymous-GET budget is tighter than the upload guard');
 ok(is_int($d['cache_max_age']) && is_int($d['cache_max_bytes']), 'cache ceilings exist for both age and disk');
-ok(!class_exists('Dopamine\FlatCms\Media') || !method_exists(Media::class, 'encode'), 'no encoder exists yet — the contract came first');
+// Was "no encoder exists yet". Phase 4 wrote it, so the case becomes the one
+// that mattered all along: the encoder came second and still answers to the
+// contract rather than carrying rules of its own.
+ok(method_exists(Media::class, 'encode'), 'the encoder exists, and it was written after the contract');
+$encodeParams = (new ReflectionMethod(Media::class, 'encode'))->getParameters();
+ok(count($encodeParams) === 2 && $encodeParams[1]->getName() === 'spec',
+    'and it takes a spec() result rather than raw query parameters — nothing reaches GD that the allowlist did not pass');
 
 section('The derivative route rejects a bad width without decoding');
 
@@ -181,7 +194,7 @@ ok(Media::spec($cms->config['images'], $bases, ['src' => '/uploads/does-not-exis
     'spec() resolves without stat()ing the source — validation precedes every read');
 
 // End to end, against a real decompression bomb on disk.
-$bomb = $root . '/public/uploads/_bomb.png';
+$bomb = $root . '/content/uploads/_bomb.png';
 @mkdir(dirname($bomb), 0775, true);
 $ihdr = pack('N', 30000) . pack('N', 30000) . "\x08\x02\x00\x00\x00";
 file_put_contents($bomb, "\x89PNG\r\n\x1a\n" . pack('N', 13) . 'IHDR' . $ihdr . pack('N', 0));
@@ -194,7 +207,133 @@ ok(isset($m[1]) && (int) $m[1] < 4 * 1024 * 1024, 'and grew peak memory by ' . (
 $off = run(__DIR__ . '/_img_route.php', [], 'src=https://evil.tld/x.jpg&w=960');
 contains($off, 'status=404', 'the route 404s an off-base src');
 
+// A source that IS in the allowlist but too big to handle inside the budget
+// must also be refused off the header, before a decode. This is the case the
+// bomb above cannot prove — there the width was wrong, so nothing was reached.
+$budget = run(__DIR__ . '/_img_route.php', [], 'src=/uploads/_bomb.png&w=960');
+contains($budget, 'status=404', 'a source over the memory budget is refused at an allowlisted width too');
+preg_match('/peak_growth=(\d+)/', $budget, $mb);
+ok(isset($mb[1]) && (int) $mb[1] < 4 * 1024 * 1024,
+    'and grew peak memory by ' . (int) ($mb[1] ?? -1) . ' bytes — refused off the header, not after a decode');
+
 unlink($bomb);
+
+section('The encoder produces real derivatives, once, atomically');
+
+$uploads = $root . '/content/uploads';
+@mkdir($uploads, 0775, true);
+
+// An opaque JPEG and a PNG with a genuinely transparent corner.
+$jpegSrc = $uploads . '/_derive.jpg';
+$im = imagecreatetruecolor(1200, 800);
+imagefilledrectangle($im, 0, 0, 1199, 799, imagecolorallocate($im, 200, 60, 60));
+imagejpeg($im, $jpegSrc, 90);
+imagedestroy($im);
+
+$pngSrc = $uploads . '/_derive.png';
+$im = imagecreatetruecolor(1200, 800);
+imagealphablending($im, false);
+imagesavealpha($im, true);
+imagefilledrectangle($im, 0, 0, 1199, 799, imagecolorallocatealpha($im, 0, 0, 0, 127));
+imagepng($im, $pngSrc);
+imagedestroy($im);
+
+$cacheDir = $cms->config['paths']['cache'] . '/images';
+array_map('unlink', glob($cacheDir . '/*') ?: []);
+
+$derive = static fn (string $src, string $format = 'auto'): ?array => Media::encode(
+    $cms->config,
+    Media::spec($cms->config['images'], $bases, ['src' => $src, 'w' => '640', 'f' => $format])
+);
+
+$webp = $derive('/uploads/_derive.jpg', 'webp');
+ok($webp !== null && is_file($webp['path']), 'a local upload encodes to a derivative on disk');
+ok(($webp['mime'] ?? '') === 'image/webp', 'WebP is produced when it is asked for');
+$dim = @getimagesize($webp['path']);
+ok($dim[0] === 640, 'at exactly the requested width (' . $dim[0] . 'px)');
+ok($dim[1] === 427, 'with the aspect ratio preserved (' . $dim[1] . 'px tall)');
+
+$jpeg = $derive('/uploads/_derive.jpg');
+ok(($jpeg['mime'] ?? '') === 'image/jpeg', 'an opaque source falls back to JPEG');
+
+// The fallback for a browser without WebP has to keep alpha, or every logo on
+// the site grows a black box.
+$png = $derive('/uploads/_derive.png');
+ok(($png['mime'] ?? '') === 'image/png', 'a source with transparency falls back to PNG instead');
+$alpha = imagecreatefrompng($png['path']);
+// Near-127 rather than exactly 127: resampling rounds. The failure this
+// catches is 0 — a flattened black rectangle, which is what came out before
+// the alpha flags moved to before the scale.
+$a = imagecolorat($alpha, 5, 5) >> 24 & 0x7F;
+ok($a >= 120, 'and the transparency survives the round trip (alpha ' . $a . '/127, not flattened to 0)');
+imagedestroy($alpha);
+
+// Keyed by source content hash: the same bytes at the same width and format
+// are the same file, and a request for one that already exists re-uses it.
+$again = $derive('/uploads/_derive.jpg', 'webp');
+ok($again['path'] === $webp['path'], 'the same src/width/format resolves to the same cache entry');
+ok(count(glob($cacheDir . '/*.webp') ?: []) === 1, 'and encoding it twice leaves one file, not two');
+ok(glob($cacheDir . '/*.lock') === [], 'the per-key lock is cleaned up after the encode');
+ok(glob($cacheDir . '/*.tmp') === [], 'and no partial file is left behind — the rename is atomic');
+
+// Concurrent misses: four processes, one cold cache, one valid derivative.
+array_map('unlink', glob($cacheDir . '/*') ?: []);
+$procs = [];
+for ($i = 0; $i < 4; $i++) {
+    $procs[] = popen('env ' . escapeshellarg(PHP_BINARY) . ' '
+        . escapeshellarg(__DIR__ . '/_img_route.php') . ' '
+        . escapeshellarg('src=/uploads/_derive.jpg&w=960&f=webp') . ' 2>&1', 'r');
+}
+$results = array_map(static fn ($p): string => (string) stream_get_contents($p), $procs);
+array_map('pclose', $procs);
+
+ok(count(array_filter($results, static fn (string $r): bool => str_contains($r, 'status=200'))) === 4,
+    'four concurrent misses all get a 200');
+ok(count(glob($cacheDir . '/*.webp') ?: []) === 1, 'and produce exactly one derivative between them');
+ok(@getimagesize(glob($cacheDir . '/*.webp')[0])[0] === 960, 'which is a valid, complete image');
+
+section('The R2 source adapter reads over HTTPS, and only over HTTPS');
+// The same bytes, reached the other way: config points media_bases and the R2
+// public base at this site's own HTTPS origin, so the fetch path runs for real
+// — redirects off, byte cap, timeout and all — without a bucket.
+$r2cfg = $cms->config;
+$r2cfg['r2']['public_base'] = 'https://dopamine-flatcms.ddev.site';
+$r2cms = new Cms($r2cfg);
+$r2bases = $r2cms->fieldContext()['media_bases'];
+$remote = 'https://dopamine-flatcms.ddev.site/uploads/_derive.jpg';
+
+ok(in_array('https://dopamine-flatcms.ddev.site/', $r2bases, true), 'the R2 public base is appended to media_bases when configured');
+
+$viaR2 = Media::encode(
+    $r2cfg,
+    Media::spec($r2cfg['images'], $r2bases, ['src' => $remote, 'w' => '640', 'f' => 'webp'])
+);
+ok($viaR2 !== null && is_file($viaR2['path']), 'a src under the R2 base is fetched and encoded');
+ok(@getimagesize($viaR2['path'])[0] === 640, 'to the same width the local adapter produces');
+
+// Content-addressed: the same bytes reached through either adapter are the same
+// derivative, so switching R2_ENABLED does not invalidate a cache.
+ok(basename($viaR2['path']) === basename($webp['path']),
+    'and to the same cache entry, because the key is the source content hash');
+
+$plain = str_replace('https://', 'http://', $remote);
+$httpBases = array_map(static fn (string $b): string => str_replace('https://', 'http://', $b), $r2bases);
+$httpCfg = $r2cfg;
+$httpCfg['r2']['public_base'] = 'http://dopamine-flatcms.ddev.site';
+ok(Media::encode($httpCfg, Media::spec($httpCfg['images'], $httpBases, ['src' => $plain, 'w' => '640'])) === null,
+    'plain HTTP is refused: this runs on an anonymous GET and a downgraded fetch is not one we made');
+
+ok(Media::spec($r2cfg['images'], $r2bases, ['src' => 'https://evil.tld/uploads/x.jpg', 'w' => '640']) === null,
+    'and a host that is not the configured base never reaches the adapter at all');
+
+section('AVIF is refused on the way in as well as on the way out');
+ok(!in_array('image/avif', $cms->config['images']['allowed'], true), 'avif is not an accepted upload type');
+ok(!in_array('avif', $d['formats'], true), 'nor an output format');
+ok(!in_array('image/avif', $d['decodable'], true), 'nor a source we will decode');
+
+unlink($jpegSrc);
+unlink($pngSrc);
+array_map('unlink', glob($cacheDir . '/*') ?: []);
 
 // ── 5. Contact-form caching ─────────────────────────────────────────────────
 

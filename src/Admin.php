@@ -33,6 +33,12 @@ use Throwable;
  */
 final class Admin
 {
+    /**
+     * The actions that write to content/. Everything here runs under the
+     * site-wide content lock so the backup job cannot commit a partial write.
+     */
+    private const MUTATIONS = ['save', 'upload', 'restore'];
+
     public function __construct(private readonly Cms $cms)
     {
     }
@@ -60,14 +66,21 @@ final class Admin
             $user = $this->cms->auth->requireUser($request);
             $action = (string) $request->request->get('action', $request->query->get('action', 'list'));
 
-            return match ($action) {
-                'edit'      => $this->edit($request, $user, (string) $request->query->get('page', '')),
-                'save'      => $this->save($request, $user),
-                'upload'    => $this->upload($request),
-                'revisions' => $this->revisions($request, $user),
-                'restore'   => $this->restore($request, $user),
-                default     => $this->list($request, $user),
-            };
+            // Every flow that writes to content/ holds the site-wide lock for
+            // as long as it writes, so the hourly backup can never commit a
+            // half-applied mutation. Taken here rather than in each flow: one
+            // place to add an action to, and no way to add one that forgets.
+            if (in_array($action, self::MUTATIONS, true)) {
+                $release = $this->cms->locks->holdContent();
+
+                try {
+                    return $this->dispatch($request, $user, $action);
+                } finally {
+                    $release();
+                }
+            }
+
+            return $this->dispatch($request, $user, $action);
         } catch (AccessDeniedException $e) {
             // Both the unauthenticated case and a role refusal land here, so an
             // editor forging ?action=restore gets the same 403 as a stranger —
@@ -84,6 +97,19 @@ final class Admin
                 'user'    => $user,
             ]), 400);
         }
+    }
+
+    /** @param array{email: string, role: string} $user */
+    private function dispatch(Request $request, array $user, string $action): Response
+    {
+        return match ($action) {
+            'edit'      => $this->edit($request, $user, (string) $request->query->get('page', '')),
+            'save'      => $this->save($request, $user),
+            'upload'    => $this->upload($request),
+            'revisions' => $this->revisions($request, $user),
+            'restore'   => $this->restore($request, $user),
+            default     => $this->list($request, $user),
+        };
     }
 
     /**
@@ -124,6 +150,21 @@ final class Admin
         return 'Παρουσιάστηκε σφάλμα και η ενέργεια δεν ολοκληρώθηκε. Δοκιμάστε ξανά.';
     }
 
+    /**
+     * The constraints every schema walk in this class runs under.
+     *
+     * `uploads` is the server's own record of what this session uploaded, and
+     * it is the only place an image's width/height may come from. Keeping it
+     * out of Cms::fieldContext() is deliberate: the session belongs to the
+     * panel, and the render path has no business carrying one.
+     *
+     * @return array<string, mixed>
+     */
+    private function context(): array
+    {
+        return ['uploads' => (array) ($_SESSION['uploads'] ?? [])] + $this->cms->fieldContext();
+    }
+
     /** @param array{email: string, role: string} $user */
     private function list(Request $request, array $user): Response
     {
@@ -147,7 +188,7 @@ final class Admin
         }
 
         $posted = (array) ($opts['posted'] ?? []);
-        $context = $this->cms->fieldContext();
+        $context = $this->context();
 
         // Decorate each block with its schema so the template can build the form.
         $blocks = [];
@@ -187,9 +228,16 @@ final class Admin
         $heldBy = $this->cms->locks->heldByOther($id, $user['email']);
         $this->cms->locks->touch($id, $user['email']);
 
+        // A `link` field is a page picker, so the form needs the page list —
+        // and the ids separately, so it can flag a stored id that no longer
+        // resolves instead of offering a dead option.
+        $pages = $this->cms->content->list();
+
         return $this->html($this->cms->twig->render('admin/edit.twig', [
             'page'     => $page,
             'blocks'   => $blocks,
+            'pages'    => $pages,
+            'page_ids' => array_column($pages, 'id'),
             'csrf'     => $this->csrf($request),
             // Always the CURRENT hash: after a conflict the editor is now
             // looking at the other person's version, so saving again is a
@@ -213,6 +261,11 @@ final class Admin
      * arrived, whether that input came from a form, a forged POST or an old
      * revision.
      *
+     * The walk itself lives in Fields::map(), because an image's src/alt pair
+     * and a list's rows need exactly this walk applied to *their* schemas too.
+     * This method is now only the top-level framing: which role is asking, and
+     * which component to name if something required comes back empty.
+     *
      * @param  array<string, mixed> $schema
      * @param  array<string, mixed> $stored
      * @param  array<string, mixed> $in
@@ -227,30 +280,11 @@ final class Admin
         string $role,
         bool $enforceRequired = true
     ): array {
-        $clean = [];
-
-        foreach ($schema['fields'] as $name => $def) {
-            $current = $stored[$name] ?? $def['default'] ?? '';
-
-            if (!Components::mayEdit($def['editable'], $role) || !array_key_exists($name, $in)) {
-                $clean[$name] = $current;
-                continue;
-            }
-
-            $value = Fields::sanitise($def, $in[$name], $context);
-
-            if ($enforceRequired && $def['required'] && $value === '') {
-                throw new RuntimeException(sprintf(
-                    'Το πεδίο «%s» στην ενότητα «%s» δεν μπορεί να είναι κενό.',
-                    $def['label'],
-                    $schema['label']
-                ));
-            }
-
-            $clean[$name] = $value;
-        }
-
-        return $clean;
+        return Fields::map($schema['fields'], $in, $stored, [
+            'role'    => $role,
+            'section' => (string) ($schema['label'] ?? ''),
+            'require' => $enforceRequired,
+        ] + $context);
     }
 
     /** @param array{email: string, role: string} $user */
@@ -260,7 +294,7 @@ final class Admin
 
         $id = (string) $request->request->get('page', '');
         $posted = (array) $request->request->all('blocks');
-        $context = $this->cms->fieldContext();
+        $context = $this->context();
 
         // The whole read-modify-write runs under an exclusive lock on the page
         // file, and refuses to proceed if the file changed since the form was
@@ -313,6 +347,12 @@ final class Admin
         }
 
         $this->cms->locks->release($id, $user['email']);
+
+        // The upload records are redeemed by the save that stores them: their
+        // dimensions are now on disk beside the src, which is where the next
+        // save reads them from. Clearing them here is what makes the token
+        // one-time rather than a growing pile of session state.
+        unset($_SESSION['uploads']);
 
         // Purge the page itself and the `site` tag, which covers everything
         // that renders cross-page data — navigation, language alternates and
@@ -368,7 +408,7 @@ final class Admin
         $this->checkCsrf($request);
 
         $id = (string) $request->request->get('page', '');
-        $context = $this->cms->fieldContext();
+        $context = $this->context();
 
         $this->cms->content->restore(
             $id,
@@ -419,7 +459,7 @@ final class Admin
 
     /**
      * Image upload. Returns JSON so the form can swap the preview without a
-     * page reload. Originals are downscaled before storage — a client will
+     * page reload. Originals are normalized before storage — a client will
      * absolutely upload a 9 MB photo straight off their phone.
      */
     private function upload(Request $request): Response
@@ -441,7 +481,7 @@ final class Admin
         // symfony/mime — one more dependency to do what ext-fileinfo already does.
         $mime = (string) (new \finfo(FILEINFO_MIME_TYPE))->file($file->getPathname());
         if (!in_array($mime, $cfg['allowed'], true)) {
-            throw new RuntimeException('Επιτρέπονται μόνο εικόνες (JPG, PNG, WebP, AVIF).');
+            throw new RuntimeException('Επιτρέπονται μόνο εικόνες (JPG, PNG, WebP).');
         }
 
         $bytes = (string) file_get_contents($file->getPathname());
@@ -457,14 +497,11 @@ final class Admin
             throw new RuntimeException('Οι διαστάσεις της εικόνας είναι υπερβολικά μεγάλες.');
         }
 
-        if ($cfg['store_max_edge'] > 0) {
-            $bytes = $this->downscale($bytes, (int) $cfg['store_max_edge'], $mime);
-        }
+        [$bytes, $width, $height] = $this->normalize($bytes, (int) $cfg['store_max_edge'], $mime);
 
         $ext = match ($mime) {
             'image/png'  => 'png',
             'image/webp' => 'webp',
-            'image/avif' => 'avif',
             default      => 'jpg',
         };
         $name = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
@@ -476,47 +513,124 @@ final class Admin
 
         $url = $this->cms->r2->put($key, $bytes, $mime);
 
+        // The server's record of what it just wrote. The save path reads the
+        // dimensions from here and never from the request body, so a forged
+        // width is not rejected — it is never consulted. Redeemed and cleared
+        // by the save that stores this src.
+        $_SESSION['uploads'][$url] = ['width' => $width, 'height' => $height];
+
         return new JsonResponse([
             'ok'      => true,
             'url'     => $url,
-            'preview' => $this->cms->imageUrl($url, 400),
+            'width'   => $width,
+            'height'  => $height,
+            'preview' => $this->cms->imageUrl($url, 320),
         ]);
     }
 
-    private function downscale(string $bytes, int $maxEdge, string $mime): string
+    /**
+     * Re-encode an upload to the bytes we are willing to store, and report the
+     * intrinsic dimensions of the result.
+     *
+     * It runs even when the image is already inside `store_max_edge`: "small
+     * enough" is not a reason to keep EXIF, and a phone photo carries the GPS
+     * coordinates of the client's house in it. Re-encoding through GD drops
+     * every metadata block there is, which is the cheapest possible way to be
+     * sure — but it also drops the orientation flag, so that has to be applied
+     * to the pixels first or half the portraits on the site come out sideways.
+     *
+     * @return array{0: string, 1: int, 2: int} bytes, width, height
+     */
+    private function normalize(string $bytes, int $maxEdge, string $mime): array
     {
-        if (!function_exists('imagecreatefromstring')) {
-            return $bytes;
-        }
-
         $img = @imagecreatefromstring($bytes);
         if ($img === false) {
-            return $bytes;
+            throw new RuntimeException('Το αρχείο δεν είναι έγκυρη εικόνα.');
         }
 
-        $w = imagesx($img);
-        $h = imagesy($img);
-        if (max($w, $h) <= $maxEdge) {
+        try {
+            $img = $this->orient($img, $bytes, $mime);
+
+            // PNG and WebP may carry alpha and the site's images sit on light
+            // and dark backgrounds both; flattening a logo here is a bug the
+            // client sees and cannot fix. Set before the scale — imagescale()
+            // composites onto a fresh canvas, and a source still in blending
+            // mode arrives there flattened against black.
+            imagealphablending($img, false);
+            imagesavealpha($img, true);
+
+            $w = imagesx($img);
+            $h = imagesy($img);
+
+            if ($maxEdge > 0 && max($w, $h) > $maxEdge) {
+                $scale = $maxEdge / max($w, $h);
+                $resized = imagescale($img, max(1, (int) round($w * $scale)), max(1, (int) round($h * $scale)));
+                if ($resized !== false) {
+                    imagedestroy($img);
+                    $img = $resized;
+                    imagealphablending($img, false);
+                    imagesavealpha($img, true);
+                }
+            }
+
+            ob_start();
+            match ($mime) {
+                'image/png'  => imagepng($img, null, 6),
+                'image/webp' => imagewebp($img, null, 88),
+                default      => imagejpeg($img, null, 88),
+            };
+
+            return [(string) ob_get_clean(), imagesx($img), imagesy($img)];
+        } finally {
             imagedestroy($img);
-            return $bytes;
+        }
+    }
+
+    /**
+     * Apply the EXIF orientation flag to the pixels.
+     *
+     * Only JPEG carries one in practice, and normally nobody would need to:
+     * browsers honour the tag on a plain <img> by themselves. We have to,
+     * because normalize() re-encodes through GD to strip EXIF — the point being
+     * the GPS coordinates of the client's house — and that throws the
+     * orientation tag away with everything else. Rotate first or the photo is
+     * sideways forever, in the stored original and in every derivative GD
+     * scales from it.
+     *
+     * ext-exif is declared in composer.json, so this cannot be missing on a box
+     * that installed cleanly. The guard stays because Composer resolves under
+     * the CLI php and the site runs under php-fpm, which can be a different
+     * build: a sideways photo is a bug, a 500 on upload is an outage.
+     *
+     * @param \GdImage $img
+     */
+    private function orient(\GdImage $img, string $bytes, string $mime): \GdImage
+    {
+        if ($mime !== 'image/jpeg' || !function_exists('exif_read_data')) {
+            return $img;
         }
 
-        $scale = $maxEdge / max($w, $h);
-        $resized = imagescale($img, (int) round($w * $scale), (int) round($h * $scale));
-        imagedestroy($img);
-        if ($resized === false) {
-            return $bytes;
-        }
-
-        ob_start();
-        match ($mime) {
-            'image/png'  => imagepng($resized, null, 6),
-            'image/webp' => imagewebp($resized, null, 88),
-            default      => imagejpeg($resized, null, 88),
+        $exif = @exif_read_data('data://image/jpeg;base64,' . base64_encode($bytes));
+        $rotate = match ((int) ($exif['Orientation'] ?? 1)) {
+            3, 4 => 180,
+            5, 6 => -90,
+            7, 8 => 90,
+            default => 0,
         };
-        imagedestroy($resized);
+        $flip = in_array((int) ($exif['Orientation'] ?? 1), [2, 4, 5, 7], true);
 
-        return (string) ob_get_clean();
+        if ($rotate !== 0) {
+            $turned = imagerotate($img, $rotate, 0);
+            if ($turned !== false) {
+                imagedestroy($img);
+                $img = $turned;
+            }
+        }
+        if ($flip) {
+            imageflip($img, IMG_FLIP_HORIZONTAL);
+        }
+
+        return $img;
     }
 
     private function csrf(Request $request): string

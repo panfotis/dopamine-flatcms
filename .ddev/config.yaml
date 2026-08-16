@@ -35,4 +35,4 @@ hooks:
   post-start:
     - exec: composer install --no-interaction
     # Writable by the web user, and never committed.
-    - exec: mkdir -p var/cache var/locks public/uploads content/.revisions
+    - exec: mkdir -p var/cache var/locks content/uploads content/.revisions

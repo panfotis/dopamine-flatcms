@@ -68,35 +68,76 @@ final class Components
             $schema['fields'] ??= [];
             $schema['template'] = $type . '/' . $type . '.twig';
 
-            // Normalise every field so the rest of the code can assume shape.
-            foreach ($schema['fields'] as $name => $def) {
-                $def = is_array($def) ? $def : ['type' => (string) $def];
-                $def['type']     = $def['type']     ?? 'text';
-                $def['label']    = $def['label']    ?? $name;
-                $def['editable'] = $def['editable'] ?? true;
-                $def['required'] = $def['required'] ?? false;
-
-                // Fail closed on anything unrecognised. `editable: yes` or a
-                // misspelled `admni` must lock the field, not hand it to
-                // everyone — a schema typo is not a reason to widen access.
-                if (!in_array($def['editable'], self::EDITABLE, true)) {
-                    $def['editable'] = false;
-                }
-
-                if ($def['type'] === 'select') {
-                    // Accept both `options: [a, b]` and `options: {a: Label}`
-                    // and always hand templates a value => label map.
-                    $def['options'] = Fields::options($def);
-                    $def['default'] = $def['default'] ?? array_key_first($def['options']);
-                }
-
-                $schema['fields'][$name] = $def;
-            }
+            $schema['fields'] = $this->normalise($schema['fields']);
 
             $out[$type] = $schema;
         }
 
         return $this->cache = $out;
+    }
+
+    /**
+     * Normalise every field so the rest of the code can assume shape.
+     *
+     * Runs on a list's sub-schema as well as on a component's own fields, so a
+     * row's field is as normalised — and as fail-closed about `editable` — as
+     * a top-level one. A list may not contain a list: the plan is explicit that
+     * repeaters are one level only, and a nested one is a schema mistake rather
+     * than a feature to support.
+     *
+     * @param  array<string, mixed> $fields
+     * @return array<string, array<string, mixed>>
+     */
+    private function normalise(array $fields): array
+    {
+        $out = [];
+
+        foreach ($fields as $name => $def) {
+            $def = is_array($def) ? $def : ['type' => (string) $def];
+            $def['type']     = $def['type']     ?? 'text';
+            $def['label']    = $def['label']    ?? $name;
+            $def['editable'] = $def['editable'] ?? true;
+            $def['required'] = $def['required'] ?? false;
+
+            // Fail closed on anything unrecognised. `editable: yes` or a
+            // misspelled `admni` must lock the field, not hand it to
+            // everyone — a schema typo is not a reason to widen access.
+            if (!in_array($def['editable'], self::EDITABLE, true)) {
+                $def['editable'] = false;
+            }
+
+            if ($def['type'] === 'select') {
+                // Accept both `options: [a, b]` and `options: {a: Label}`
+                // and always hand templates a value => label map.
+                $def['options'] = Fields::options($def);
+                $def['default'] = $def['default'] ?? array_key_first($def['options']);
+            }
+
+            if ($def['type'] === 'image') {
+                // Whether an image carries information or is decoration is a
+                // design decision, so it is declared here and nowhere else. A
+                // `decorative` arriving in a request is just another undeclared
+                // key and is dropped like any other.
+                $def['decorative'] = ($def['decorative'] ?? false) === true;
+                // The panel builds its inputs from the same sub-schema the
+                // save path validates against, so the two cannot drift.
+                $def['fields'] = Fields::IMAGE;
+            }
+
+            if ($def['type'] === 'list') {
+                $def['fields'] = $this->normalise(
+                    array_filter(
+                        (array) ($def['fields'] ?? []),
+                        static fn (mixed $f): bool => (is_array($f) ? ($f['type'] ?? '') : $f) !== 'list'
+                    )
+                );
+                $def['item_label'] = (string) ($def['item_label'] ?? array_key_first($def['fields']) ?? '');
+            }
+
+            $out[$name] = $def;
+        }
+
+        return $out;
     }
 
     public function has(string $type): bool

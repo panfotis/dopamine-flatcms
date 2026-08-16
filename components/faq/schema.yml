@@ -1,0 +1,32 @@
+label: Συχνές ερωτήσεις
+description: Λίστα ερωτήσεων και απαντήσεων.
+
+fields:
+  heading:
+    type: text
+    label: Τίτλος
+    max: 60
+
+  # A real YAML boolean on disk, not the string "1". Templates branch on it.
+  open_first:
+    type: boolean
+    label: Η πρώτη ερώτηση ανοιχτή εξαρχής
+
+  # A repeater over a fixed sub-schema. `max` is the ceiling the save path cuts
+  # to *before* it sanitises anything, so it bounds work as well as content.
+  # `item_label` names which sub-field titles each row in the panel.
+  questions:
+    type: list
+    label: Ερωτήσεις
+    max: 20
+    item_label: question
+    hint: Ο πελάτης προσθέτει και αφαιρεί γραμμές. Τα πεδία μέσα σε κάθε γραμμή είναι δικά σας.
+    fields:
+      question:
+        type: text
+        label: Ερώτηση
+        max: 140
+        required: true
+      answer:
+        type: richtext
+        label: Απάντηση

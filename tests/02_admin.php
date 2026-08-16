@@ -33,6 +33,52 @@ contains($edit, 'name="csrf"', 'CSRF token embedded in the form');
 contains($edit, 'Κεντρική ενότητα', 'component label from schema.yml shown as the card title');
 contains($edit, 'Για άτομα που χρησιμοποιούν αναγνώστη οθόνης', 'field hint rendered');
 
+section('A component built from schema.yml alone round-trips');
+// faq is two files and no registration step: a list, a boolean and a richtext,
+// with the panel, the save path and the template all derived from the schema.
+contains($edit, 'name="blocks[faq][questions][0][question]"', 'the repeater names rows by index');
+contains($edit, 'name="blocks[faq][questions][1][answer]"', 'and renders every stored row');
+contains($edit, 'data-row-add="faq-questions"', 'with a control to add one');
+contains($edit, 'data-max="20"', 'bounded by the schema max the save path also enforces');
+contains($edit, 'Μπορεί ο πελάτης να χαλάσει', 'the item_label titles each row with its own question');
+contains($edit, 'name="blocks[faq][open_first]" value="1"', 'the boolean is a checkbox');
+contains($edit, 'type="hidden" name="blocks[faq][open_first]" value="0"', 'with a hidden partner, so unchecking really posts');
+
+$_SESSION['csrf'] = 'the-real-token';
+$faqFile = dirname(__DIR__) . '/content/pages/el/home.yml';
+copy($faqFile, $faqFile . '.admin.bak');
+
+$roundTrip = admin_post([
+    'action'   => 'save',
+    'csrf'     => 'the-real-token',
+    'page'     => 'home',
+    'baseline' => (string) hash_file('sha256', $faqFile),
+    'blocks'   => ['faq' => [
+        'heading'    => 'Ερωτήσεις',
+        'open_first' => '0',
+        'questions'  => [
+            ['question' => 'Πόσο κοστίζει;', 'answer' => '<p>Λιγότερο <strong>απ\' ό,τι νομίζετε</strong>.</p>'],
+            ['question' => 'Πότε παραδίδεται;', 'answer' => '<p>Σε δύο εβδομάδες.</p>'],
+            ['question' => 'Τρίτη γραμμή, προστέθηκε τώρα', 'answer' => '<p>Νέα.</p>'],
+        ],
+    ]],
+]);
+ok($roundTrip->getStatusCode() === 303, 'a save through those exact field names is accepted');
+
+$stored = \Symfony\Component\Yaml\Yaml::parseFile($faqFile);
+$faqBlock = $stored['blocks'][array_search('faq', array_column($stored['blocks'], 'id'), true)]['fields'];
+ok(count($faqBlock['questions']) === 3, 'the row the client added is on disk');
+ok($faqBlock['questions'][2]['question'] === 'Τρίτη γραμμή, προστέθηκε τώρα', 'in the right slot, with its own values');
+ok($faqBlock['open_first'] === false, 'and unchecking the box really stored false');
+
+$rendered = cms()->renderPage(cms()->content->load('home'));
+contains($rendered, '<summary>Πόσο κοστίζει;</summary>', 'and the template renders it back');
+contains($rendered, "<strong>απ' ό,τι νομίζετε</strong>", 'with its richtext intact');
+missing($rendered, '<details open>', 'open_first: false leaves the first row closed');
+
+rename($faqFile . '.admin.bak', $faqFile);
+array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/home.*.yml') ?: []);
+
 section('No structural controls exist in the UI');
 missing($edit, 'Προσθήκη ενότητας', 'no "add component" button');
 missing($edit, 'data-reorder', 'no reorder handles');
@@ -81,11 +127,81 @@ contains((string) ($json['url'] ?? ''), '/image-', 'and a name with nothing ASCI
 // every upload landed a directory below the URL saved into the content file —
 // preview fine, live page broken.
 $url = (string) ($json['url'] ?? '');
-$served = dirname(__DIR__) . '/public' . $url;
+// Uploads live in content/uploads/ now, not under the docroot: nginx aliases
+// /uploads/ to them, so the returned URL is unchanged and the bytes are in the
+// content repository where a git clone restores them along with the pages.
+$onDisk = static fn (string $u): string
+    => cms()->config['paths']['uploads'] . '/' . ltrim(substr($u, strlen('/uploads/')), '/');
+
+$served = $onDisk($url);
 ok(is_file($served), 'and the bytes are on disk at exactly the URL it returned: ' . $url);
+ok(str_starts_with($served, dirname(__DIR__) . '/content/'), 'inside the content repository, not under public/');
 ok(str_starts_with($url, '/uploads/'), 'which is under /uploads/, so config.media_bases accepts it on save');
 ok(\Dopamine\FlatCms\Fields::mediaPath($url, cms()->fieldContext()['media_bases']) === $url,
     'and the src survives the save-time media guard rather than being blanked');
+
+section('Uploads are normalized before they are stored');
+// A landscape JPEG carrying Orientation=6 ("rotate 90° clockwise to display")
+// and a GPS tag — which is exactly what arrives from a phone. Built here
+// rather than committed, because a binary fixture nobody can read is a fixture
+// nobody maintains.
+$exif = (require __DIR__ . '/fixtures/exif_jpeg.php')(20, 10);
+$phone = sys_get_temp_dir() . '/dopamine-phone-' . bin2hex(random_bytes(4)) . '.jpg';
+file_put_contents($phone, $exif);
+
+$before = @exif_read_data($phone);
+ok((int) ($before['Orientation'] ?? 0) === 6, 'the fixture really does declare Orientation=6');
+ok(isset($before['GPSLatitude']), 'and really does carry the coordinates of where it was taken');
+
+$normalized = admin(Request::create(
+    '/admin.php',
+    'POST',
+    ['action' => 'upload', 'csrf' => 'the-real-token'],
+    [],
+    ['file' => new UploadedFile($phone, 'IMG_4021.JPG', 'image/jpeg', null, true)]
+));
+$meta = json_decode((string) $normalized->getContent(), true);
+$storedFile = $onDisk((string) ($meta['url'] ?? ''));
+
+ok(($meta['ok'] ?? false) === true, 'the phone photo uploads');
+ok(($meta['width'] ?? 0) === 10 && ($meta['height'] ?? 0) === 20,
+    'and is stored rotated: a 20x10 source with Orientation=6 becomes '
+    . ($meta['width'] ?? '?') . 'x' . ($meta['height'] ?? '?') . ', not 20x10 with a flag nobody honours');
+
+$after = @exif_read_data($storedFile);
+ok($after === false || !isset($after['GPSLatitude']), 'the GPS tag is gone — re-encoding is what strips it');
+ok($after === false || !isset($after['Orientation']),
+    'and so is the orientation flag, which would otherwise rotate the already-rotated pixels again');
+ok(@getimagesize($storedFile)[0] === 10, 'the bytes on disk really are the rotated ones');
+
+// Normalization runs even though 20x10 is far inside store_max_edge: "small
+// enough to keep as-is" is not a reason to keep someone's home address in it.
+ok(filesize($storedFile) > 0 && $storedFile !== $phone, 'a small image is re-encoded too, not passed through');
+
+// The dimensions the save path will use are the server's own record of what it
+// just wrote, and they are never read back off the request.
+ok(($_SESSION['uploads'][$meta['url']] ?? null) === ['width' => 10, 'height' => 20],
+    'the upload leaves a server-side record of the dimensions for the save to redeem');
+
+@unlink($phone);
+@unlink($storedFile);
+
+section('AVIF is refused on the way in');
+$avif = sys_get_temp_dir() . '/dopamine-avif-' . bin2hex(random_bytes(4)) . '.avif';
+$im = imagecreatetruecolor(4, 4);
+imageavif($im, $avif, 30);
+imagedestroy($im);
+
+$refused = admin(Request::create(
+    '/admin.php',
+    'POST',
+    ['action' => 'upload', 'csrf' => 'the-real-token'],
+    [],
+    ['file' => new UploadedFile($avif, 'x.avif', 'image/avif', null, true)]
+));
+ok($refused->getStatusCode() === 400, 'an AVIF upload is refused: GD support for it is build-dependent');
+contains((string) $refused->getContent(), 'JPG, PNG, WebP', 'and the client is told which formats are accepted');
+@unlink($avif);
 
 // A forged upload is refused at the CSRF gate, before anything is written.
 $forgedUpload = admin(Request::create(

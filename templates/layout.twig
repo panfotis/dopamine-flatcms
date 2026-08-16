@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ page.title }} — {{ site('name') }}</title>
 {% if page.meta.description is defined %}<meta name="description" content="{{ page.meta.description }}">{% endif %}
+{% if site('favicon') %}<link rel="icon" href="{{ site('favicon') }}">{% endif %}
 <style>
   :root{
     --ink:#15171a; --muted:#5c6470; --line:#e4e7eb; --bg:#fff; --accent:#1b6ef3;
@@ -21,9 +22,24 @@
   .btn{display:inline-block;background:var(--accent);color:#fff;text-decoration:none;
        padding:.85em 1.6em;border-radius:8px;font-weight:600}
   .site-footer{border-top:1px solid var(--line);margin-top:80px;padding:32px 0;color:var(--muted);font-size:15px}
+  .site-nav{border-bottom:1px solid var(--line)}
+  .site-nav .wrap{display:flex;gap:26px;padding-block:18px}
+  .site-nav a{color:var(--ink);text-decoration:none;font-weight:500}
+  .site-nav a[aria-current]{color:var(--accent)}
 </style>
 </head>
 <body>
+{# Order comes from each page's `nav:` key, not from the slug sort Content::list
+   happens to return. A page with no `nav:` is simply not in the menu. #}
+{% if nav %}
+  <nav class="site-nav" aria-label="Κύρια πλοήγηση">
+    <div class="wrap">
+      {% for item in nav %}
+        <a href="{{ item.url }}"{{ item.url == page.slug ? ' aria-current="page"' : '' }}>{{ item.label }}</a>
+      {% endfor %}
+    </div>
+  </nav>
+{% endif %}
 <main>
   {% for block in blocks %}{{ block|raw }}{% endfor %}
 </main>

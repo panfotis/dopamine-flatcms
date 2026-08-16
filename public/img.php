@@ -5,9 +5,10 @@
  *
  *   /img.php?src=/uploads/2026/08/a.jpg&w=960&f=auto
  *
- * Phase 0 ships the contract and the rejection path only. Every parameter is
- * validated against a finite allowlist first, so a bad request costs a stat of
- * this file and nothing else — no source read, no decode, no memory.
+ * Every parameter is validated against a finite allowlist first, so a bad
+ * request costs a stat of this file and nothing else — no source read, no
+ * decode, no memory. Only once spec() has said yes does anything expensive
+ * become reachable.
  */
 
 declare(strict_types=1);
@@ -25,8 +26,13 @@ $spec = Media::spec(
     (string) ($_SERVER['HTTP_ACCEPT'] ?? '')
 );
 
-if ($spec === null) {
+$derivative = $spec === null ? null : Media::encode($cms->config, $spec);
+
+if ($derivative === null) {
     // no-store: a rejection must never occupy a cache entry an attacker chose.
+    // A source that is missing, undecodable or too big to handle is a 404 for
+    // the same reason a bad width is — there is nothing here, and saying more
+    // would describe the filesystem to whoever asked.
     http_response_code(404);
     header('Cache-Control: no-store');
     header('Content-Type: text/plain; charset=utf-8');
@@ -34,8 +40,10 @@ if ($spec === null) {
     exit;
 }
 
-// ponytail: the encoder is Phase 4. The contract above is what it must satisfy.
-http_response_code(501);
-header('Cache-Control: no-store');
-header('Content-Type: text/plain; charset=utf-8');
-echo "Derivative encoder not implemented yet (Phase 4).\n";
+// Immutable: a derivative is a pure function of src + width + format, and the
+// src path itself changes whenever the image does.
+http_response_code(200);
+header('Content-Type: ' . $derivative['mime']);
+header('Cache-Control: public, max-age=' . $spec['max_age'] . ', immutable');
+header('Content-Length: ' . filesize($derivative['path']));
+readfile($derivative['path']);

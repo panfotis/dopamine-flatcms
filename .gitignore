@@ -1,9 +1,18 @@
 /vendor/
 /var/cache/
 /var/*.log
-/public/uploads/
-/content/.revisions/
 .env
 *.bak
 *.tmp
 var/locks/
+
+# content/ is deliberately NOT ignored — not uploads, not revisions.
+#
+# They used to be. public/uploads/ was gitignored and nothing copied it
+# anywhere, so a lost box restored every page perfectly with every image on it
+# broken. Uploads are hash-suffixed, so replacing an image writes a new blob
+# instead of rewriting an old one, which is the usual reason binaries in git go
+# bad. Thirty to eighty images at store_max_edge is 25–100 MB: nothing.
+#
+# This stops being right at a gallery site or past a few hundred MB. That site
+# sets R2_ENABLED=1 and the paths stop being local; see README "The ceiling".

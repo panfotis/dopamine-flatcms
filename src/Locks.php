@@ -24,6 +24,58 @@ final class Locks
     {
     }
 
+    /**
+     * The one real lock in the system, and the only thing in this class that
+     * actually blocks.
+     *
+     * It exists for the hourly content backup. That job runs `git add -A` over
+     * content/ and commits whatever it finds, so without it a commit can land
+     * mid-save: a page file renamed into place but its revision not yet
+     * written, or an upload's bytes present and the page that references them
+     * not. The recovery point would then be a state the CMS never produced.
+     *
+     * Mutations take it **shared** — they already serialise against each other
+     * per page, and two saves to different pages have no reason to queue. The
+     * backup takes it **exclusive**: it waits for whatever is in flight and
+     * holds off whatever arrives while it commits, which is a few hundred
+     * milliseconds once an hour.
+     *
+     * Returns the release callable rather than a handle, so the caller's only
+     * option is to release it:
+     *
+     *     $release = $locks->holdContent();
+     *     try { ... } finally { $release(); }
+     *
+     * @param  bool $exclusive true for the backup, false for a mutation
+     * @return callable(): void
+     */
+    public function holdContent(bool $exclusive = false): callable
+    {
+        if (!is_dir($this->dir) && !@mkdir($this->dir, 0775, true) && !is_dir($this->dir)) {
+            return static function (): void {
+            };
+        }
+
+        $handle = @fopen($this->dir . '/content.lock', 'c');
+        if ($handle === false || !flock($handle, $exclusive ? LOCK_EX : LOCK_SH)) {
+            // Never fail a client's save because the lock file is unwritable.
+            // The backup is the side that must not proceed blind, and it checks
+            // its own acquisition; a save that ran unlocked is at worst a commit
+            // one interval later.
+            if ($handle !== false) {
+                fclose($handle);
+            }
+
+            return static function (): void {
+            };
+        }
+
+        return static function () use ($handle): void {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+        };
+    }
+
     private function file(string $pageId): string
     {
         return $this->dir . '/' . preg_replace('/[^a-z0-9_-]/i', '', $pageId) . '.json';

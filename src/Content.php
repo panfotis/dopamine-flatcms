@@ -10,7 +10,7 @@ use Symfony\Component\Yaml\Yaml;
 /**
  * Page storage. One YAML file per page, that is the whole database.
  *
- *   content/pages/home.yml
+ *   content/pages/el/home.yml
  *
  *   title: Αρχική
  *   slug: /
@@ -19,6 +19,15 @@ use Symfony\Component\Yaml\Yaml;
  *       type: hero          <- structure. Never editable from the admin.
  *       fields:
  *         heading: "..."    <- content. This is all the client can change.
+ *
+ * The locale directory is there on a single-language site too. It is the final
+ * storage shape, adopted now rather than at Phase 9, because moving every
+ * client's pages after v1.0.0 is a migration nobody wants to run twenty times.
+ * Until Phase 9 exactly one locale is ever resolved: the configured default.
+ *
+ * The filename is the page **id**, and the id is the translation identity —
+ * `contact.yml` is the same page in `el/` and `en/` with different slugs. That
+ * is why a `link` field stores the id and resolves the slug at render time.
  */
 final class Content
 {
@@ -31,8 +40,16 @@ final class Content
      */
     private const REVISION = '/^[a-z0-9_-]+\.\d{8}-\d{6}-[0-9a-f]{6}\.yml$/i';
 
-    public function __construct(private readonly string $dir)
+    public function __construct(
+        private readonly string $dir,
+        private readonly string $locale,
+    ) {
+    }
+
+    /** The directory this instance's pages live in. */
+    public function pagesDir(): string
     {
+        return $this->dir . '/pages/' . $this->locale;
     }
 
     /** A page id, or an exception. The only way an id becomes part of a path. */
@@ -48,20 +65,23 @@ final class Content
 
     private function file(string $id): string
     {
-        return $this->dir . '/pages/' . $this->id($id) . '.yml';
+        return $this->pagesDir() . '/' . $this->id($id) . '.yml';
     }
 
-    /** @return list<array{id:string, title:string, slug:string}> */
+    /** @return list<array{id:string, title:string, slug:string, nav:array<string,mixed>|null}> */
     public function list(): array
     {
         $out = [];
-        foreach (glob($this->dir . '/pages/*.yml') ?: [] as $file) {
+        foreach (glob($this->pagesDir() . '/*.yml') ?: [] as $file) {
             $id = basename($file, '.yml');
             $data = Yaml::parseFile($file) ?? [];
             $out[] = [
                 'id'    => $id,
                 'title' => (string) ($data['title'] ?? $id),
                 'slug'  => (string) ($data['slug'] ?? '/' . $id),
+                // Developer-owned, like every other structural key: the menu is
+                // not something a client reorders from the panel.
+                'nav'   => is_array($data['nav'] ?? null) ? $data['nav'] : null,
             ];
         }
 
@@ -197,11 +217,17 @@ final class Content
         // Second-resolution names collide when two saves land in the same
         // second — the earlier version was being overwritten and lost from the
         // history entirely.
-        copy($file, sprintf('%s/%s.%s-%s.yml', $dir, $id, date('Ymd-His'), bin2hex(random_bytes(3))));
+        $new = sprintf('%s/%s.%s-%s.yml', $dir, $id, date('Ymd-His'), bin2hex(random_bytes(3)));
+        copy($file, $new);
 
-        $existing = glob($dir . '/' . $id . '.*.yml') ?: [];
+        // Pruning sorts by name, and names only carry seconds — so within one
+        // second the order is the random suffix. Excluding the file just
+        // written is what stops a burst of saves from deleting the snapshot it
+        // has this moment taken, which would quietly make that one save the
+        // one that cannot be undone.
+        $existing = array_values(array_diff(glob($dir . '/' . $id . '.*.yml') ?: [], [$new]));
         sort($existing);
-        foreach (array_slice($existing, 0, max(0, count($existing) - $keep)) as $old) {
+        foreach (array_slice($existing, 0, max(0, count($existing) + 1 - $keep)) as $old) {
             @unlink($old);
         }
     }

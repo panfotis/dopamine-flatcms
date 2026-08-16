@@ -19,7 +19,7 @@ putenv('AUTH_DEV_BYPASS=1');
 require dirname(__DIR__) . '/config.php';
 
 $cms   = cms();
-$file  = dirname(__DIR__) . '/content/pages/home.yml';
+$file  = dirname(__DIR__) . '/content/pages/el/home.yml';
 $backup = $file . '.concurrency.bak';
 copy($file, $backup);
 

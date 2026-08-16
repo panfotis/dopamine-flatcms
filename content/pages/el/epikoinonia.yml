@@ -5,6 +5,12 @@ slug: /epikoinonia
 # form lands in Phase 7; the caching decision is made now so Phase 7 cannot
 # quietly ship a cached CSRF token. See Cms::cacheHeaders().
 private: true
+# Where this page sits in the menu. Developer-owned: the client
+# cannot reorder or rename the navigation from the panel. Omit the
+# key entirely and the page stays reachable but unlisted.
+nav:
+  label: Επικοινωνία
+  order: 20
 meta:
   description: 'Στοιχεία επικοινωνίας.'
 blocks:
@@ -14,7 +20,11 @@ blocks:
     fields:
       heading: Επικοινωνία
       subheading: 'Απαντάμε συνήθως εντός μίας εργάσιμης.'
-      image: /uploads/2026/08/38ea9d5c-2b28-464c-a3c8-432fb06b9df8-f8befb.png
+      image:
+        src: /uploads/2026/08/38ea9d5c-2b28-464c-a3c8-432fb06b9df8-f8befb.png
+        alt: ''
+        width: 1254
+        height: 1254
       cta_label: ''
       cta_url: ''
       align: start

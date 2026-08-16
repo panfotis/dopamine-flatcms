@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+#
+# Prove the backup is a backup. Weekly, from cron.
+#
+#   bin/restore-drill
+#
+# A green backup cron says a push succeeded. It does not say the thing that was
+# pushed can be turned back into a working site, and those are different
+# claims — the one that matters has never been checked by the job that makes
+# it. So: clone the remote somewhere else entirely, run doctor against it, and
+# fetch one page and one uploaded image out of it.
+#
+# The image matters more than the page. Pages were always in git; images were
+# the half that used to be missing, and a restore that produces every page with
+# every picture broken is the exact failure this exists to catch.
+#
+#   BACKUP_REMOTE  the content repository to clone
+#   PHP_BIN        php
+#   RELEASE_PATH   a release directory to borrow code from (defaults to current)
+#   DRILL_ALERT    command run with a message on failure; monitored
+
+set -euo pipefail
+
+remote="${BACKUP_REMOTE:-}"
+php="${PHP_BIN:-php}"
+release="${RELEASE_PATH:-${DEPLOY_ROOT:-/var/www/pelatis}/current}"
+alert="${DRILL_ALERT:-}"
+
+[ -n "$remote" ] || { echo "BACKUP_REMOTE is not set" >&2; exit 2; }
+
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+
+fail() {
+  echo "restore-drill: $1" >&2
+  [ -n "$alert" ] && $alert "restore drill failed: $1" || true
+  exit 1
+}
+
+git clone --quiet --depth 1 "$remote" "$work/content" || fail "clone failed"
+
+# Pages must be there, in the shape the resolver expects.
+pages="$(find "$work/content/pages" -name '*.yml' 2>/dev/null | wc -l)"
+[ "$pages" -gt 0 ] || fail "the clone contains no pages"
+
+# And the images they reference. Every `src` under /uploads/ must be a file in
+# this clone — untracked uploads are exactly what used to go missing.
+missing=0
+while read -r src; do
+  [ -n "$src" ] || continue
+  rel="${src#/uploads/}"
+  if [ ! -f "$work/content/uploads/$rel" ]; then
+    echo "  missing from the clone: $src" >&2
+    missing=$((missing + 1))
+  fi
+done < <(grep -rhoE 'src: /uploads/[^[:space:]]+' "$work/content/pages" 2>/dev/null | sed 's/^src: //')
+
+[ "$missing" -eq 0 ] || fail "$missing image(s) referenced by a restored page are not in the backup"
+
+images="$(find "$work/content/uploads" -type f 2>/dev/null | wc -l)"
+[ "$images" -gt 0 ] || fail "the clone contains no uploads at all"
+
+# And the whole thing has to pass the same health check a deploy runs.
+mkdir -p "$work/var/cache" "$work/var/locks"
+env CONTENT_PATH="$work/content" \
+    VAR_PATH="$work/var" \
+    UPLOADS_PATH="$work/content/uploads" \
+    "$php" "$release/bin/doctor" --quiet \
+  || fail "the restored content does not pass bin/doctor"
+
+echo "restore-drill: ok ($pages pages, $images uploads, doctor clean)"

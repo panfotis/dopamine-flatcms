@@ -8,7 +8,7 @@ No database. No build step. No admin UI for structure.
 ```
 components/hero/schema.yml   →  the fields the client sees
 components/hero/hero.twig    →  how it renders
-content/pages/home.yml       →  which components this page has, and their values
+content/pages/el/home.yml    →  which components this page has, and their values
 ```
 
 ---
@@ -18,7 +18,7 @@ content/pages/home.yml       →  which components this page has, and their valu
 **Structure lives in files. Content lives in the panel.**
 
 You control which components a page has, in what order, with what fields, by
-editing `content/pages/*.yml` and `components/*/schema.yml`. The client opens
+editing `content/pages/<locale>/*.yml` and `components/*/schema.yml`. The client opens
 `/admin.php` and sees a form. There is no "add section" button, no drag and
 drop, no component picker — those UIs do not exist.
 
@@ -35,7 +35,7 @@ unaffected.
 
 ## Requirements
 
-- PHP 8.2+ with `curl`, `json`, `mbstring`, and `gd` (gd only for upload downscaling)
+- PHP 8.4 with `curl`, `dom`, `exif`, `gd`, `json`, `openssl`
 - A web server pointing at `public/`
 - Optional: a Cloudflare zone, an R2 bucket
 
@@ -47,7 +47,7 @@ Copy `ddev/config.yaml` to `.ddev/config.yaml`, then:
 ddev start                      # boots and runs composer install
 ddev launch                     # the site
 ddev launch /admin.php          # the panel
-ddev exec bash tests/run.sh     # 111 assertions
+ddev exec bash tests/run.sh     # the whole suite
 ```
 
 Everything else you need day to day:
@@ -78,7 +78,7 @@ Three things specific to this project:
 once Cloudflare transformations are switched on.
 
 R2, image transformations and cache purge are all off locally, so uploads land
-in `public/uploads/` and saves are instant. The whole thing runs with zero
+in `content/uploads/` and saves are instant. The whole thing runs with zero
 Cloudflare setup.
 
 Once the core moves to a private Composer package, run `ddev auth ssh` so the
@@ -135,7 +135,7 @@ fields:
 </section>
 ```
 
-Then put it on a page — `content/pages/home.yml`:
+Then put it on a page — `content/pages/el/home.yml`:
 
 ```yaml
 blocks:
@@ -160,12 +160,26 @@ fall back to `default` (or an empty string) rather than erroring.
 | `text` | single-line input | plain text, whitespace collapsed, truncated at `max` |
 | `textarea` | multi-line input | plain text, blank lines collapsed |
 | `richtext` | small contenteditable with B / I / list / link | only `p br strong b em i u a ul ol li`, all attributes stripped except `href` |
-| `image` | thumbnail + upload button | path or URL |
-| `link` | single-line input | `http(s)`, `/path`, `#anchor`, `mailto:`, `tel:` only |
+| `image` | thumbnail + upload button + alt input | a map: `src` (must be under `media_bases`), `alt`, and server-derived `width`/`height` |
+| `link` | page picker | a page id — the filename. The slug is resolved at render time |
 | `select` | dropdown | must match a declared option |
+| `boolean` | checkbox | a real YAML `true`/`false` |
+| `list` | repeater over a fixed sub-schema | `array_values()`, cut to `max`, then each row walked against `fields` |
+
+An `image` field carries its own alt: declare the field and the alt input comes
+with it. Alt is **required whenever `src` is set**, unless the field declares
+`decorative: true` — which renders `alt=""` and shows no input, and is the right
+answer for a background image that carries no information. That flag is the
+developer's, not the client's: a `decorative` arriving in a request is dropped
+like any other undeclared key.
+
+A `list` declares `fields` (its sub-schema), `max` (the ceiling, applied before
+anything is sanitised) and `item_label` (which sub-field titles each row in the
+panel). One level only.
 
 Per-field options: `label`, `hint`, `max`, `required`, `default`,
-`placeholder`, `options`, and `editable`, which takes three values:
+`placeholder`, `options`, `decorative`, `fields`, `item_label`, and `editable`,
+which takes three values:
 
 | `editable` | admin | editor |
 |---|---|---|
@@ -185,21 +199,120 @@ cannot carry styling into the page.
 
 ## Deploying on a server
 
-Point the vhost at `public/`. Nothing above it should be reachable — see
-`nginx.conf.example`.
+Production is an **atomic-release layout**. `current` is a symlink to a release
+directory holding code and vendor only; everything a client owns lives outside
+it and survives every deploy and every rollback.
 
 ```
 /var/www/pelatis/
-├── public/          ← docroot
-├── content/         ← must be writable by php-fpm
-├── components/
-├── src/
-└── vendor/
+├── current -> releases/20260816-143000/   ← flipping this is the deploy
+├── releases/
+│   └── 20260816-143000/    public/ src/ components/ templates/ vendor/ bin/
+└── shared/
+    ├── content/            ← its own private git repository
+    │   ├── pages/el/       pages, one YAML file each
+    │   ├── uploads/        images, tracked in git with everything else
+    │   ├── .revisions/     per-save snapshots, also tracked
+    │   └── redirects.yml
+    ├── var/                cache, locks, submissions — never deployed
+    ├── roles.yml
+    └── .env                secrets — never deployed, never committed
 ```
 
+The vhost docroot is `current/public/`, and `/uploads/` is **aliased** to
+`shared/content/uploads/` — see `nginx.conf.example`. No symlink out of the
+docroot, and stored `src` values stay `/uploads/...` either way.
+
 ```bash
-chown -R www-data:www-data content public/uploads var
+chown -R www-data:www-data shared/content shared/var
 ```
+
+### One deploy
+
+```bash
+DEPLOY_ROOT=/var/www/pelatis DEPLOY_REPO=git@github.com:dope/pelatis.git \
+  bin/deploy.sh v1.4.0
+```
+
+Fetch the exact revision → `composer install --no-dev -o` → `composer audit` →
+the test suite → `bin/doctor` **against the shared content this release is
+about to serve** → a smoke test of the release serving itself → *then* flip
+`current` → smoke-test the live site → purge the edge.
+
+Everything before the flip is reversible by doing nothing: a failure there
+leaves the running site untouched, same code, same content, no downtime. If the
+post-switch smoke test fails, the switch is reversed before the deploy reports
+success.
+
+```bash
+bin/rollback.sh          # back to the previous release, one command
+```
+
+Content is never rolled back — no client-owned state lives inside a release.
+
+The private Composer repository credential lives in `shared/auth.json`, read via
+`COMPOSER_HOME`. It is deploy-key scoped to the package repository, never enters
+a release directory, and is rotated by replacing that one file and re-running
+`bin/deploy.sh` — there is no second place it is cached. Rotate whenever an
+operator leaves, and at least annually.
+
+### Health check
+
+```bash
+bin/doctor            # report
+bin/doctor --quiet    # exit code only, for cron
+```
+
+Validates YAML shape, unique slugs and block ids, duplicate block ids, component
+schemas and templates (including whether they compile), the layouts, redirect
+targets and loops, internal page ids, configured paths and their permissions,
+required PHP extensions, safe production auth settings, and disk headroom. A
+deploy runs it before switching, so a schema rename that would break a live page
+stops the deploy instead of the site.
+
+### Cron
+
+```cron
+# Content backup. The recovery point is at most one hour, not "whenever
+# someone remembered". Holds the site-wide content lock, so it can never
+# commit a half-applied save.
+17 * * * *  cd /var/www/pelatis/current && BACKUP_ALERT='/usr/local/bin/alert' bin/backup
+
+# The drill that makes the backup a backup: clone the remote somewhere else,
+# check every referenced image is in it, run doctor against the result.
+# A green backup cron without this proves a push happened, nothing more.
+40 4 * * 1  cd /var/www/pelatis/current && BACKUP_REMOTE=git@github.com:dope/pelatis-content.git \
+              DRILL_ALERT='/usr/local/bin/alert' bin/restore-drill
+
+# Disk, derivative-cache growth, permissions, content health.
+*/30 * * * * cd /var/www/pelatis/current && bin/doctor --quiet || /usr/local/bin/alert 'doctor failed'
+
+# Public smoke check.
+*/5 * * * *  curl -fsS -o /dev/null https://pelatis.gr/ || /usr/local/bin/alert 'site down'
+```
+
+Log rotation, `/etc/logrotate.d/pelatis`:
+
+```
+/var/www/pelatis/shared/var/*.log {
+    weekly
+    rotate 8
+    compress
+    missingok
+    notifempty
+    copytruncate
+}
+```
+
+### A new site
+
+```bash
+bin/new-site ../pelatis-gr "Πελάτης ΑΕ" pelatis.gr
+```
+
+Copies code, components and templates — never content, uploads, revisions or
+secrets. The scaffold starts with `SITE_NOINDEX=1`, because nobody has approved
+the copy yet.
 
 Set secrets as environment variables rather than editing `config.php`
 (in `/etc/php/8.4/fpm/pool.d/pelatis.conf`):
@@ -249,22 +362,31 @@ Create a bucket, connect a custom domain (`media.pelatis.gr`), then R2 → Manag
 API tokens → create a token with **Object Read & Write** scoped to that bucket.
 
 Zero egress fees, so image-heavy client sites cost nothing to serve. With
-`R2_ENABLED=0` everything falls back to `public/uploads/` and the CMS behaves
+`R2_ENABLED=0` everything falls back to `content/uploads/` and the CMS behaves
 identically — handy for local work.
 
 ### 3. Image transformations
 
-Speed → Optimization → Image Resizing → enable for the zone, then set
-`CF_IMAGES_ENABLED=1`.
+**Optional, and off by default.** Derivatives are generated locally with GD:
+`/img.php?src=…&w=…` resizes on first request, writes to `var/cache/images/`
+keyed by source content hash + width + format, and serves it immutable for a
+year. Every image renders through `templates/picture.twig` as a `<picture>`
+with a WebP source and a JPEG (or PNG, where there is transparency) fallback.
 
-The `img()` Twig helper builds `/cdn-cgi/image/width=…,format=auto/…` URLs, so
-Cloudflare resizes and re-encodes on the fly. Nothing is generated or stored on
-your side.
+The width allowlist is finite — `320, 640, 960, 1280, 1600, 2048` — and a width
+outside it 404s before a byte of the source is read, so an anonymous GET cannot
+fill the disk with attacker-chosen variants. `img()` returns an empty string for
+one, so it never reaches the markup either.
 
-**Free plan: 5.000 unique transformations per month.** A brochure site uses
-maybe 120. Past the limit, new transformations return an error rather than
-being billed — so the failure mode is broken images, not a surprise invoice.
-Worth an alert once you are running a lot of sites.
+Cloudflare's own transformations remain available: Speed → Optimization → Image
+Resizing → enable for the zone, then `CF_IMAGES_ENABLED=1`, and `img()` builds
+`/cdn-cgi/image/…` URLs instead. The width allowlist applies to that path too,
+so both backends serve the same finite set of variants.
+
+It is off by default because the free plan's **5.000 unique transformations per
+month are per account, shared across every zone** — twenty sites at ~200 uniques
+each is 4.000 against that cap with no headroom, and no way to attribute or
+rebill it per client.
 
 ### 4. Cache
 
@@ -279,6 +401,27 @@ would rather not bother with tags on a 5-page site.
 A failed purge never fails the save: the content is already on disk, the panel
 shows a warning, and the page updates when the TTL expires.
 
+**Headers are not proof that anything is cached.** Cloudflare does not cache
+HTML by default whatever you send, so the zone needs explicit rules:
+
+1. Cache Rules → *Cache public HTML*: `http.host eq "pelatis.gr"` → **Eligible
+   for cache**, Edge TTL *Use cache-control header*.
+2. Cache Rules → *Bypass panel and forms*, **above** the rule above:
+   `http.request.uri.path eq "/admin.php" or http.response.headers["cache-control"][0]
+   contains "no-store"` → **Bypass cache**.
+
+Then verify, twice, rather than trusting the config screen:
+
+```bash
+curl -sI https://pelatis.gr/          | grep -i cf-cache-status   # want HIT (second request)
+curl -sI https://pelatis.gr/admin.php | grep -i cf-cache-status   # want BYPASS
+curl -sI https://pelatis.gr/epikoinonia | grep -i cf-cache-status # want BYPASS — form page
+```
+
+A contact page served from a shared cache hands one visitor's CSRF token to the
+next, which is why form pages are `private: true` and send `no-store`. The
+bypass rule is what makes that survive a cache rule somebody adds later.
+
 ---
 
 ## What is deliberately not here
@@ -286,7 +429,6 @@ shows a warning, and the page updates when the TTL expires.
 - Adding, removing or reordering components from the panel
 - Multi-user accounts and roles (Cloudflare Access handles who gets in)
 - Draft / publish workflow — saving publishes
-- Multilingual content
 - Forms and form submissions (use a Worker, or Formspree, plus Turnstile)
 - A media library — `image` fields upload and replace in place
 
@@ -296,24 +438,47 @@ pays for one.
 ## Safety net
 
 Every save writes a timestamped copy to `content/.revisions/` first and keeps
-the last 10. To roll back a bad client edit:
-
-```bash
-cp content/.revisions/home.20260816-143012.yml content/pages/home.yml
-```
+the last 10, and the panel restores one for you (admin only, CSRF-protected,
+re-sanitised on the way back in — never a `cp`).
 
 Page writes are atomic (temp file + rename), so an interrupted save cannot
 leave a half-written page live.
 
-Put `content/` under git and you get real history and a remote backup for free.
+`shared/content/` **is** a git repository — pages, revisions and uploads
+together — pushed hourly by `bin/backup` under the site-wide content lock, so a
+commit can never catch a half-applied save. `bin/restore-drill` clones that
+remote weekly, checks every image a page references is actually in it, and runs
+`bin/doctor` against the result. A green backup cron proves a push happened; the
+drill is what proves the push is a site.
+
+That is one mechanism and one restore: `git clone`, and the site is whole,
+pictures included. It stops being right at a gallery site or past a few hundred
+MB — that site sets `R2_ENABLED=1` and the media moves out, which is a config
+change rather than a rewrite.
 
 ## Tests
 
 ```
-tests/01_render.php     component discovery, page rendering, image URLs
-tests/02_admin.php      form generation, CSRF, auth, absence of structural controls
-tests/03_lockdown.php   hostile save: XSS, javascript: URLs, locked fields,
-                        injected fields, retyping components, Word paste
+tests/01_render.php      component discovery, page rendering, <picture> markup, image URLs
+tests/02_admin.php       form generation, CSRF, auth, uploads and normalization,
+                         absence of structural controls
+tests/03_lockdown.php    hostile save: XSS, hostile URLs, locked fields, injected
+                         fields, retyping components, Word paste, forged image
+                         dimensions, oversized lists
+tests/04_hardening.php   regressions from the security review, decompression bombs
+tests/05_concurrency.php stale saves, conflict re-render, presence markers
+tests/06_production.php  production contracts: paths, atomic release, derivative
+                         route and encoder, cache policy, boot guard
 ```
 
-61 checks. Run them after touching `Fields`, `Admin` or `Components`.
+```
+tests/07_shipkit.php     nav, redirects, 500.twig, SITE_NOINDEX, bin/doctor,
+                         release switching and rollback, backup and restore drill
+```
+
+523 checks: `ddev exec bash tests/run.sh`. Run all of them after touching
+`Fields`, `Admin`, `Components`, `Media` or anything in `bin/`.
+
+CI (`.github/workflows/ci.yml`) runs the lint, `composer audit`, `bin/doctor`
+and tests 01–05 on PHP 8.4 for every push. 06 and 07 make real HTTPS requests to
+the local origin, so they are the deploy's job rather than CI's.

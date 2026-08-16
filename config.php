@@ -58,18 +58,34 @@ $config = [
         'name'     => 'Demo Πελάτη',
         'locale'   => 'el',
         'base_url' => env('SITE_BASE_URL', 'http://localhost:8080'),
+
+        // Emits X-Robots-Tag: noindex on every response. For the window between
+        // "the domain resolves" and "the client has approved the copy" — which
+        // is exactly when a crawler finds a site and nobody is watching.
+        'noindex'  => env_bool('SITE_NOINDEX'),
+
+        // Site-level media, used by the layout and by Phase 6's Open Graph
+        // tags. Per-page values override them; these are what a page that has
+        // said nothing falls back to, so no page ships without either.
+        'favicon'    => env('SITE_FAVICON', '/uploads/favicon.png'),
+        'og_default' => env('SITE_OG_DEFAULT', ''),
     ],
 
-    // Single-locale storage is the permanent page-storage shape: pages live at
-    // content/pages/*.yml today and Phase 9 adds content/pages/<locale>/ beside
-    // it. Nothing before then may invent a second layout.
+    // content/pages/<locale>/<id>.yml is the permanent page-storage shape, and
+    // it is already that shape on a single-language site. Phase 9 resolves a
+    // second locale directory beside the first; until then only site.locale is
+    // ever read. Adopting it now is what keeps Phase 9 a resolver change rather
+    // than a migration run against twenty live client sites after v1.0.0.
     'paths' => [
         'content'    => $contentPath,
         'components' => __DIR__ . '/components',
         'templates'  => __DIR__ . '/templates',
         'cache'      => $varPath . '/cache',
-        // Production: nginx aliases /uploads/ to shared/content/uploads/.
-        'uploads'    => env('UPLOADS_PATH', __DIR__ . '/public/uploads'),
+        // Inside content/, not under the docroot: uploads are client-owned
+        // state and belong in the content repository with everything else the
+        // client can lose. nginx aliases /uploads/ here, so stored `src` values
+        // and config.media_bases are unchanged by where the bytes actually sit.
+        'uploads'    => env('UPLOADS_PATH', $contentPath . '/uploads'),
     ],
 
     // Twig template cache. Set false while developing.
@@ -119,7 +135,10 @@ $config = [
         'transform'   => env_bool('CF_IMAGES_ENABLED'),
         'quality'     => 82,
         'max_upload'  => 12 * 1024 * 1024, // 12 MB
-        'allowed'     => ['image/jpeg', 'image/png', 'image/webp', 'image/avif'],
+        // AVIF is refused on the way in as well as on the way out: GD's support
+        // for it is build-dependent, and a prototype that "accepted" one could
+        // write JPEG bytes under an .avif name while downscaling.
+        'allowed'     => ['image/jpeg', 'image/png', 'image/webp'],
         // Longest edge kept on the original we store, to stop 8 MB phone photos
         // sitting in R2 forever. Set 0 to store untouched originals.
         'store_max_edge' => 2400,
@@ -220,6 +239,13 @@ $config = [
  * stopping at the first, so fixing a prod box is one round trip, not four.
  */
 if (env('APP_ENV', 'dev') === 'prod') {
+    // A stack trace on a live client site names absolute paths and library
+    // internals to whoever loaded the page. Set here rather than left to the
+    // deployment checklist, because a checklist is a thing someone forgets and
+    // this is the one setting whose failure mode is silent until it is public.
+    ini_set('display_errors', '0');
+    ini_set('log_errors', '1');
+
     $problems = [];
 
     if ($config['auth']['mode'] === 'none') {
