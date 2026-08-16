@@ -273,6 +273,8 @@ final class Admin
             'notice'   => $opts['notice'] ?? null,
             'warn'     => $opts['warn'] ?? null,
             'conflict' => $opts['conflict'] ?? null,
+            // Field name -> message, looked up by the input renderer.
+            'errors'   => (array) ($opts['errors'] ?? []),
             'held_by'  => $heldBy,
         ]));
     }
@@ -338,6 +340,16 @@ final class Admin
         $postedSeo = (array) $request->request->all('seo');
         $context = $this->context();
 
+        // Field name -> message, filled in by the walk below and handed to the
+        // form so the message lands beside the box that caused it. Every block
+        // is walked even after one refuses, because an editor who fixes one
+        // missing alt and is only then told about a second has been made to
+        // save twice to learn what was wrong once. Within a block it is still
+        // the first refusal — Fields::map() throws — which is one message per
+        // card rather than all of them; worth revisiting only if a component
+        // ever declares enough required fields for that to bite.
+        $errors = [];
+
         // The whole read-modify-write runs under an exclusive lock on the page
         // file, and refuses to proceed if the file changed since the form was
         // rendered. Without both, two tabs (or one double-clicked submit)
@@ -347,7 +359,7 @@ final class Admin
             $this->cms->content->transaction(
                 $id,
                 (string) $request->request->get('baseline', ''),
-                function (array $page) use ($request, $user, $posted, $postedSeo, $context): array {
+                function (array $page) use ($request, $user, $posted, $postedSeo, $context, &$errors): array {
                     foreach ($page['blocks'] as $i => $block) {
                         $schema = $this->cms->components->get((string) $block['type']);
                         if ($schema === null) {
@@ -358,26 +370,34 @@ final class Admin
                         // from the schema key set, so a field removed from
                         // schema.yml disappears from the file on the next save
                         // instead of lingering unsanitised forever.
-                        $page['blocks'][$i]['fields'] = $this->cleanValues(
-                            $schema,
-                            (array) ($block['fields'] ?? []),
-                            (array) ($posted[$block['id']] ?? []),
-                            $context,
-                            $user['role']
-                        );
+                        try {
+                            $page['blocks'][$i]['fields'] = $this->cleanValues(
+                                $schema,
+                                (array) ($block['fields'] ?? []),
+                                (array) ($posted[$block['id']] ?? []),
+                                $context,
+                                $user['role']
+                            );
+                        } catch (ValidationException $e) {
+                            $errors[$e->field('blocks[' . $block['id'] . ']')] = $e->getMessage();
+                        }
                     }
 
                     // The page's own SEO, through the identical walk. A card the
                     // editor never opened still posts every input, and every
                     // field in it is optional — so an ignored card writes the
                     // stored values straight back rather than refusing a save.
-                    $page['seo'] = $this->cleanValues(
-                        $this->seoSchema(),
-                        (array) ($page['seo'] ?? []),
-                        $postedSeo,
-                        $context,
-                        $user['role']
-                    );
+                    try {
+                        $page['seo'] = $this->cleanValues(
+                            $this->seoSchema(),
+                            (array) ($page['seo'] ?? []),
+                            $postedSeo,
+                            $context,
+                            $user['role']
+                        );
+                    } catch (ValidationException $e) {
+                        $errors[$e->field('seo')] = $e->getMessage();
+                    }
 
                     // Page title is the one non-block field a client may edit.
                     if ($request->request->has('title')) {
@@ -387,9 +407,28 @@ final class Admin
                         );
                     }
 
+                    // Nothing is written while a single field is refused: a
+                    // half-saved page is not a lesser failure than a refused
+                    // one, it is a worse one. Thrown from inside the
+                    // transaction so the file is never touched.
+                    if ($errors !== []) {
+                        throw new ValidationException('Δεν αποθηκεύτηκε τίποτα.');
+                    }
+
                     return $page;
                 }
             );
+        } catch (ValidationException $e) {
+            // The form comes back with what they typed and a message on every
+            // field that needs one — the values are not theirs to lose.
+            $response = $this->edit($request, $user, $id, [
+                'posted'     => $posted,
+                'posted_seo' => $postedSeo,
+                'errors'     => $errors,
+            ]);
+            $response->setStatusCode(422);
+
+            return $response;
         } catch (StaleContentException $e) {
             // Refusing the write is correct. Throwing away what they typed is
             // not — re-render the form holding their values against the new

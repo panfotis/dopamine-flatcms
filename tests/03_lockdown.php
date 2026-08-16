@@ -99,9 +99,18 @@ $withImage = static fn (array $image): array => [
 $real = (string) $storedImage['src'];
 
 $noAlt = admin_post($withImage(['src' => $real, 'alt' => '   ']));
-ok($noAlt->getStatusCode() === 400, 'a non-decorative image with a file and no description is refused');
+ok($noAlt->getStatusCode() === 422, 'a non-decorative image with a file and no description is refused');
 contains((string) $noAlt->getContent(), 'Περιγραφή εικόνας', 'and the refusal names the field the client has to fill in');
 ok(Yaml::parseFile($file)['blocks'][1]['fields']['image']['src'] === '', 'nothing was written by the refused save');
+
+// A refusal that empties the form is the same support call as a lost save, so
+// the refusal *is* the form, with the message on the field that caused it.
+$noAltBody = (string) $noAlt->getContent();
+contains($noAltBody, 'name="blocks[intro][image][alt]"', 'and the client is handed the form back, not an error page');
+contains($noAltBody, 'name="blocks[intro][image][src]" value="' . $real . '"',
+    'holding the image they picked, so the upload is not lost with the message');
+contains($noAltBody, 'has-error', 'with the offending field marked inline');
+ok(count(Yaml::parseFile($file)['blocks'][1]['fields']) > 0, 'and still nothing on disk');
 
 // The condition matters: Phase 6's og_image defaults to an empty map on every
 // page, and an unconditional rule would make every page unsaveable.
@@ -219,7 +228,7 @@ ok($seoOf()['og_image']['width'] === 0 && $seoOf()['og_image']['height'] === 0,
 // A block image is a different question and still refuses: that one carries
 // information, and this is the case the decorative flag exists to distinguish.
 $blockNoAlt = admin_post($withImage(['src' => (string) $storedImage['src'], 'alt' => '   ']));
-ok($blockNoAlt->getStatusCode() === 400, 'while a meaningful block image with no description is still refused');
+ok($blockNoAlt->getStatusCode() === 422, 'while a meaningful block image with no description is still refused');
 
 section('A list is bounded before it is walked, not after');
 $faq = $after['blocks'][$blockNo($after, 'faq')]['fields'];

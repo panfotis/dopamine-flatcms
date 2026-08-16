@@ -289,6 +289,58 @@ ok($forgedUpload->getStatusCode() === 400, 'an upload with a forged CSRF token i
 @unlink($png);
 @unlink($served);
 
+section('A refused save comes back as the form, with the message on the field');
+// The failure mode this replaces: one error page, the whole form gone, and
+// everything the client typed with it. Every required field is checked in one
+// pass, at every depth, so fixing one does not reveal the next on the save
+// after that.
+$_SESSION['csrf'] = 'the-real-token';
+$badFile = dirname(__DIR__) . '/content/pages/el/home.yml';
+copy($badFile, $badFile . '.err.bak');
+$beforeBad = (string) file_get_contents($badFile);
+
+$refused = admin_post([
+    'action'   => 'save',
+    'csrf'     => 'the-real-token',
+    'page'     => 'home',
+    'baseline' => (string) hash_file('sha256', $badFile),
+    'blocks'   => [
+        // Required, at the top level of a block.
+        'hero'  => ['heading' => '   ', 'subheading' => 'Κείμενο που δεν πρέπει να χαθεί'],
+        // Required, inside an image map.
+        'intro' => ['image' => ['src' => '/uploads/2024/01/team-abc123.jpg', 'alt' => '']],
+        // Required, inside a list row — and only the second row.
+        'faq'   => ['questions' => [
+            ['question' => 'Πόσο κοστίζει;', 'answer' => '<p>Ναι.</p>'],
+            ['question' => '', 'answer' => '<p>Χωρίς ερώτηση.</p>'],
+        ]],
+    ],
+]);
+$body = (string) $refused->getContent();
+
+ok($refused->getStatusCode() === 422, 'the save is refused');
+ok((string) file_get_contents($badFile) === $beforeBad, 'and not one field of it reached the file');
+ok(glob(dirname(__DIR__) . '/content/.revisions/home.*.yml') === [],
+    'nor did it burn a revision — the history keeps the last version that was real');
+
+contains($body, 'name="blocks[hero][heading]"', 'the client gets the form back, not an error page');
+contains($body, 'Κείμενο που δεν πρέπει να χαθεί', 'still holding what they typed in the fields that were fine');
+contains($body, '3 πεδία χρειάζονται', 'told how many fields need attention — all of them, in one pass');
+ok(substr_count($body, 'class="err"') === 3, 'with one inline message each, beside the box that caused it');
+ok(substr_count($body, 'class="field has-error"') === 3, 'and each of those boxes marked');
+
+// The path is what makes the message land in the right place, and it is built
+// as the refusal unwinds — a row index and an image's alt included.
+$field = static fn (string $name): bool => (bool) preg_match(
+    '/name="' . preg_quote($name, '/') . '"[^>]*>\s*<p class="err"/',
+    $body
+);
+ok($field('blocks[hero][heading]'), 'a required field at the top level of a block');
+ok($field('blocks[intro][image][alt]'), 'an alt inside an image map');
+ok($field('blocks[faq][questions][1][question]'), 'and a field inside the *second* row of a list, not the first');
+
+rename($badFile . '.err.bak', $badFile);
+
 section('Auth blocks unauthenticated access when dev bypass is off');
 // A production auth setup, built here rather than in a child process: the
 // bypass off, cf_access on, and no Access JWT anywhere on the request.

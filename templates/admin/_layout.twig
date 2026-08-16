@@ -50,6 +50,10 @@
   input:focus,textarea:focus,select:focus,.rt:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
   input[readonly],textarea[readonly]{background:var(--soft);color:var(--muted)}
 
+  .err{color:var(--danger);font-size:13px;font-weight:600;margin:6px 0 0}
+  .field.has-error > input,.field.has-error > textarea,.field.has-error > select,
+  .field.has-error > .rt{border-color:var(--danger);background:#fffafa}
+
   .rt{min-height:110px}
   .rt p{margin:0 0 .6em}
   .rt-toolbar{display:flex;gap:4px;margin-bottom:6px}

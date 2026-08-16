@@ -202,8 +202,13 @@ final class Content
                 throw new RuntimeException('Η σελίδα δεν βρέθηκε.');
             }
 
+            // Mutate first: a refused save must not leave a revision behind,
+            // and a client fixing three missing alts in a row would otherwise
+            // push the last real version out of the history.
+            $page = $mutate($page);
+
             $this->snapshot($id);
-            $this->save($id, $mutate($page));
+            $this->save($id, $page);
         } finally {
             flock($lock, LOCK_UN);
             fclose($lock);

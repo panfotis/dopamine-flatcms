@@ -11,6 +11,18 @@
   {% if notice %}<div class="flash ok">{{ notice }}</div>{% endif %}
   {% if warn %}<div class="flash warn">{{ warn }}</div>{% endif %}
 
+  {% if errors|default({})|length %}
+    <div class="flash err">
+      <strong>Δεν αποθηκεύτηκε τίποτα.</strong>
+      <p style="margin:.6em 0 0">
+        {{ errors|length }} {{ errors|length == 1 ? 'πεδίο χρειάζεται' : 'πεδία χρειάζονται' }}
+        συμπλήρωση — {{ errors|length == 1 ? 'είναι σημειωμένο' : 'είναι σημειωμένα' }} με κόκκινο
+        παρακάτω. <strong>Τα υπόλοιπα κείμενα που γράψατε είναι ακόμα στη φόρμα</strong>·
+        συμπληρώστε τα και πατήστε ξανά Αποθήκευση.
+      </p>
+    </div>
+  {% endif %}
+
   {% if conflict %}
     <div class="flash err">
       <strong>{{ conflict }}</strong>
@@ -56,7 +68,7 @@
            demands one. #}
         {% for name, def in seo_fields %}
           {{ _self.field(def, 'seo-' ~ name, 'seo[' ~ name ~ ']', seo[name]|default(''),
-                         not may_edit(def.editable, user.role), pages, page_ids) }}
+                         not may_edit(def.editable, user.role), pages, page_ids, errors|default({})) }}
         {% endfor %}
       </div>
     </details>
@@ -95,9 +107,9 @@
               {% set locked = not may_edit(def.editable, user.role) %}
 
               {% if def.type == 'list' %}
-                {{ _self.repeater(def, id, fname, value, locked, pages, page_ids, user.role) }}
+                {{ _self.repeater(def, id, fname, value, locked, pages, page_ids, user.role, errors|default({})) }}
               {% else %}
-                {{ _self.field(def, id, fname, value, locked, pages, page_ids) }}
+                {{ _self.field(def, id, fname, value, locked, pages, page_ids, errors|default({})) }}
               {% endif %}
             {% endfor %}
           {% endif %}
@@ -121,8 +133,19 @@
   copies of this chain would drift, and the copy inside the repeater is exactly
   where a locked field or a missing alt would stop being enforced in the UI.
 #}
-{% macro field(def, id, fname, value, locked, pages, page_ids) %}
-              <div class="field">
+{% macro field(def, id, fname, value, locked, pages, page_ids, errors) %}
+              {# Keyed by the input's own name attribute, which is the string
+                 the save path reports a refusal against — so the message lands
+                 on the box that caused it, at any nesting depth. #}
+              {% set errors = errors|default({}) %}
+              {% set error = errors[fname]|default(null) %}
+              {# The schema's own `required`, handed to the browser. Only on
+                 inputs the client can see and focus: a required control that
+                 is hidden (richtext's mirror textarea) blocks the submit with
+                 a bubble nobody can read. Those are refused server-side and
+                 come back as an inline message like everything else. #}
+              {% set demand = def.required|default(false) and not locked %}
+              <div class="field{{ error ? ' has-error' : '' }}">
                 <label for="{{ id }}">
                   {{ def.label }}
                   {% if locked %}<span class="pill" style="margin-inline-start:6px">κλειδωμένο</span>{% endif %}
@@ -138,6 +161,7 @@
                      empty, so the client can read it and decide whether they
                      can do better. #}
                   <textarea id="{{ id }}" name="{{ fname }}" {{ locked ? 'readonly' : '' }}
+                            {{ demand ? 'required' : '' }} {{ error ? 'aria-invalid="true"' : '' }}
                             {% if def.placeholder is defined and def.placeholder %}placeholder="{{ def.placeholder }}"{% endif %}
                             {% if def.max is defined %}data-max="{{ def.max }}"{% endif %}>{{ value }}</textarea>
 
@@ -176,12 +200,20 @@
                      all — an empty alt is the right markup for it, and asking
                      for one produces "photo" and "logo123.jpg". #}
                   {% if not def.decorative %}
-                    <div class="field" style="margin-top:12px">
+                    {% set altError = errors[fname ~ '[alt]']|default(null) %}
+                    <div class="field{{ altError ? ' has-error' : '' }}" style="margin-top:12px">
                       <label for="{{ id }}-alt">{{ def.fields.alt.label }}</label>
+                      {# The same rule the save path applies, stated to the
+                         browser: required exactly when there is an image. No
+                         validation library — the round trip is the fallback,
+                         not the mechanism. #}
                       <input type="text" id="{{ id }}-alt" name="{{ fname }}[alt]"
                              value="{{ value.alt|default('') }}"
                              {{ locked ? 'readonly' : '' }}
+                             {{ src and not locked ? 'required' : '' }}
+                             {{ altError ? 'aria-invalid="true"' : '' }}
                              maxlength="{{ def.fields.alt.max }}" data-max="{{ def.fields.alt.max }}">
+                      {% if altError %}<p class="err">{{ altError }}</p>{% endif %}
                       <p class="hint">{{ def.fields.alt.hint }}</p>
                     </div>
                   {% endif %}
@@ -222,10 +254,12 @@
                 {% else %}
                   <input type="text" id="{{ id }}" name="{{ fname }}" value="{{ value }}"
                          {{ locked ? 'readonly' : '' }}
+                         {{ demand ? 'required' : '' }} {{ error ? 'aria-invalid="true"' : '' }}
                          {% if def.max is defined %}maxlength="{{ def.max }}" data-max="{{ def.max }}"{% endif %}
                          {% if def.placeholder is defined %}placeholder="{{ def.placeholder }}"{% endif %}>
                 {% endif %}
 
+                {% if error %}<p class="err">{{ error }}</p>{% endif %}
                 {% if def.hint is defined %}<p class="hint">{{ def.hint }}</p>{% endif %}
               </div>
 {% endmacro %}
@@ -237,7 +271,7 @@
   `max` before it sanitises anything, so a reordered or renumbered form is not
   something this has to keep straight.
 #}
-{% macro repeater(def, id, fname, rows, locked, pages, page_ids, role) %}
+{% macro repeater(def, id, fname, rows, locked, pages, page_ids, role, errors) %}
   <div class="field">
     <label>
       {{ def.label }}
@@ -261,7 +295,8 @@
                  row[subName]|default(''),
                  locked or not may_edit(subDef.editable, role),
                  pages,
-                 page_ids
+                 page_ids,
+                 errors|default({})
                ) }}
           {% endfor %}
         </div>
@@ -287,7 +322,8 @@
                  '',
                  not may_edit(subDef.editable, role),
                  pages,
-                 page_ids
+                 page_ids,
+                 {}
                ) }}
           {% endfor %}
         </div>
@@ -304,6 +340,16 @@
   const csrf = form.querySelector('[name=csrf]').value;
   let dirty = false;
   const touch = () => { dirty = true; };
+
+  /* ---- go to the first refused field ---------------------------------
+     The message is at the top of a long form and the field it names can be
+     three cards down — and inside the SEO card, which is closed by default. */
+  const bad = document.querySelector('.field.has-error');
+  if (bad) {
+    bad.closest('details')?.setAttribute('open', '');
+    bad.scrollIntoView({ block: 'center' });
+    bad.querySelector('input, textarea, select')?.focus();
+  }
 
   /* ---- character counters ------------------------------------------- */
   document.querySelectorAll('.counter[data-for]').forEach(el => {
@@ -357,6 +403,7 @@
     const hidden = document.getElementById(id);
     const thumb = document.getElementById(id + '-thumb');
     const path = document.getElementById(id + '-path');
+    const alt = document.getElementById(id + '-alt');
 
     btn.addEventListener('click', () => file.click());
 
@@ -376,6 +423,7 @@
         hidden.value = data.url;
         thumb.style.backgroundImage = "url('" + (data.preview || data.url) + "')";
         path.textContent = data.url;
+        if (alt) alt.required = true;
         status.textContent = 'Η εικόνα ανέβηκε. Πατήστε Αποθήκευση.';
         touch();
       } catch (err) {
@@ -393,6 +441,9 @@
       document.getElementById(id).value = '';
       document.getElementById(id + '-thumb').style.backgroundImage = '';
       document.getElementById(id + '-path').textContent = 'Καμία εικόνα';
+      // No image, no alt to demand — same condition the save path uses.
+      const alt = document.getElementById(id + '-alt');
+      if (alt) alt.required = false;
       touch();
     });
   });
@@ -430,6 +481,12 @@
   });
 
   /* ---- don't lose work ------------------------------------------------ */
+  // A required field inside a closed <details> is not focusable, and the
+  // browser then refuses the submit with a bubble nobody can see.
+  form.addEventListener('invalid', e => {
+    e.target.closest('details')?.setAttribute('open', '');
+  }, true);
+
   form.addEventListener('input', touch);
   form.addEventListener('submit', () => { dirty = false; });
   window.addEventListener('beforeunload', e => {

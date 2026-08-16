@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Dopamine\FlatCms;
 
-use RuntimeException;
 use Symfony\Component\HtmlSanitizer\HtmlSanitizer;
 use Symfony\Component\HtmlSanitizer\HtmlSanitizerAction;
 use Symfony\Component\HtmlSanitizer\HtmlSanitizerConfig;
@@ -171,8 +170,16 @@ final class Fields
                 continue;
             }
 
-            $out[$name] = self::sanitise($def, $in[$name], ['stored' => $current] + $context);
-            self::demand($def, $out[$name], $context);
+            // Whatever depth the refusal came from, this frame knows one more
+            // segment of the path to the input that caused it — which is what
+            // lets the panel put the message beside the box instead of on an
+            // error page with the form gone.
+            try {
+                $out[$name] = self::sanitise($def, $in[$name], ['stored' => $current] + $context);
+                self::demand($def, $out[$name], $context);
+            } catch (ValidationException $e) {
+                throw $e->under($name);
+            }
         }
 
         return $out;
@@ -186,18 +193,23 @@ final class Fields
      * @param array<string, mixed> $def
      * @param array<string, mixed> $context
      */
-    public static function demand(array $def, mixed $value, array $context): void
+    public static function demand(array $def, mixed $value, array $context, string $name = ''): void
     {
         if (($context['require'] ?? true) !== true || ($def['required'] ?? false) !== true) {
             return;
         }
 
         if ($value === '' || $value === [] || $value === false) {
-            throw new RuntimeException(sprintf(
-                'Το πεδίο «%s» στην ενότητα «%s» δεν μπορεί να είναι κενό.',
-                (string) ($def['label'] ?? ''),
-                (string) ($context['section'] ?? '')
-            ));
+            throw new ValidationException(
+                sprintf(
+                    'Το πεδίο «%s» στην ενότητα «%s» δεν μπορεί να είναι κενό.',
+                    (string) ($def['label'] ?? ''),
+                    (string) ($context['section'] ?? '')
+                ),
+                // map() names the field it is walking; a sub-field the schema
+                // does not declare — an image's alt — has to name itself.
+                $name === '' ? [] : [$name]
+            );
         }
     }
 
@@ -283,7 +295,8 @@ final class Fields
             self::demand(
                 ['label' => self::IMAGE['alt']['label'], 'required' => $src !== ''],
                 $out['alt'],
-                $context
+                $context,
+                'alt'
             );
         }
 
@@ -352,12 +365,18 @@ final class Fields
         // to "wrong".
         $out = [];
         foreach ($rows as $i => $row) {
-            $out[] = self::map(
-                $fields,
-                is_array($row) ? $row : [],
-                is_array($stored[$i] ?? null) ? $stored[$i] : [],
-                $context
-            );
+            try {
+                $out[] = self::map(
+                    $fields,
+                    is_array($row) ? $row : [],
+                    is_array($stored[$i] ?? null) ? $stored[$i] : [],
+                    $context
+                );
+            } catch (ValidationException $e) {
+                // The row index is part of the input's name, so it is part of
+                // the path — otherwise every row's error points at the first.
+                throw $e->under((string) $i);
+            }
         }
 
         return $out;
