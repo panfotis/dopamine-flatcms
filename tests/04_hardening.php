@@ -189,7 +189,9 @@ $raw = Yaml::parseFile($file);
 $raw['blocks'][0]['fields']['ghost_field'] = 'should not survive a save';
 file_put_contents($file, Yaml::dump($raw, 6, 2));
 
-$content = new Content(dirname(__DIR__) . '/content', 'el');
+// With the panel's catalogue, as Cms builds it. Without one a message
+// falls back to its key, which is checked below.
+$content = new Content(dirname(__DIR__) . '/content', 'el', cms()->lang);
 admin_post($hostile('test-token', (string) hash_file('sha256', $file)));
 $after = Yaml::parseFile($file);
 ok(!array_key_exists('ghost_field', $after['blocks'][0]['fields']), 'undeclared key removed from the file on the next save');
@@ -203,7 +205,17 @@ try {
 } catch (Throwable $e) {
     $threw = $e->getMessage();
 }
-contains($threw, 'άλλαξε από αλλού', 'a save carrying a stale baseline is refused');
+contains($threw, cms()->lang->t('err.stale'), 'a save carrying a stale baseline is refused');
+
+// A store built without a catalogue — a script, a cron — still refuses; it just
+// says so in keys. A missing translation must never be a missing guard.
+$mute = '';
+try {
+    (new Content(dirname(__DIR__) . '/content', 'el'))->transaction('home', $stale, static fn (array $p): array => $p);
+} catch (Throwable $e) {
+    $mute = $e->getMessage();
+}
+ok($mute === 'err.stale', 'and refuses identically with no catalogue loaded, falling back to the key: ' . $mute);
 
 $fresh = $content->baseline('home');
 $ran = false;
@@ -215,17 +227,17 @@ ok($ran, 'a save carrying the current baseline goes through');
 
 section('Revision snapshots do not collide within one second');
 // Scoped to the fixture page: a suite run must never wipe real revision history.
-array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/home.*.yml') ?: []);
+array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/home.*.yml') ?: []);
 for ($i = 0; $i < 3; $i++) {
     $content->snapshot('home');
 }
-ok(count(glob(dirname(__DIR__) . '/content/.revisions/home.*.yml') ?: []) === 3, 'three snapshots in the same second produce three files');
+ok(count(glob(dirname(__DIR__) . '/content/.revisions/el/home.*.yml') ?: []) === 3, 'three snapshots in the same second produce three files');
 
 // Pruning sorts by name, and a name only carries seconds — so inside one second
 // the order is the random suffix, and the snapshot just taken could sort lowest
 // and be deleted by its own prune. That made exactly one save in a burst the
 // one that could not be undone.
-$revsOf = static fn (): array => glob(dirname(__DIR__) . '/content/.revisions/home.*.yml') ?: [];
+$revsOf = static fn (): array => glob(dirname(__DIR__) . '/content/.revisions/el/home.*.yml') ?: [];
 $kept = true;
 for ($i = 0; $i < 12; $i++) {
     $was = $revsOf();
@@ -238,7 +250,7 @@ ok(count($revsOf()) === 5, 'while the keep limit still holds (' . count($revsOf(
 // restore
 rename($backup, $file);
 // Scoped to the fixture page: a suite run must never wipe real revision history.
-array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/home.*.yml') ?: []);
+array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/home.*.yml') ?: []);
 
 section('Admin errors do not leak filesystem paths');
 $error = admin_post([
@@ -252,7 +264,7 @@ $body = (string) $error->getContent();
 ok($error->getStatusCode() === 400, 'an internal error is a 400, not a 200 with an error-shaped page');
 missing($body, '/home/', 'no absolute path in the error shown to the client');
 missing($body, '.yml', 'no filename in the error shown to the client');
-contains($body, 'Η σελίδα δεν βρέθηκε', 'a client-appropriate Greek message is shown instead');
+contains($body, cms()->lang->t('err.page_missing'), 'a client-appropriate message is shown instead');
 
 section('Decompression-bomb images are refused before GD sees them');
 // A valid PNG header claiming 30000x30000. Tiny on disk, ~3.6 GB decoded.
@@ -288,7 +300,7 @@ $tooBig = admin(Request::create(
 $grew = memory_get_peak_usage(true) - $peak;
 
 ok($tooBig->getStatusCode() === 400, 'a 48 MP upload is refused');
-contains((string) $tooBig->getContent(), 'διαστάσεις', 'with a Greek message the client can act on');
+contains((string) $tooBig->getContent(), cms()->lang->t('up.too_many_pixels'), 'with a message the client can act on');
 missing((string) $tooBig->getContent(), '/home/', 'and no filesystem path in it');
 // 8000x6000 at 4 bytes a pixel is 192 MB before the destination buffer. The
 // bar here is generous because this measures a whole in-process admin request,
@@ -325,7 +337,7 @@ $nearRefused = admin(Request::create(
     )]
 ));
 ok($nearRefused->getStatusCode() === 400, 'the combined source/destination memory budget refuses it');
-contains((string) $nearRefused->getContent(), 'διαστάσεις', 'with the same actionable dimensions message');
+contains((string) $nearRefused->getContent(), cms()->lang->t('up.too_many_pixels'), 'with the same actionable dimensions message');
 @unlink($nearFile);
 
 section('A global is content, never a URL');
@@ -347,10 +359,39 @@ ok(array_filter($navIds, static fn (string $id): bool => str_starts_with($id, '_
     'the menu never contains one: ' . implode(', ', $navIds));
 ok($globalCms->pageUrl('_header') === '', 'and a link field pointing at one resolves to nothing, like a deleted page');
 
-// The prefix is a routing rule, not a path guard: the id regex is what stops a
-// traversal, and it does so by collapsing the attempt to a plain id.
-ok($globalCms->content->load('../_header') !== null,
-    'a traversal attempt is stripped to a bare id rather than escaping the directory');
-ok($globalCms->content->load('../../config') === null, 'and cannot reach outside the pages directory');
+// The prefix is a routing rule, not a path guard. assertSafeSegment() is the
+// path guard, and it refuses rather than strips: an earlier version stripped,
+// so `../home` quietly resolved to `home` and an obvious attack was answered
+// with a page.
+$refused = static function (callable $fn): bool {
+    try {
+        $fn();
+
+        return false;
+    } catch (\RuntimeException) {
+        return true;
+    }
+};
+ok($refused(static fn () => $globalCms->content->load('../_header')),
+    'a traversal attempt in a page id is refused, not silently stripped to a bare id');
+ok($refused(static fn () => $globalCms->content->load('../../config')), 'and cannot reach outside the pages directory');
+ok($refused(static fn () => $globalCms->content->load('home.yml')), 'nor can a filename be smuggled in as an id');
+
+section('A crafted locale segment cannot escape content/pages/');
+// Two gates, because one gate that moves is not a gate: the locale is matched
+// against the configured map first, and Content refuses it again on the way to
+// a directory name.
+ok($refused(static fn () => $globalCms->useLocale('../../etc')), 'an unconfigured locale is refused by the map');
+ok($refused(static fn () => $globalCms->useLocale('EL')), 'and the match is exact, not merely case-insensitive-ish');
+ok($refused(static fn () => new Content(dirname(__DIR__) . '/content', '../el')),
+    'and a traversal in a locale is refused by Content itself, whatever called it');
+
+$localeCms = cms();
+[$code, $rest] = $localeCms->localeOf('/en/contact');
+ok($code === 'en' && $rest === '/contact', 'a prefixed path resolves to its language and the path inside it');
+ok($localeCms->localeOf('/en') === ['en', '/'], 'the prefix alone is that language\'s home page');
+ok($localeCms->localeOf('/epikoinonia') === ['el', '/epikoinonia'], 'and an unprefixed path is the default language');
+ok($localeCms->localeOf('/english-lessons') === ['el', '/english-lessons'],
+    'a slug that merely starts with the prefix letters is not a locale match');
 
 summary();

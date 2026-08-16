@@ -1,0 +1,62 @@
+{% extends 'admin/_layout.twig' %}
+{% block title %}{{ t('sub.one') }}{% endblock %}
+
+{% block content %}
+  <h1>{{ t('sub.one') }}</h1>
+  <p class="sub">
+    <a href="?action=submissions">{{ t('nav.back_submissions') }}</a> ·
+    {{ record.at|date('d/m/Y H:i') }} ·
+    <code>{{ record.page }}</code> ({{ record.locale }})
+  </p>
+
+  {% if record.status != 'sent' %}
+    <div class="flash {{ record.status == 'review' ? 'warn' : 'err' }}">
+      {% if record.status == 'review' %}
+        {{ t('sub.ambiguous') }}
+      {% else %}
+        <strong>{{ t('sub.failed', record.attempts) }}</strong>
+      {% endif %}
+      {% if record.error %}<p style="margin:.6em 0 0"><code>{{ record.error }}</code></p>{% endif %}
+    </div>
+  {% endif %}
+
+  <div class="card">
+    <header><h2>{{ t('sub.content') }}</h2></header>
+    <div class="body">
+      {% for name, value in record.values %}
+        <div class="field">
+          <label>{{ name }}</label>
+          {# Plain text by the time it was stored — Fields::sanitise ran on the
+             way in — and escaped again here by autoescaping. Nothing a stranger
+             typed is ever rendered as markup. #}
+          <p style="margin:0;white-space:pre-wrap">{{ value ?: '—' }}</p>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="savebar"><div class="inner">
+    {% if record.status != 'sent' %}
+      <form method="post" style="display:inline">
+        <input type="hidden" name="action" value="submission_retry">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="month" value="{{ record.month }}">
+        <input type="hidden" name="id" value="{{ record.id }}">
+        <button class="btn" type="submit">{{ t('sub.retry') }}</button>
+      </form>
+    {% endif %}
+
+    {# The erasure path a privacy notice promises has to be a button someone
+       can press. CSRF-protected and admin-only like every other mutation. #}
+    <form method="post" style="display:inline"
+          onsubmit="return confirm('{{ t('sub.delete_confirm')|e('js') }}')">
+      <input type="hidden" name="action" value="submission_delete">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="month" value="{{ record.month }}">
+      <input type="hidden" name="id" value="{{ record.id }}">
+      <button class="btn ghost" type="submit">{{ t('sub.delete') }}</button>
+    </form>
+
+    <span class="status">{{ t('sub.reference', record.id) }}</span>
+  </div></div>
+{% endblock %}

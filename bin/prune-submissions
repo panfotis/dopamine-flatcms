@@ -1,0 +1,35 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * Delete submissions past the retention window. Run from cron, daily.
+ *
+ *   17 4 * * * cd /var/www/pelatis/current && bin/prune-submissions >> /var/log/flatcms-mail.log 2>&1
+ *
+ * A retention policy nobody enforces is a sentence in a privacy notice. This is
+ * the half that makes it a control: FORM_RETAIN_MONTHS, twelve by default, and
+ * a whole month directory goes at a time because that is the granularity the
+ * path already carries.
+ *
+ * The off-host backup keeps 30 days and expires deleted records naturally,
+ * which is the window the privacy notice has to document — pruning here does
+ * not reach into a backup, and pretending otherwise would be the lie.
+ */
+
+declare(strict_types=1);
+
+use Dopamine\FlatCms\Cms;
+
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+$cms = new Cms(require dirname(__DIR__) . '/config.php');
+$months = (int) $cms->config['form']['retain_months'];
+
+$gone = $cms->submissions->prune($months);
+
+printf(
+    "prune-submissions: retention %d months, %d month(s) removed%s\n",
+    $months,
+    count($gone),
+    $gone === [] ? '' : ' (' . implode(', ', $gone) . ')'
+);

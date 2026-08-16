@@ -35,7 +35,24 @@ $feed = match ($slug) {
 if ($feed !== null) {
     $response = new Response($feed[1], 200, ['Content-Type' => $feed[0]]);
 } else {
-    $page = $cms->content->findBySlug($slug);
+    // Which language, from the URL prefix, before anything is looked up. The
+    // default language's prefix is empty, so an existing single-language site's
+    // URLs resolve exactly as they did.
+    [$locale, $path] = $cms->localeOf($slug);
+    $cms->useLocale($locale);
+
+    $page = $cms->content->findBySlug($path);
+
+    // No translation at this address. `fallback: default` serves the default
+    // language's page rather than a dead end — rendered *as* that language, so
+    // its own URL is the canonical one and the menu is not half-translated.
+    if ($page === null && $cms->locales()[$locale]['fallback'] === 'default') {
+        $fallbackPage = $cms->contentIn($cms->defaultLocale())->findBySlug($path);
+        if ($fallbackPage !== null) {
+            $cms->useLocale($cms->defaultLocale());
+            $page = $fallbackPage;
+        }
+    }
 
     if ($page === null) {
         // Before the 404, never after: nearly every one of these sites replaces
@@ -50,9 +67,65 @@ if ($feed !== null) {
                 ['Content-Type' => 'text/html; charset=utf-8', 'Cache-Control' => 'no-store']
             );
     } else {
+        // A page carrying a form is the only public page with per-visitor
+        // state. It is `private: true`, so it is never edge-cached and this
+        // token is genuinely this visitor's — the Phase 0 caching decision
+        // exists precisely so this line is correct.
+        $form = new Dopamine\FlatCms\Form($cms);
+        $extra = [];
+
+        if ($form->blockOn($page) !== null) {
+            session_start([
+                'cookie_httponly' => true,
+                'cookie_samesite' => 'Lax',
+                'cache_limiter'   => '',
+                'cookie_secure'   => $request->isSecure()
+                    || $request->headers->get('X-Forwarded-Proto') === 'https',
+            ]);
+
+            $result = ['ok' => false, 'errors' => [], 'values' => []];
+
+            if ($request->isMethod('POST')) {
+                $result = $form->handle($request, $page);
+
+                if ($result['ok']) {
+                    // POST/redirect/GET: a refresh after sending must not send
+                    // again, and the back button must not re-post.
+                    $response = new RedirectResponse(
+                        $cms->localeUrl((string) $page['slug']) . '?sent=1',
+                        303,
+                        ['Cache-Control' => 'no-store, private']
+                    );
+                    $response->send();
+
+                    exit;
+                }
+            }
+
+            // A new token and a new clock on every render, including the
+            // re-render after a refusal: the minimum time-to-submit measures
+            // how long *this* form was on screen.
+            $_SESSION['form_csrf'] = $_SESSION['form_csrf'] ?? bin2hex(random_bytes(16));
+            $_SESSION['form_opened_at'] = time();
+
+            $extra = [
+                'form_csrf'   => $_SESSION['form_csrf'],
+                'form_inputs' => $form->inputs(
+                    $cms->components->get((string) $form->blockOn($page)['type']) ?? []
+                ),
+                'form_errors' => $result['errors'],
+                'form_values' => $result['values'],
+                'form_sent'   => $request->query->get('sent') === '1',
+                'turnstile_site_key' => (string) $cms->config['turnstile']['site_key'],
+            ];
+        }
+
         $response = new Response(
-            $cms->renderPage($page),
-            200,
+            $cms->renderPage($page, $extra),
+            // A refused submission is not a successful page view. 422 rather
+            // than 200 so a monitor can tell "the form is rejecting everyone"
+            // from "the page is fine".
+            ($extra !== [] && $extra['form_errors'] !== []) ? 422 : 200,
             ['Content-Type' => 'text/html; charset=utf-8']
         );
     }

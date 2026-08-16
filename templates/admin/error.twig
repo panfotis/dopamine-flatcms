@@ -1,8 +1,8 @@
 {% extends 'admin/_layout.twig' %}
-{% block title %}Σφάλμα{% endblock %}
+{% block title %}{{ t('err.title') }}{% endblock %}
 
 {% block content %}
-  <h1>Κάτι πήγε στραβά</h1>
+  <h1>{{ t('err.title') }}</h1>
   <div class="flash err">{{ message }}</div>
-  <p><a class="btn ghost" href="?">Πίσω στις σελίδες</a></p>
+  <p><a class="btn ghost" href="?">{{ t('err.back') }}</a></p>
 {% endblock %}

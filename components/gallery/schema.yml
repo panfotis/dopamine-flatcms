@@ -1,0 +1,21 @@
+label: Γκαλερί
+description: Πλέγμα φωτογραφιών. Ο πελάτης ανεβάζει, αναδιατάσσει και αφαιρεί.
+
+fields:
+  heading:
+    type: text
+    label: Τίτλος
+    max: 60
+
+  # A gallery is its own type, not a `list` with one image inside: thirty
+  # photos through a generic repeater is thirty stacked cards, which is
+  # unusable. The validation is the same walk either way.
+  #
+  # Alt is optional in here and required on a standalone image — a client who
+  # must describe thirty photos before the save goes through writes thirty junk
+  # strings, and a screen reader reads those out instead of skipping them.
+  photos:
+    type: image_list
+    label: Φωτογραφίες
+    max: 30
+    hint: Επιλέξτε πολλές μαζί. Η περιγραφή είναι προαιρετική εδώ — γράψτε την όπου έχει νόημα.

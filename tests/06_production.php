@@ -121,9 +121,14 @@ $fileOf->setAccessible(true);
 $resolved = $fileOf->invoke(new Content('/CONTENT', 'el'), 'home');
 ok($resolved === '/CONTENT/pages/el/home.yml', 'a page id resolves to <content>/pages/<locale>/<id>.yml');
 ok(glob($root . '/content/pages/*.yml') === [], 'no page is left at the old flat path — one shape, not two');
+// One directory per configured language, and no others: a stray directory is
+// content nobody can reach, since resolution goes through the locale map.
 $dirs = array_map('basename', glob($root . '/content/pages/*', GLOB_ONLYDIR) ?: []);
-ok($dirs === [(string) $cmsBoot['site']['locale']],
-    'and exactly one locale directory exists, the configured default: ' . implode(', ', $dirs));
+$configured = array_keys((array) $cmsBoot['locales']);
+sort($dirs);
+sort($configured);
+ok($dirs === $configured,
+    'and one locale directory per configured language, no more: ' . implode(', ', $dirs));
 ok(count(glob($root . '/content/pages/' . $cmsBoot['site']['locale'] . '/*.yml') ?: []) > 0,
     'with the real content inside it');
 
@@ -167,7 +172,7 @@ $deploy($spike . '/releases/r2');
 ok(readlink($spike . '/current') === $spike . '/releases/r2', 'deploy flipped current to r2');
 ok(trim((string) file_get_contents($spike . '/current/VERSION')) === 'r2', 'the new code is live');
 ok(($shared->load('home')['title'] ?? '') === 'Γραμμένο στο r1', 'the client save survives the deploy untouched');
-ok(count(glob($spike . '/shared/content/.revisions/home.*.yml') ?: []) === 1, 'revision history survives the deploy');
+ok(count(glob($spike . '/shared/content/.revisions/el/home.*.yml') ?: []) === 1, 'revision history survives the deploy');
 ok(is_file($spike . '/shared/var/locks/home.json'), 'shared/var/locks survives the deploy');
 ok(is_file($spike . '/shared/var/cache/warm.txt'), 'shared/var/cache survives the deploy');
 

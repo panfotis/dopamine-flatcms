@@ -21,9 +21,24 @@
        Content::list() happens to return. A page with no `nav:` is not in the
        menu — which is how a landing page stays reachable but unlisted. #}
     {% if nav %}
-      <nav class="site-nav" aria-label="Κύρια πλοήγηση">
+      <nav class="site-nav" aria-label="{{ fields.nav_label }}">
+        {# Against page.url, not page.slug: on a prefixed language the menu
+           links carry the prefix and the stored slug does not. #}
         {% for item in nav %}
-          <a href="{{ item.url }}"{{ item.url == page.slug ? ' aria-current="page"' : '' }}>{{ item.label }}</a>
+          <a href="{{ item.url }}"{{ item.url == page.url ? ' aria-current="page"' : '' }}>{{ item.label }}</a>
+        {% endfor %}
+      </nav>
+    {% endif %}
+
+    {# Nothing to switch between on a single-language site, so nothing renders.
+       A language with no translation of this page still appears, pointing at
+       its home page — being offered fewer languages on some pages than on
+       others reads as a broken site. #}
+    {% if alternates|default([])|length > 1 %}
+      <nav class="lang-switch" aria-label="{{ fields.lang_label }}">
+        {% for alt in alternates %}
+          <a href="{{ alt.url }}" hreflang="{{ alt.locale }}" lang="{{ alt.locale }}"
+             {{- alt.current ? ' aria-current="true"' : '' }}>{{ alt.label }}</a>
         {% endfor %}
       </nav>
     {% endif %}
@@ -39,4 +54,7 @@
   .site-nav{display:flex;gap:26px;flex-wrap:wrap}
   .site-nav a{color:var(--ink);text-decoration:none;font-weight:500}
   .site-nav a[aria-current]{color:var(--accent)}
+  .lang-switch{display:flex;gap:12px;font-size:14px}
+  .lang-switch a{color:var(--muted);text-decoration:none}
+  .lang-switch a[aria-current]{color:var(--ink);font-weight:600}
 </style>

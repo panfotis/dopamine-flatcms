@@ -1,0 +1,54 @@
+# Managed by Dopamine FlatCMS. Structure is edited here, content in /admin.
+# Same id as el/epikoinonia.yml — a different slug is the whole point of one
+# file per language, and a `link` field storing the id survives both.
+title: Contact
+slug: /contact
+private: true
+nav:
+  label: Contact
+  order: 20
+seo:
+  title: ''
+  description: 'How to reach us.'
+  og_image:
+    src: ''
+    alt: ''
+    width: 0
+    height: 0
+  noindex: false
+  canonical: ''
+blocks:
+  -
+    id: hero
+    type: hero
+    fields:
+      heading: Contact
+      subheading: 'We usually answer within one working day.'
+      image:
+        src: /uploads/2026/08/38ea9d5c-2b28-464c-a3c8-432fb06b9df8-f8befb.png
+        alt: ''
+        width: 1254
+        height: 1254
+      cta_label: ''
+      cta_url: ''
+      align: start
+  -
+    id: details
+    type: contact_cta
+    fields:
+      heading: Details
+      phone: '+30 210 0000000'
+      email: hello@example.gr
+      address: |-
+        Thessaloniki
+        Greece
+  -
+    id: form
+    type: contact_form
+    fields:
+      heading: 'Send us a message'
+      intro: 'Fill in your details and we answer within one working day.'
+      success: 'Thank you! We have your message and will be in touch shortly.'
+      consent_text: 'I agree to be contacted about my enquiry.'
+      recipient: ''
+      turnstile: false

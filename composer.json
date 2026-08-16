@@ -16,6 +16,7 @@
         "symfony/dotenv": "^8.1",
         "symfony/html-sanitizer": "^8.1",
         "symfony/http-foundation": "^8.1",
+        "symfony/mailer": "^8.1",
         "symfony/yaml": "^7.2",
         "twig/twig": "^3.21"
     },

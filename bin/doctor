@@ -254,11 +254,6 @@ foreach (['layout.twig', '404.twig', '500.twig', 'picture.twig'] as $template) {
 
 // ── Pages ───────────────────────────────────────────────────────────────────
 
-$pagesDir = $cms->content->pagesDir();
-if (!is_dir($pagesDir)) {
-    $fail('no pages directory for the configured locale: ' . $pagesDir);
-}
-
 $stray = glob($config['paths']['content'] . '/pages/*.yml') ?: [];
 if ($stray !== []) {
     $fail(sprintf(
@@ -267,6 +262,54 @@ if ($stray !== []) {
         implode(', ', array_map('basename', $stray))
     ));
 }
+
+// The locale map itself, before anything is read through it. Each of these is
+// a config mistake that produces a site which serves — just not the one that
+// was meant.
+$defaults = array_keys(array_filter($cms->locales(), static fn (array $d): bool => $d['default']));
+if (count($defaults) !== 1) {
+    $fail(sprintf('locales: exactly one must be `default: true` (found %d)', count($defaults)));
+}
+
+$prefixes = [];
+foreach ((array) ($config['locales'] ?? []) as $code => $def) {
+    $def = (array) $def;
+    $prefix = rtrim((string) ($def['prefix'] ?? ''), '/');
+
+    if (($def['default'] ?? false) === true && isset($def['fallback'])) {
+        // There is nothing for the default language to fall back *to*.
+        $fail(sprintf('locale "%s": is the default and must not carry a fallback', $code));
+    }
+    if (($def['default'] ?? false) !== true && $prefix === '') {
+        // Resolution is by prefix, so a second empty prefix is a page nobody
+        // can reach rather than a language served at the root.
+        $fail(sprintf('locale "%s": needs a URL prefix — only the default language may have none', $code));
+    }
+    if ($prefix !== '' && !preg_match('#^/[a-z0-9-]+$#i', $prefix)) {
+        $fail(sprintf('locale "%s": prefix must look like "/en" (got "%s")', $code, $prefix));
+    }
+    if (isset($prefixes[$prefix])) {
+        $fail(sprintf('locales "%s" and "%s" share the prefix "%s"', $prefixes[$prefix], $code, $prefix));
+    }
+    $prefixes[$prefix] = $code;
+
+    if (!is_dir($config['paths']['content'] . '/pages/' . $code)) {
+        $fail(sprintf('locale "%s": no content/pages/%s directory', $code, $code));
+    }
+}
+
+// Every language's files, walked with the identical checks. `$byLocale` is
+// what the link check and the translation diff below read.
+$byLocale = [];
+// Every live URL on the site, prefix included, across every language — which
+// is what a redirect has to land on and what one may not shadow.
+$liveUrls = [];
+foreach (array_keys($cms->locales()) as $localeCode) {
+    $cms->useLocale($localeCode);
+    $pagesDir = $cms->content->pagesDir();
+    if (!is_dir($pagesDir)) {
+        continue; // already reported above
+    }
 
 $slugs = [];
 $ids = [];
@@ -313,6 +356,7 @@ foreach (glob($pagesDir . '/*.yml') ?: [] as $file) {
             $fail(sprintf('pages "%s" and "%s" share the slug "%s"', $slugs[$key], $id, $slug));
         }
         $slugs[$key] = $id;
+        $liveUrls[rtrim($cms->localeUrl($slug), '/') ?: '/'] = $localeCode . '/' . $id;
     }
 
     $seen = [];
@@ -339,6 +383,14 @@ foreach (glob($pagesDir . '/*.yml') ?: [] as $file) {
         }
     }
 
+    // A `layout:` that does not resolve renders in layout.twig instead —
+    // correct at request time, and silent everywhere else. This is where it
+    // gets said, before a landing page ships with a header nobody wanted.
+    $layout = (string) ($data['layout'] ?? '');
+    if ($layout !== '' && !is_file($config['paths']['templates'] . '/' . $layout . '.twig')) {
+        $warn(sprintf('page "%s": layout "%s" has no template — it will render in layout.twig', $id, $layout));
+    }
+
     if (isset($data['nav']) && !is_array($data['nav'])) {
         $fail(sprintf('page "%s": nav: must be a mapping of label and order', $id));
     }
@@ -355,13 +407,34 @@ foreach (glob($pagesDir . '/*.yml') ?: [] as $file) {
 // is right at request time and silent everywhere else. This is where it is said.
 foreach (['_header', '_footer'] as $required) {
     if (!in_array($required, $globals, true)) {
-        $warn(sprintf('no %s.yml: nothing renders in that region on any page', $required));
+        $warn(sprintf('locale "%s": no %s.yml — nothing renders in that region', $localeCode, $required));
+    }
+}
+
+    $byLocale[$localeCode] = ['ids' => $ids, 'routable' => $routable, 'globals' => $globals];
+}
+
+// The translation diff. The filename *is* the translation identity, so a page
+// that exists in one language and not another is a set difference over a
+// directory listing — mechanically checkable before a deploy, which a
+// free-text key inside a file never was.
+$everyId = array_unique(array_merge(...array_map(
+    static fn (array $set): array => $set['ids'],
+    array_values($byLocale)
+) ?: [[]]));
+sort($everyId);
+
+foreach ($byLocale as $code => $set) {
+    foreach (array_diff($everyId, $set['ids']) as $missing) {
+        $warn(sprintf('locale "%s": no translation of page "%s"', $code, $missing));
     }
 }
 
 // Every `link` field on every page: an id that no longer resolves renders as
 // plain text, which is correct behaviour and invisible from the outside.
-foreach ($componentsLoad ? $ids : [] as $id) {
+foreach ($byLocale as $localeCode => $set) {
+    $cms->useLocale($localeCode);
+foreach ($componentsLoad ? $set['ids'] : [] as $id) {
     try {
         $page = $cms->content->load($id);
     } catch (Throwable) {
@@ -381,9 +454,10 @@ foreach ($componentsLoad ? $ids : [] as $id) {
             // Against the routable ids, not every file: pageUrl() resolves
             // through Content::list(), so a link pointing at `_footer` renders
             // as plain text exactly like a link to a page that was deleted.
-            if ($target !== '' && !in_array($target, $routable, true)) {
+            if ($target !== '' && !in_array($target, $set['routable'], true)) {
                 $warn(sprintf(
-                    'page "%s", block "%s", field "%s": links to page id "%s", which does not exist',
+                    'locale "%s", page "%s", block "%s", field "%s": links to page id "%s", which does not exist',
+                    $localeCode,
                     $id,
                     $block['id'],
                     $name,
@@ -393,8 +467,35 @@ foreach ($componentsLoad ? $ids : [] as $id) {
         }
     }
 }
+}
+
+// ── Panel language ──────────────────────────────────────────────────────────
+
+// A translation that has fallen behind renders English on some screens and the
+// site's language on others, which reads as a broken panel rather than a
+// missing string. This is the only place anyone finds out before a client does.
+$panel = $cms->lang;
+if ($panel->keys() === []) {
+    $fail('no lang/' . Dopamine\FlatCms\Lang::SOURCE . '.php — the panel has no source catalogue');
+} elseif ($panel->locale() !== Dopamine\FlatCms\Lang::SOURCE) {
+    $behind = $panel->missing();
+    if ($behind !== []) {
+        $warn(sprintf(
+            'panel language "%s" is missing %d string(s), which will render in %s: %s',
+            $panel->locale(),
+            count($behind),
+            Dopamine\FlatCms\Lang::SOURCE,
+            implode(', ', array_slice($behind, 0, 8)) . (count($behind) > 8 ? '…' : '')
+        ));
+    }
+}
 
 // ── Redirects ───────────────────────────────────────────────────────────────
+
+// redirects.yml is one file for the whole site, and a bare page id in it is a
+// default-language page — so ask pageUrl() from there rather than from
+// whichever language the loop above happened to finish in.
+$cms->useLocale($cms->defaultLocale());
 
 $redirectFile = $config['paths']['content'] . '/redirects.yml';
 if (is_file($redirectFile)) {
@@ -414,7 +515,7 @@ if (is_file($redirectFile)) {
         $from = '/' . trim((string) $from, '/');
         $to = (string) $to;
 
-        if (isset($slugs[rtrim($from, '/') ?: '/'])) {
+        if (isset($liveUrls[rtrim($from, '/') ?: '/'])) {
             // The redirect is checked only after findBySlug misses, so this one
             // can never fire — and whoever wrote it believes it does.
             $fail(sprintf('redirect "%s" shadows a live page and can never fire', $from));
@@ -436,7 +537,7 @@ if (is_file($redirectFile)) {
         if (str_starts_with($resolved, '/') && $cms->redirectFor($resolved) !== null) {
             $fail(sprintf('redirect "%s" -> "%s" chains into another redirect', $from, $resolved));
         }
-        if (str_starts_with($resolved, '/') && !isset($slugs[rtrim($resolved, '/') ?: '/'])) {
+        if (str_starts_with($resolved, '/') && !isset($liveUrls[rtrim($resolved, '/') ?: '/'])) {
             $fail(sprintf('redirect "%s" -> "%s" lands on nothing', $from, $resolved));
         }
     }
@@ -456,9 +557,10 @@ if (!$quiet) {
         $problems === [] ? STDOUT : STDERR,
         $problems === []
             ? sprintf(
-                "doctor: ok (%d pages, %d globals, %d components, %d warnings)\n",
-                count($routable),
-                count($globals),
+                "doctor: ok (%d pages, %d globals, %d locales, %d components, %d warnings)\n",
+                array_sum(array_map(static fn (array $s): int => count($s['routable']), $byLocale)),
+                array_sum(array_map(static fn (array $s): int => count($s['globals']), $byLocale)),
+                count($byLocale),
                 count($types),
                 count($warnings)
             )

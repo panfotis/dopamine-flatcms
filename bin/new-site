@@ -27,16 +27,25 @@ mkdir -p "$target"
 
 # Code, components and templates. Not content: a new site starts empty, and
 # inheriting another client's pages is how demo copy reaches production.
-for item in src public templates components bin composer.json composer.lock \
+for item in src public templates components lang bin composer.json composer.lock \
             nginx.conf.example config.php README.md CLAUDE.md tests .gitignore; do
   cp -R "$src/$item" "$target/$item"
 done
 
 rm -rf "$target/components/faq"          # demo component; keep hero/text_image/contact_cta
-mkdir -p "$target/content/pages/el" "$target/content/uploads" \
+mkdir -p "$target/content/uploads" \
          "$target/var/cache" "$target/var/locks" "$target/config"
 
-cat > "$target/content/pages/el/home.yml" <<'YAML'
+# One content directory per configured language, seeded so the scaffold passes
+# its own bin/doctor from the first minute. Read out of the config that was just
+# copied rather than hardcoded here: a site is single-language or bilingual
+# because of that file, and two places to say so is one place to get it wrong.
+locales=$(php -r '$c = require $argv[1]; echo implode(" ", array_keys($c["locales"]));' "$target/config.php")
+
+for locale in $locales; do
+  mkdir -p "$target/content/pages/$locale"
+
+  cat > "$target/content/pages/$locale/home.yml" <<'YAML'
 # Managed by Dopamine FlatCMS. Structure is edited here, content in /admin.
 title: Αρχική
 slug: /
@@ -69,6 +78,38 @@ blocks:
       cta_url: ''
       align: center
 YAML
+
+  # The header and the footer are content too, and a site without them renders
+  # no menu at all — so they ship with the scaffold rather than being the first
+  # thing every new site is missing.
+  cat > "$target/content/pages/$locale/_header.yml" <<'YAML'
+# Managed by Dopamine FlatCMS. The leading underscore means: never served at a
+# URL. This renders inside <header> on every page.
+title: Κεφαλίδα
+blocks:
+  -
+    id: header
+    type: site_header
+    fields:
+      logo:
+        src: ''
+        alt: ''
+        width: 0
+        height: 0
+YAML
+
+  cat > "$target/content/pages/$locale/_footer.yml" <<'YAML'
+# Managed by Dopamine FlatCMS. Renders inside <footer> on every page.
+title: Υποσέλιδο
+blocks:
+  -
+    id: footer
+    type: site_footer
+    fields:
+      note: ''
+      links: []
+YAML
+done
 
 cat > "$target/content/redirects.yml" <<'YAML'
 # Old URL -> where it should go now. Checked before the 404, so the previous

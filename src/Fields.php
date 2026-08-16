@@ -27,6 +27,7 @@ final class Fields
 {
     public const TYPES = [
         'text', 'textarea', 'richtext', 'image', 'link', 'url', 'select', 'boolean', 'list',
+        'image_list', 'video_embed', 'video_loop',
     ];
 
     /**
@@ -35,6 +36,34 @@ final class Fields
      * more than a FAQ or a team grid needs.
      */
     private const LIST_MAX = 20;
+
+    /**
+     * The same guard for a gallery, with the ceiling a gallery actually needs.
+     * A client uploading a wedding album is a different product; 60 photos is
+     * already more than a brochure site should be serving on one page.
+     */
+    private const GALLERY_MAX = 60;
+
+    /**
+     * The two providers, and the *whole* of what is accepted from a paste.
+     *
+     * A pattern that matched the host and then took the rest of the URL on
+     * trust is how a path segment ends up inside an attribute. The capture is
+     * the id charset itself, so what is stored can only ever be an id.
+     *
+     * @var array<string, list<string>>
+     */
+    private const PROVIDERS = [
+        'youtube' => [
+            '#^https?://(?:www\.)?youtube\.com/watch\?(?:[^&]*&)*v=([A-Za-z0-9_-]{6,20})#i',
+            '#^https?://(?:www\.)?youtube\.com/embed/([A-Za-z0-9_-]{6,20})#i',
+            '#^https?://youtu\.be/([A-Za-z0-9_-]{6,20})#i',
+        ],
+        'vimeo' => [
+            '#^https?://(?:www\.)?vimeo\.com/(\d{6,12})#i',
+            '#^https?://player\.vimeo\.com/video/(\d{6,12})#i',
+        ],
+    ];
 
     /**
      * The sub-schema of every `image` field, whatever the component calls it.
@@ -48,14 +77,15 @@ final class Fields
      * a component copies it, it never declares its own.
      */
     public const IMAGE = [
-        'src' => ['type' => 'media', 'label' => 'Εικόνα'],
+        'src' => ['type' => 'media', 'label' => 'field.image'],
         'alt' => [
             'type'  => 'text',
             'max'   => 120,
-            'label' => 'Περιγραφή εικόνας',
-            'hint'  => 'Τι δείχνει η εικόνα, σε μία φράση. Διαβάζεται φωναχτά σε '
-                     . 'όσους χρησιμοποιούν αναγνώστη οθόνης, εμφανίζεται στη θέση '
-                     . 'της αν δεν φορτώσει, και το διαβάζει η Google.',
+            // Keys, not sentences: Components::normalise() resolves them
+            // through the panel catalogue, so the one built-in field map is
+            // translated by the same mechanism as everything else.
+            'label' => 'field.alt',
+            'hint'  => 'field.alt_hint',
         ],
     ];
 
@@ -81,43 +111,35 @@ final class Fields
         'title' => [
             'type'  => 'text',
             'max'   => 60,
-            'label' => 'Τίτλος στη Google',
-            'hint'  => 'Η μπλε γραμμή που πατάει ο κόσμος στα αποτελέσματα '
-                     . 'αναζήτησης. Κενό = ο τίτλος της σελίδας.',
+            'label' => 'seo.title',
+            'hint'  => 'seo.title_hint',
         ],
         'description' => [
             'type'  => 'textarea',
             'max'   => 155,
-            'label' => 'Περιγραφή στη Google',
-            'hint'  => 'Οι δύο γραμμές κάτω από τον τίτλο στα αποτελέσματα '
-                     . 'αναζήτησης. Κενό = το πρώτο κείμενο της σελίδας.',
+            'label' => 'seo.description',
+            'hint'  => 'seo.description_hint',
         ],
         'og_image' => [
             'type'  => 'image',
-            'label' => 'Εικόνα κοινοποίησης',
+            'label' => 'seo.og_image',
             // Decorative, so no alt input and no og:image:alt. The share card
             // already carries the title and the description as text, and this
             // image is a banner beside them — asking the client to describe it
             // a second time buys "εικόνα" typed to clear a field.
             'decorative' => true,
-            'hint'  => 'Η εικόνα στην προεπισκόπηση όταν κάποιος στέλνει τον '
-                     . 'σύνδεσμο σε Facebook, LinkedIn, Viber ή WhatsApp. '
-                     . 'Κενό = η πρώτη εικόνα της σελίδας.',
+            'hint'  => 'seo.og_image_hint',
         ],
         'noindex' => [
             'type'  => 'boolean',
-            'label' => 'Απόκρυψη από τις μηχανές αναζήτησης',
-            'hint'  => 'Ζητά από Google και Bing να μην δείχνουν τη σελίδα στα '
-                     . 'αποτελέσματα, και τη βγάζει από το sitemap. Όποιος έχει '
-                     . 'τον σύνδεσμο τη βλέπει κανονικά — δεν είναι κλείδωμα.',
+            'label' => 'seo.noindex',
+            'hint'  => 'seo.noindex_hint',
         ],
         'canonical' => [
             'type'     => 'url',
             'editable' => 'admin',
-            'label'    => 'Canonical URL',
-            'hint'     => 'Λέει στη Google ότι το κανονικό αντίγραφο αυτού του '
-                        . 'περιεχομένου βρίσκεται σε άλλη διεύθυνση, και να '
-                        . 'μετράει τη δημοτικότητα εκεί. Κενό αν δεν είστε βέβαιοι.',
+            'label'    => 'seo.canonical',
+            'hint'     => 'seo.canonical_hint',
         ],
     ];
 
@@ -200,11 +222,19 @@ final class Fields
         }
 
         if ($value === '' || $value === [] || $value === false) {
+            // The catalogue arrives in $context like every other runtime
+            // constraint — media_bases, role, uploads. A label that is a
+            // built-in key resolves; one a component wrote itself falls back to
+            // the literal, which is exactly what a per-site label should do.
+            $lang = $context['lang'] ?? null;
+            $say = static fn (string $k, string|int ...$a): string
+                => $lang instanceof Lang ? $lang->t($k, ...$a) : $k;
+
             throw new ValidationException(
-                sprintf(
-                    'Το πεδίο «%s» στην ενότητα «%s» δεν μπορεί να είναι κενό.',
-                    (string) ($def['label'] ?? ''),
-                    (string) ($context['section'] ?? '')
+                $say(
+                    'field.required_in',
+                    $say((string) ($def['label'] ?? '')),
+                    $say((string) ($context['section'] ?? ''))
                 ),
                 // map() names the field it is walking; a sub-field the schema
                 // does not declare — an image's alt — has to name itself.
@@ -222,9 +252,14 @@ final class Fields
     public static function blank(string $type): string|bool|array
     {
         return match ($type) {
-            'image', 'list' => [],
-            'boolean'       => false,
-            default         => '',
+            'image', 'list', 'image_list' => [],
+            'boolean'     => false,
+            // Both are maps a template branches on, so an empty one has to be
+            // the right *shape* — `fields.video.provider` must be readable on a
+            // page nobody has filled in yet.
+            'video_embed' => ['provider' => '', 'id' => ''],
+            'video_loop'  => ['src' => '', 'poster' => []],
+            default       => '',
         };
     }
 
@@ -253,6 +288,9 @@ final class Fields
             'select'   => self::select($def, $value),
             'boolean'  => self::boolean($raw),
             'list'     => self::items($def, $raw, $context),
+            'image_list'  => self::gallery($def, $raw, $context),
+            'video_embed' => self::embed($value),
+            'video_loop'  => self::loop($def, $raw, $context),
             default    => self::plain($value, $def['max'] ?? null, false),
         };
     }
@@ -329,6 +367,131 @@ final class Fields
         return [
             'width'  => max(0, (int) ($record['width'] ?? 0)),
             'height' => max(0, (int) ($record['height'] ?? 0)),
+        ];
+    }
+
+    /**
+     * A gallery: a list of image maps, and nothing else.
+     *
+     * It is a separate type rather than `list` with one `image` inside it
+     * because thirty photos through a generic repeater is unusable — the panel
+     * needs a grid, not thirty stacked cards. The *validation* is the same walk
+     * either way, which is the point: this reuses map() over IMAGE per row, so
+     * "undeclared keys are dropped" and "width/height are server-derived" are
+     * not re-implemented here.
+     *
+     * **Alt is optional in a gallery**, and required on a standalone `image`.
+     * That is the Phase 10 open question, decided: a client who must describe
+     * thirty photos before the save goes through writes thirty junk strings,
+     * and a screen reader reads those out instead of skipping them. The input
+     * is still there, with its hint. `decorative: true` on the field still
+     * forces alt="" for a gallery that carries no information at all.
+     *
+     * @param  array<string, mixed> $def
+     * @param  array<string, mixed> $context
+     * @return list<array{src: string, alt: string, width: int, height: int}>
+     */
+    private static function gallery(array $def, mixed $raw, array $context): array
+    {
+        if (!is_array($raw)) {
+            return [];
+        }
+
+        // Bounded before the loop, exactly as items() is: a posted 50 000-row
+        // gallery must cost the cut, not 50 000 sanitiser passes.
+        $max = (is_int($def['max'] ?? null) && $def['max'] > 0) ? $def['max'] : self::GALLERY_MAX;
+        $rows = array_slice(array_values($raw), 0, $max);
+
+        $stored = is_array($context['stored'] ?? null) ? array_values($context['stored']) : [];
+
+        $out = [];
+        foreach ($rows as $i => $row) {
+            $image = self::image(
+                // `decorative` is kept, the alt *requirement* is not: one is a
+                // statement about what the pictures are, which only the
+                // developer can make, and the other is the scalability
+                // decision. `require: false` is the same switch the conflict
+                // re-render uses, so there is no second way to say it.
+                ['decorative' => ($def['decorative'] ?? false) === true],
+                is_array($row) ? $row : [],
+                [
+                    'stored'  => is_array($stored[$i] ?? null) ? $stored[$i] : [],
+                    'require' => false,
+                ] + $context
+            );
+
+            // A row whose src was rejected — outside media_bases, or simply
+            // emptied — is not a photo. Dropping it here is what stops a
+            // gallery from growing blank tiles every time it is saved.
+            if ($image['src'] !== '') {
+                $out[] = $image;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * A video embed: `{provider, id}` parsed out of a pasted URL, never HTML.
+     *
+     * The client pastes what is in their address bar. What is stored is two
+     * short strings matched against a fixed pattern, and the template builds
+     * the iframe — so there is no path by which client input becomes markup.
+     * Anything that is not a YouTube or Vimeo URL stores an empty map, which
+     * the template renders as nothing.
+     *
+     * @return array{provider: string, id: string}
+     */
+    private static function embed(string $raw): array
+    {
+        $raw = trim(strip_tags($raw));
+        if ($raw === '') {
+            return ['provider' => '', 'id' => ''];
+        }
+
+        // The id charset is the allowlist. Matching a *host* and then trusting
+        // whatever followed it is how a path segment becomes an attribute.
+        foreach (self::PROVIDERS as $provider => $patterns) {
+            foreach ($patterns as $pattern) {
+                if (preg_match($pattern, $raw, $m) === 1) {
+                    return ['provider' => $provider, 'id' => $m[1]];
+                }
+            }
+        }
+
+        return ['provider' => '', 'id' => ''];
+    }
+
+    /**
+     * A short muted background video: an MP4 we host, plus a poster image.
+     *
+     * `src` goes through the same media-base guard every image does — a
+     * <video src> pointing at a third party is the same open-proxy problem with
+     * a bigger file attached. The poster is a full image map, so it carries its
+     * own server-derived dimensions and reserves the box before the video
+     * arrives.
+     *
+     * @param  array<string, mixed> $def
+     * @param  array<string, mixed> $context
+     * @return array{src: string, poster: array<string, mixed>}
+     */
+    private static function loop(array $def, mixed $raw, array $context): array
+    {
+        $raw = is_array($raw) ? $raw : [];
+        $stored = is_array($context['stored'] ?? null) ? $context['stored'] : [];
+
+        return [
+            'src' => self::mediaPath(
+                is_scalar($raw['src'] ?? null) ? (string) $raw['src'] : '',
+                (array) ($context['media_bases'] ?? [])
+            ),
+            // A poster is never decorative: it is what a visitor with autoplay
+            // disabled actually sees, so it is the image, not a placeholder.
+            'poster' => self::image(
+                ['decorative' => ($def['decorative'] ?? false) === true],
+                is_array($raw['poster'] ?? null) ? $raw['poster'] : [],
+                ['stored' => is_array($stored['poster'] ?? null) ? $stored['poster'] : []] + $context
+            ),
         ];
     }
 

@@ -6,6 +6,12 @@
 *.tmp
 var/locks/
 
+# Visitor PII. This must never reach a git remote: the content repository is
+# pushed hourly, and a name, an email and a message replicated to a remote with
+# no retention limit and no erasure path is the GDPR problem this whole
+# directory layout exists to avoid. Backed up separately, encrypted, 30 days.
+var/submissions/
+
 # content/ is deliberately NOT ignored — not uploads, not revisions.
 #
 # They used to be. public/uploads/ was gitignored and nothing copied it

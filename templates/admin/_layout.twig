@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="el">
+<html lang="{{ t('_locale') }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>{% block title %}Διαχείριση{% endblock %} — {{ site('name') }}</title>
+<title>{% block title %}{{ t('admin') }}{% endblock %} — {{ site('name') }}</title>
 <style>
   :root{
     --ink:#12141a; --muted:#68707d; --line:#e3e6ea; --soft:#f6f7f9;
@@ -63,6 +63,14 @@
 
   .media{display:flex;gap:14px;align-items:flex-start}
   .media .thumb{width:132px;height:92px;border:1px solid var(--line);border-radius:8px;background:var(--soft) center/cover no-repeat;flex:none}
+  .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:12px}
+  .gallery .tile{margin:0;border:1px solid var(--line);border-radius:8px;padding:8px;background:#fff}
+  .gallery .tile .thumb{height:96px;border-radius:6px;background:var(--soft) center/cover no-repeat}
+  .gallery .tile .alt{width:100%;margin-top:6px;font-size:13px;padding:5px 7px}
+  .gallery .tools{display:flex;gap:4px;margin-top:6px}
+  .gallery .tools button{flex:1;border:1px solid var(--line);background:#fff;border-radius:6px;
+    padding:3px 0;cursor:pointer;font-size:13px;line-height:1.4}
+  .gallery .tools button:hover{background:var(--soft)}
   .media .controls{flex:1;min-width:0}
   .media .path{font-size:12px;color:var(--muted);word-break:break-all;margin-top:6px}
 
@@ -90,7 +98,7 @@
 </head>
 <body>
 <div class="topbar"><div class="inner">
-  <div class="brand"><a href="?" style="text-decoration:none;color:inherit">{{ site('name') }}</a> <span>· Διαχείριση</span></div>
+  <div class="brand"><a href="?" style="text-decoration:none;color:inherit">{{ site('name') }}</a> <span>· {{ t('admin') }}</span></div>
   <div class="who">{{ user.email }}{% if user.role %} <span class="pill">{{ user.role }}</span>{% endif %}</div>
 </div></div>
 

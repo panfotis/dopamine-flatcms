@@ -95,13 +95,40 @@ $config = [
         'og_default' => env('SITE_OG_DEFAULT', ''),
     ],
 
+    /**
+     * The languages this site serves, resolved **by URL prefix** and only by
+     * URL prefix (plan §9). The default language carries an empty prefix, so
+     * its URLs are exactly what they were before a second language existed —
+     * which is what keeps adding one from moving a live site's rankings.
+     *
+     * `fallback` is what a non-default language does about a page it has no
+     * translation of: `404`, or `default` to send the visitor to the version
+     * that exists. It is meaningless on the default language and bin/doctor
+     * refuses a config that sets one there.
+     *
+     * Delete every entry but one and this is a single-language site again;
+     * nothing downstream branches on how many there are.
+     */
+    'locales' => [
+        'el' => ['label' => 'Ελληνικά', 'prefix' => '',    'default' => true],
+        'en' => ['label' => 'English',  'prefix' => '/en', 'fallback' => 'default'],
+    ],
+
+    /**
+     * The language the *panel* speaks — the person editing the site, not the
+     * visitor reading it. Per site, not per user: one install serves one
+     * client, and Cloudflare Access gives nowhere to store a preference.
+     *
+     * English is the source language and the default; `el` is a translation.
+     */
+    'admin_locale' => env('ADMIN_LOCALE', 'en'),
+
     // content/pages/<locale>/<id>.yml is the permanent page-storage shape, and
-    // it is already that shape on a single-language site. Phase 9 resolves a
-    // second locale directory beside the first; until then only site.locale is
-    // ever read. Adopting it now is what keeps Phase 9 a resolver change rather
-    // than a migration run against twenty live client sites after v1.0.0.
+    // it has been that shape since Phase 5 — which is what made Phase 9 a
+    // resolver change rather than a migration run against twenty live sites.
     'paths' => [
         'content'    => $contentPath,
+        'lang'       => __DIR__ . '/lang',
         'components' => __DIR__ . '/components',
         'templates'  => __DIR__ . '/templates',
         'cache'      => $varPath . '/cache',
@@ -227,6 +254,77 @@ $config = [
             // its disk with thumbnails nobody requests any more.
             'cache_max_bytes' => 512 * 1024 * 1024,
         ],
+    ],
+
+    /**
+     * The contact form (plan §7).
+     *
+     * The pipeline order is the security property: rate limit **first**, so a
+     * POST flood cannot force one outbound HTTPS call per worker before it is
+     * refused. Everything after it is cheap by comparison.
+     */
+    'form' => [
+        // Where a submission is mailed when the component does not name a
+        // recipient. `editable: admin` on the component, never editor: as
+        // client-editable text it lets someone redirect every lead off-site.
+        'to'   => env('FORM_TO', ''),
+        'from' => env('FORM_FROM', ''),
+
+        // Never the Hetzner box: a VPS with no SPF or DKIM lands in spam, and
+        // the client concludes the form is broken. Empty = mail is not
+        // attempted at all and every submission is stored unsent, which is the
+        // right behaviour on a box that has not been configured yet.
+        'dsn' => env('MAIL_DSN', ''),
+
+        // Per IP, per window. Generous enough that a real person filling in the
+        // form twice is never refused, tight enough that a script is.
+        'rate_limit'  => (int) env('FORM_RATE_LIMIT', '5'),
+        'rate_window' => (int) env('FORM_RATE_WINDOW', '600'),
+
+        // A human takes longer than this to read a form and type into it. A
+        // bot posts the instant it parses the page.
+        'min_seconds' => 3,
+
+        // Behind Cloudflare, REMOTE_ADDR is Cloudflare — so a per-IP counter
+        // rate-limits the entire internet as one bucket. The *correct* fix is
+        // nginx `set_real_ip_from` + `real_ip_header CF-Connecting-IP` with the
+        // Cloudflare ranges, which makes REMOTE_ADDR right before PHP sees it;
+        // nginx.conf.example ships it. This flag is the fallback for an origin
+        // that cannot do that, and it defaults to OFF because trusting a header
+        // on a directly-reachable origin lets anyone forge their own bucket.
+        'trust_cf_ip' => env_bool('FORM_TRUST_CF_IP', false),
+
+        // How long a submission is kept. bin/prune-submissions enforces it.
+        'retain_months' => (int) env('FORM_RETAIN_MONTHS', '12'),
+
+        // Bounded: a permanently-refused address must stop costing a delivery
+        // attempt every five minutes forever.
+        'max_attempts' => 5,
+    ],
+
+    /**
+     * Cloudflare Turnstile. Built, defaulted off, switched on per component
+     * from the panel by an admin.
+     *
+     * Keys live here and never in a content file: the panel writes content to
+     * disk and pushes it to a git remote hourly, and a secret is not content.
+     * Toggle on with no keys configured behaves as off and says so in the
+     * panel — refusing to render the form over a configuration mistake would
+     * cost the client leads.
+     */
+    'turnstile' => [
+        'site_key' => env('TURNSTILE_SITE_KEY', ''),
+        'secret'   => env('TURNSTILE_SECRET', ''),
+    ],
+
+    /**
+     * Self-hosted background loops. Deliberately tiny: no transcoding, no
+     * renditions, no multipart upload — those are a pipeline, and this is a
+     * brochure site with a ten-second muted clip behind its hero. Anything
+     * longer belongs on YouTube, which is what `video_embed` is for.
+     */
+    'video' => [
+        'max_upload' => 10 * 1024 * 1024, // 10 MB, hard
     ],
 
     // Where an image `src` is allowed to point. Anything else is rejected on

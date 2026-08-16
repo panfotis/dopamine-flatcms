@@ -130,7 +130,12 @@ final class Components
                 $def['default'] = $def['default'] ?? array_key_first($def['options']);
             }
 
-            if ($def['type'] === 'image') {
+            // Everything that holds an image holds the *same* image: one
+            // src/alt pair, one place that decides whether it is decorative.
+            // A gallery is a list of them; a background video's poster is one
+            // of them. Declaring the sub-schema per type is exactly how
+            // `text_image` once ended up with an alt beside its image.
+            if (in_array($def['type'], ['image', 'image_list'], true)) {
                 // Whether an image carries information or is decoration is a
                 // design decision, so it is declared here and nowhere else. A
                 // `decorative` arriving in a request is just another undeclared
@@ -139,6 +144,11 @@ final class Components
                 // The panel builds its inputs from the same sub-schema the
                 // save path validates against, so the two cannot drift.
                 $def['fields'] = Fields::IMAGE;
+            }
+
+            if ($def['type'] === 'video_loop') {
+                $def['decorative'] = ($def['decorative'] ?? false) === true;
+                $def['fields'] = ['poster' => ['type' => 'image', 'fields' => Fields::IMAGE]];
             }
 
             if ($def['type'] === 'list') {

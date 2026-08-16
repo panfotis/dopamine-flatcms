@@ -31,7 +31,7 @@ contains($edit, 'name="blocks[intro][body]"', 'richtext field present for the se
 contains($edit, 'data-max="70"', 'max length exposed to the character counter');
 contains($edit, 'name="csrf"', 'CSRF token embedded in the form');
 contains($edit, 'Κεντρική ενότητα', 'component label from schema.yml shown as the card title');
-contains($edit, 'Διαβάζεται φωναχτά σε όσους χρησιμοποιούν αναγνώστη οθόνης', 'field hint rendered');
+contains($edit, cms()->lang->t('field.alt_hint'), 'field hint rendered');
 
 section('A component built from schema.yml alone round-trips');
 // faq is two files and no registration step: a list, a boolean and a richtext,
@@ -77,7 +77,7 @@ contains($rendered, "<strong>απ' ό,τι νομίζετε</strong>", 'with its
 missing($rendered, '<details open>', 'open_first: false leaves the first row closed');
 
 rename($faqFile . '.admin.bak', $faqFile);
-array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/home.*.yml') ?: []);
+array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/home.*.yml') ?: []);
 
 section('SEO is a collapsed card an editor can ignore entirely');
 // Collapsed matters: it is the one card on the form that is optional from top
@@ -96,9 +96,9 @@ foreach ([
 // and the description as text, so asking the client to describe the banner
 // beside them a second time buys "εικόνα" typed to clear a field.
 missing($edit, 'name="seo[og_image][alt]"', 'the share image asks for no description of its own');
-contains($edit, 'Κενό = η πρώτη εικόνα της σελίδας', 'and says what happens if it is left empty');
-contains($edit, 'Κενό = το πρώτο κείμενο της σελίδας', 'as does the description');
-contains($edit, 'δεν είναι κλείδωμα', 'and every hint says what the field does, not that it "helps SEO"');
+contains($edit, cms()->lang->t('seo.og_image_hint'), 'and says what happens if it is left empty');
+contains($edit, cms()->lang->t('seo.description_hint'), 'as does the description');
+contains($edit, cms()->lang->t('seo.noindex_hint'), 'and every hint says what the field does, not that it "helps SEO"');
 contains($edit, 'type="hidden" name="seo[noindex]" value="0"',
     'noindex has the hidden partner every boolean gets, so unchecking really posts');
 
@@ -150,7 +150,7 @@ ok(\Symfony\Component\Yaml\Yaml::parseFile($seoFile)['seo']['description'] === '
     'the block is adopted on the first save rather than needing a migration');
 
 rename($seoFile . '.seo.bak', $seoFile);
-array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/home.*.yml') ?: []);
+array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/home.*.yml') ?: []);
 
 section('No structural controls exist in the UI');
 missing($edit, 'Προσθήκη ενότητας', 'no "add component" button');
@@ -160,12 +160,12 @@ missing($edit, 'name="slug"', 'slug is never an input');
 
 section('Locked field is read-only in the UI as well as on save');
 ok((bool) preg_match('/id="hero-align"[^>]*disabled/', $edit), 'locked select rendered disabled');
-contains($edit, 'κλειδωμένο', 'locked badge shown to the editor');
+contains($edit, cms()->lang->t('edit.locked'), 'locked badge shown to the editor');
 
 section('CSRF is enforced');
 $_SESSION['csrf'] = 'the-real-token';
 $forged = admin_post(['action' => 'save', 'csrf' => 'forged', 'page' => 'home', 'blocks' => []]);
-contains((string) $forged->getContent(), 'Η συνεδρία έληξε', 'save with a wrong CSRF token is rejected');
+contains((string) $forged->getContent(), cms()->lang->t('err.session'), 'save with a wrong CSRF token is rejected');
 ok($forged->getStatusCode() === 400, 'and the rejection is a 400, not a page that merely looks like an error');
 
 section('Uploads come off the request, not $_FILES');
@@ -321,14 +321,15 @@ $body = (string) $refused->getContent();
 
 ok($refused->getStatusCode() === 422, 'the save is refused');
 ok((string) file_get_contents($badFile) === $beforeBad, 'and not one field of it reached the file');
-ok(glob(dirname(__DIR__) . '/content/.revisions/home.*.yml') === [],
+ok(glob(dirname(__DIR__) . '/content/.revisions/el/home.*.yml') === [],
     'nor did it burn a revision — the history keeps the last version that was real');
 
 contains($body, 'name="blocks[hero][heading]"', 'the client gets the form back, not an error page');
 contains($body, 'value="Νέος τίτλος που δεν πρέπει να χαθεί"',
     'and the editable page title survives the refusal too');
 contains($body, 'Κείμενο που δεν πρέπει να χαθεί', 'still holding what they typed in the fields that were fine');
-contains($body, '3 πεδία χρειάζονται', 'told how many fields need attention — all of them, in one pass');
+contains($body, cms()->lang->t('flash.fields_need_filling_plural', 3),
+    'told how many fields need attention — all of them, in one pass');
 ok(substr_count($body, 'class="err"') === 3, 'with one inline message each, beside the box that caused it');
 ok(substr_count($body, 'class="field has-error"') === 3, 'and each of those boxes marked');
 
@@ -362,7 +363,7 @@ ok(admin_get([])->headers->get('Cache-Control') === 'no-store, private', 'and so
 
 section('Globals are edited in the panel, on the same screen as a page');
 $index = render([]);
-contains($index, 'Σε όλες τις σελίδες', 'the page list carries a second table for the globals');
+contains($index, cms()->lang->t('list.globals'), 'the page list carries a second table for the globals');
 contains($index, '?action=edit&amp;page=_header', 'linking to the header');
 contains($index, '?action=edit&amp;page=_footer', 'and to the footer');
 missing($index, 'href="/_header"', 'with no "view" link, because a global has no address to visit');
@@ -405,6 +406,147 @@ ok(!array_key_exists('seo', $storedFooter),
 ok($storedFooter['title'] === 'Υποσέλιδο', 'and its title is not a client-editable field');
 
 rename($footerBackup, $footerFile);
-array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/_footer.*.yml') ?: []);
+array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/_footer.*.yml') ?: []);
+
+section('A gallery is a grid, not thirty stacked cards');
+$galleryForm = render(['action' => 'edit', 'page' => 'home']);
+contains($galleryForm, 'data-gallery="gallery-photos"', 'the image_list renders as a grid');
+contains($galleryForm, 'name="blocks[gallery][photos][0][src]"', 'with one hidden src per tile');
+contains($galleryForm, 'name="blocks[gallery][photos][0][alt]"', 'and an inline description input');
+contains($galleryForm, 'data-move="-1"', 'reorder is up/down buttons — keyboard-accessible without a library');
+missing($galleryForm, 'draggable="true"', 'and there is no drag-and-drop to load a library for');
+contains($galleryForm, 'multiple', 'the picker takes several photos at once');
+
+section('A video embed is a URL box, and a loop is an upload');
+contains($galleryForm, 'name="blocks[video][embed]"', 'the embed field is one input');
+contains($galleryForm, 'value="https://www.youtube.com/watch?v=', 'showing the stored id back as a URL the client recognises');
+contains($galleryForm, 'name="blocks[video][loop][src]"', 'the loop stores a path');
+contains($galleryForm, 'name="blocks[video][loop][poster][alt]"',
+    'and its poster is an ordinary image field, description and all');
+contains($galleryForm, 'accept="video/mp4"', 'the loop picker takes MP4 only');
+
+section('Video uploads are size- and container-checked');
+$mp4 = sys_get_temp_dir() . '/dopamine-video-' . bin2hex(random_bytes(4)) . '.mp4';
+// The smallest thing finfo will call video/mp4: an ftyp box is the structure
+// the whole claim rests on, so it is checked directly as well.
+file_put_contents($mp4, "\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom" . str_repeat("\x00", 64));
+
+$upload = static fn (string $path, string $name, string $type): \Symfony\Component\HttpFoundation\Response
+    => admin(Request::create('/admin.php', 'POST', ['action' => 'upload', 'csrf' => 'the-real-token'], [], [
+        'file' => new UploadedFile($path, $name, $type, null, true),
+    ]));
+
+$_SESSION['csrf'] = 'the-real-token';
+$video = $upload($mp4, 'clip.mp4', 'video/mp4');
+$videoBody = json_decode((string) $video->getContent(), true);
+ok(($videoBody['ok'] ?? false) === true, 'a real MP4 is accepted');
+ok(($videoBody['video'] ?? false) === true, 'and reported as a video, so the panel does not paint it as a thumbnail');
+ok(str_ends_with((string) ($videoBody['url'] ?? ''), '.mp4'), 'stored with an .mp4 name: ' . ($videoBody['url'] ?? ''));
+ok(str_starts_with((string) ($videoBody['url'] ?? ''), '/uploads/'),
+    'inside uploads, which is the only place a video src may point');
+
+// The declared type is the client's to choose; the bytes are not.
+$fake = sys_get_temp_dir() . '/dopamine-fake-' . bin2hex(random_bytes(4)) . '.mp4';
+file_put_contents($fake, str_repeat('A', 512));
+$fakeUp = $upload($fake, 'not-really.mp4', 'video/mp4');
+ok($fakeUp->getStatusCode() === 400, 'a file that merely claims to be video/mp4 is refused');
+
+$huge = sys_get_temp_dir() . '/dopamine-huge-' . bin2hex(random_bytes(4)) . '.mp4';
+file_put_contents($huge, "\x00\x00\x00\x18ftypmp42" . str_repeat("\x00", 11 * 1024 * 1024));
+$hugeUp = $upload($huge, 'huge.mp4', 'video/mp4');
+ok($hugeUp->getStatusCode() === 400, 'and one over the 10 MB cap is refused');
+contains((string) $hugeUp->getContent(), '10 MB', 'with a message that names the limit');
+
+array_map('unlink', array_filter([$mp4, $fake, $huge], 'is_file'));
+array_map('unlink', glob(dirname(__DIR__) . '/content/uploads/*/*/clip-*.mp4') ?: []);
+
+section('The panel speaks its own language, chosen per site');
+// English is the *source* language and the default: a distributable package
+// whose default is Greek is a fork waiting to happen.
+ok(cms()->lang->locale() === 'en', 'ADMIN_LOCALE defaults to English');
+contains($list, 'Pick a page', 'and the panel renders in it');
+contains($list, '<html lang="en">', 'declaring that language to a screen reader');
+
+$greekPanel = require dirname(__DIR__) . '/config.php';
+$greekPanel['admin_locale'] = 'el';
+$inGreek = (string) admin(Request::create('/admin.php', 'GET'), $greekPanel)->getContent();
+contains($inGreek, 'Επιλέξτε σελίδα', 'switching ADMIN_LOCALE switches the panel');
+contains($inGreek, '<html lang="el">', 'and the document language with it');
+missing($inGreek, 'Pick a page', 'with nothing left in the source language');
+
+// A typo must show English, not take the panel down.
+$typo = require dirname(__DIR__) . '/config.php';
+$typo['admin_locale'] = 'not-a-locale';
+$fellBack = admin(Request::create('/admin.php', 'GET'), $typo);
+ok($fellBack->getStatusCode() === 200, 'an unrecognised ADMIN_LOCALE still serves');
+contains((string) $fellBack->getContent(), 'Pick a page', 'in the source language');
+
+// The panel's language and the *site's* are different questions. A component's
+// own label is written by the developer in whatever language the site is, and
+// must survive the panel being English.
+contains($edit, 'Κεντρική ενότητα', "a component's own Greek label is not translated away");
+
+// The catalogue is complete, or the panel shows English where it is not — and
+// that is a thing to know before a client does.
+$el = new \Dopamine\FlatCms\Lang(dirname(__DIR__) . '/lang', 'el');
+ok($el->missing() === [], 'the Greek catalogue translates every key: ' . implode(', ', $el->missing()));
+ok($el->t('no.such.key') === 'no.such.key', 'and an unknown key renders as itself rather than blank');
+
+section('The panel edits one language at a time');
+$greek = render([]);
+contains($greek, 'Ελληνικά', 'the page list offers the configured languages');
+contains($greek, '?locale=en', 'and a way into the other one');
+contains($greek, '<code>/epikoinonia</code>', 'listing the Greek slugs');
+
+$english = render(['locale' => 'en']);
+contains($english, '<code>/contact</code>', 'while the English screen lists the English slugs');
+contains($english, 'Contact', 'and the English titles');
+missing($english, '<code>/epikoinonia</code>', 'never the other language\'s');
+
+$enEdit = render(['action' => 'edit', 'page' => 'epikoinonia', 'locale' => 'en']);
+contains($enEdit, 'We usually answer within one working day', 'the edit form opens the English file');
+contains($enEdit, 'name="locale" value="en"',
+    'and carries the language on the form, so the save cannot land in the wrong file');
+contains($enEdit, 'href="/en/contact"', 'with a preview link at the prefixed URL');
+
+// The forged case: the field decides where the write goes, so it has to be the
+// field the form actually posts and not a guess made from the id.
+$enFile = dirname(__DIR__) . '/content/pages/en/epikoinonia.yml';
+$elFile = dirname(__DIR__) . '/content/pages/el/epikoinonia.yml';
+copy($enFile, $enFile . '.i18n.bak');
+$elBefore = (string) file_get_contents($elFile);
+
+$_SESSION['csrf'] = 'the-real-token';
+$enSave = admin_post([
+    'action' => 'save', 'csrf' => 'the-real-token', 'page' => 'epikoinonia', 'locale' => 'en',
+    'baseline' => (string) hash_file('sha256', $enFile),
+    'blocks' => ['details' => ['heading' => 'Reach us']],
+]);
+ok($enSave->getStatusCode() === 303, 'an English save is accepted');
+ok(\Symfony\Component\Yaml\Yaml::parseFile($enFile)['blocks'][1]['fields']['heading'] === 'Reach us',
+    'and lands in the English file');
+ok((string) file_get_contents($elFile) === $elBefore, 'while the Greek file is untouched, byte for byte');
+contains((string) $enSave->headers->get('Location'), 'locale=en', 'and the redirect keeps the editor in that language');
+
+rename($enFile . '.i18n.bak', $enFile);
+array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/en/epikoinonia.*.yml') ?: []);
+
+section('The panel says which pages are not translated yet');
+$orphanFile = dirname(__DIR__) . '/content/pages/el/tmp-untranslated.yml';
+file_put_contents($orphanFile, \Symfony\Component\Yaml\Yaml::dump([
+    'title' => 'Χωρίς μετάφραση', 'slug' => '/xoris', 'blocks' => [],
+], 6, 2));
+
+contains(render([]), cms()->lang->t('list.missing_in', 'English'), 'a page the other language lacks is flagged');
+// Adding a page is adding a file — page creation stays developer-only — so the
+// English screen reports it rather than offering a button.
+contains(render(['locale' => 'en']), 'tmp-untranslated', 'and the English list names what it is missing');
+
+unlink($orphanFile);
+
+section('An unknown locale is refused, not silently defaulted');
+$badLocale = admin_get(['locale' => '../../etc']);
+ok($badLocale->getStatusCode() === 400, 'a crafted locale is a refusal');
+missing((string) $badLocale->getContent(), 'Αρχική', 'and no page list is rendered behind it');
 
 summary();

@@ -100,7 +100,7 @@ $real = (string) $storedImage['src'];
 
 $noAlt = admin_post($withImage(['src' => $real, 'alt' => '   ']));
 ok($noAlt->getStatusCode() === 422, 'a non-decorative image with a file and no description is refused');
-contains((string) $noAlt->getContent(), 'Περιγραφή εικόνας', 'and the refusal names the field the client has to fill in');
+contains((string) $noAlt->getContent(), cms()->lang->t('field.alt'), 'and the refusal names the field the client has to fill in');
 ok(Yaml::parseFile($file)['blocks'][1]['fields']['image']['src'] === '', 'nothing was written by the refused save');
 
 // A refusal that empties the form is the same support call as a lost save, so
@@ -297,7 +297,7 @@ contains($rendered, 'href="/nea-epikoinonia"', 'renaming a slug leaves the inter
 // Byte-for-byte, comments included: save() rewrites the file, and a suite run
 // must not quietly edit the developer's own content.
 rename($other . '.bak', $other);
-array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/epikoinonia.*.yml') ?: []);
+array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/epikoinonia.*.yml') ?: []);
 
 // An id that no longer resolves must not become a dead href.
 admin_post($linkTo('deleted-page'));
@@ -305,7 +305,7 @@ $dead = cms()->renderPage(cms()->content->load('home'));
 missing($dead, 'href="deleted-page"', 'an id that no longer resolves is never rendered as an href');
 contains($dead, '<span class="btn is-dead">Επικοινωνία</span>', 'it renders as plain text instead');
 contains((string) admin_get(['action' => 'edit', 'page' => 'home'])->getContent(),
-    'δεν υπάρχει πια', 'and the panel flags it so it can actually be fixed');
+    cms()->lang->t('edit.dead_link', 'deleted-page'), 'and the panel flags it so it can actually be fixed');
 
 section('Rich text is whitelisted');
 missing($intro['body'], '<script', 'script tag removed');
@@ -318,7 +318,7 @@ contains($intro['body'], '<a href="https://example.gr" target="_blank" rel="noop
 missing($intro['body'], '&nbsp;</p>', 'empty paragraph dropped');
 
 section('Revisions');
-$revs = glob(dirname(__DIR__) . '/content/.revisions/home.*.yml') ?: [];
+$revs = glob(dirname(__DIR__) . '/content/.revisions/el/home.*.yml') ?: [];
 ok(count($revs) >= 1, 'a revision snapshot was written before saving');
 
 section('Page still renders after a hostile save');
@@ -407,7 +407,7 @@ ok($emailOf() === 'nea@example.gr', 'and nothing was written by the attempt');
 $noCsrf = as_user($ADMIN, 'POST', [
     'action' => 'restore', 'csrf' => 'forged', 'page' => 'home', 'revision' => $revs[0]['file'],
 ]);
-contains((string) $noCsrf->getContent(), 'Η συνεδρία έληξε', 'even an admin needs a CSRF token to restore');
+contains((string) $noCsrf->getContent(), cms()->lang->t('err.session'), 'even an admin needs a CSRF token to restore');
 ok($noCsrf->getStatusCode() === 400, 'and the forged restore is refused');
 
 section('A revision name is a filename, never a path');
@@ -428,7 +428,7 @@ section('Restore re-runs the sanitiser instead of copying the file back');
 // A revision written *before* the allowlist tightened: hostile HTML sitting on
 // disk in a file the panel is about to put back. copy() would land it verbatim,
 // and text_image renders body with |raw.
-$revDir = dirname(__DIR__) . '/content/.revisions';
+$revDir = dirname(__DIR__) . '/content/.revisions/el';
 $poisoned = Yaml::parseFile($file);
 $poisoned['title'] = 'Παλιός <b>τίτλος</b>';
 $poisoned['slug'] = '/hijacked';
@@ -475,6 +475,178 @@ missing($html2, 'evil.gr', 'nor any laundered link');
 // snapshots inside the same second sort on their random suffix.
 ok(array_diff(array_column(cms()->content->revisions('home'), 'file'), $namesBefore) !== [],
     'the version being replaced was snapshotted first — a restore is undoable');
+
+section('image_list: a gallery is bounded, and alt is optional in it');
+$saveGallery = static fn (array $photos): array => [
+    'action'   => 'save',
+    'csrf'     => 'test-token',
+    'page'     => 'home',
+    'baseline' => (string) hash_file('sha256', $file),
+    'blocks'   => ['gallery' => ['photos' => $photos]],
+];
+$photosOf = static function () use ($file, $blockNo): array {
+    $page = Yaml::parseFile($file);
+
+    return (array) $page['blocks'][$blockNo($page, 'gallery')]['fields']['photos'];
+};
+$realSrc = (string) $storedImage['src'];
+
+// The Phase 10 open question, decided: thirty forced descriptions produce
+// thirty junk strings, which a screen reader reads out instead of skipping.
+$noAltGallery = admin_post($saveGallery([
+    ['src' => $realSrc, 'alt' => ''],
+    ['src' => $realSrc, 'alt' => 'Με περιγραφή'],
+]));
+ok($noAltGallery->getStatusCode() === 303, 'a gallery row with no description saves — unlike a standalone image');
+ok(count($photosOf()) === 2, 'both rows landed');
+ok($photosOf()[1]['alt'] === 'Με περιγραφή', 'and a description that was written is kept');
+
+// Everything else a photo carries is still the server's.
+ok(array_keys($photosOf()[0]) === ['src', 'alt', 'width', 'height'],
+    'a row has exactly the image sub-keys: ' . implode(', ', array_keys($photosOf()[0])));
+ok($photosOf()[0]['width'] === $storedImage['width'], 'with server-derived dimensions, as anywhere else');
+
+$hostileGallery = admin_post($saveGallery([
+    ['src' => 'https://evil.gr/x.jpg', 'alt' => 'έξω'],           // outside media_bases
+    ['src' => $realSrc, 'alt' => 'ok', 'width' => 99999, 'evil' => 'x'],
+    ['src' => '', 'alt' => 'χωρίς αρχείο'],                        // no photo at all
+]));
+ok($hostileGallery->getStatusCode() === 303, 'the save is accepted — the payload is what gets refused');
+$after = $photosOf();
+ok(count($after) === 1, 'a row whose src was rejected is dropped, not stored blank: ' . count($after) . ' left');
+ok($after[0]['src'] === $realSrc, 'leaving the one legitimate photo');
+// Rows have no identity beyond their position, so a stored row only informs the
+// row that lands in the same slot — and anything that cannot be confirmed is 0,
+// which picture.twig renders as no attribute at all. Never the posted 99999: a
+// wrong ratio reserves the wrong box, which is worse than reserving none.
+ok($after[0]['width'] !== 99999, 'a forged width is never stored');
+ok(in_array($after[0]['width'], [0, $storedImage['width']], true),
+    'it is either the pair on disk for that src or an honest zero: ' . $after[0]['width']);
+ok(!array_key_exists('evil', $after[0]), 'and an undeclared sub-key is dropped, exactly as at the top level');
+
+// Bounded before the loop, so a huge post costs the cut and not 5 000 walks.
+$flood = array_fill(0, 200, ['src' => $realSrc, 'alt' => '']);
+ok(admin_post($saveGallery($flood))->getStatusCode() === 303, 'a 200-row post is accepted');
+ok(count($photosOf()) === 30, 'and cut to the schema max, not stored: ' . count($photosOf()));
+
+section('video_embed: a provider and an id, never HTML');
+$saveVideo = static fn (mixed $embed): array => [
+    'action'   => 'save',
+    'csrf'     => 'test-token',
+    'page'     => 'home',
+    'baseline' => (string) hash_file('sha256', $file),
+    'blocks'   => ['video' => ['embed' => $embed]],
+];
+$embedOf = static function () use ($file, $blockNo): array {
+    $page = Yaml::parseFile($file);
+
+    return (array) $page['blocks'][$blockNo($page, 'video')]['fields']['embed'];
+};
+
+admin_post($saveVideo('https://www.youtube.com/watch?v=abcdefghijk&t=90'));
+ok($embedOf() === ['provider' => 'youtube', 'id' => 'abcdefghijk'],
+    'a YouTube watch URL is parsed to a provider and an id, and the tracking parameter is dropped');
+
+admin_post($saveVideo('https://youtu.be/abcdefghijk'));
+ok($embedOf()['id'] === 'abcdefghijk', 'a short link resolves to the same id');
+
+admin_post($saveVideo('https://vimeo.com/123456789'));
+ok($embedOf() === ['provider' => 'vimeo', 'id' => '123456789'], 'and Vimeo to its own');
+
+foreach ([
+    '<iframe src="https://evil.gr"></iframe>'            => 'pasted iframe HTML',
+    'javascript:alert(1)'                                 => 'a javascript: URL',
+    'https://evil.gr/watch?v=abcdefghijk'                 => 'the right shape on the wrong host',
+    'https://www.youtube.com/watch?v=../../etc/passwd'    => 'a traversal in the id position',
+    'https://www.youtube.com/watch?v=abc"onload="x'       => 'an attribute break in the id',
+] as $payload => $what) {
+    admin_post($saveVideo($payload));
+    ok($embedOf() === ['provider' => '', 'id' => ''], $what . ' stores nothing at all');
+}
+
+// The id charset *is* the allowlist, so nothing that reaches the template can
+// break out of the attribute it is interpolated into.
+admin_post($saveVideo('https://www.youtube.com/watch?v=abcdefghijk'));
+$videoHtml = cms()->renderPage(cms()->content->load('home'));
+contains($videoHtml, 'https://www.youtube-nocookie.com/embed/abcdefghijk', 'the facade points at the no-cookie host');
+missing($videoHtml, '<iframe', 'and no iframe is on the page at all until the visitor clicks');
+
+section('video_loop: an MP4 we host, and a poster that is a real image');
+$saveLoop = static fn (array $loop): array => [
+    'action'   => 'save',
+    'csrf'     => 'test-token',
+    'page'     => 'home',
+    'baseline' => (string) hash_file('sha256', $file),
+    'blocks'   => ['video' => ['loop' => $loop]],
+];
+$loopOf = static function () use ($file, $blockNo): array {
+    $page = Yaml::parseFile($file);
+
+    return (array) $page['blocks'][$blockNo($page, 'video')]['fields']['loop'];
+};
+
+admin_post($saveLoop(['src' => 'https://evil.gr/big.mp4', 'poster' => ['src' => '', 'alt' => '']]));
+ok($loopOf()['src'] === '', 'a video src outside media_bases is rejected — the guard is not image-only');
+
+admin_post($saveLoop([
+    'src'    => '/uploads/2026/08/clip.mp4',
+    'poster' => ['src' => $realSrc, 'alt' => 'Πρώτο καρέ'],
+]));
+ok($loopOf()['src'] === '/uploads/2026/08/clip.mp4', 'while one we host is stored');
+ok($loopOf()['poster']['alt'] === 'Πρώτο καρέ', 'the poster keeps its description');
+// Nothing was uploaded in this session and the stored poster had no src, so
+// there is nothing to measure — and unknown is 0, never a guess.
+ok($loopOf()['poster']['width'] === 0,
+    'and a poster src that was typed rather than uploaded has honestly unknown dimensions');
+
+section('An editor cannot flip the Turnstile toggle, or redirect the leads');
+// The plan puts this case next to the forged `editable: admin` field from
+// Phase 3, and for the same reason: a spam control the client can switch off is
+// not a spam control, and a recipient the client can retype is a lead redirect.
+// Both are refused on save, not merely locked in the form.
+$contactFile = dirname(__DIR__) . '/content/pages/el/epikoinonia.yml';
+copy($contactFile, $contactFile . '.form.bak');
+
+$formBlock = static function () use ($contactFile, $blockNo): array {
+    $page = Yaml::parseFile($contactFile);
+
+    return (array) $page['blocks'][$blockNo($page, 'form')]['fields'];
+};
+$postForm = static fn (string $email, array $fields): array => [
+    'action'   => 'save',
+    'csrf'     => 'test-token',
+    'page'     => 'epikoinonia',
+    'baseline' => (string) hash_file('sha256', $contactFile),
+    'blocks'   => ['form' => $fields],
+];
+
+$asEditor = as_user($EDITOR, 'POST', $postForm($EDITOR, [
+    'heading'   => 'Επικοινωνία',
+    'turnstile' => '1',
+    'recipient' => 'attacker@evil.gr',
+]));
+ok($asEditor->getStatusCode() === 303, 'the editor\'s save is accepted — the two forged fields are what is refused');
+ok($formBlock()['turnstile'] === false, 'an editor cannot switch Turnstile on by forging the request');
+ok($formBlock()['recipient'] === '', 'nor point the leads at their own address');
+ok($formBlock()['heading'] === 'Επικοινωνία', 'while the fields that are theirs to edit went through');
+
+$asAdmin = as_user($ADMIN, 'POST', $postForm($ADMIN, [
+    'heading'   => 'Επικοινωνία',
+    'turnstile' => '1',
+    'recipient' => 'leads@pelatis.gr',
+]));
+ok($asAdmin->getStatusCode() === 303, 'an admin save is accepted');
+ok($formBlock()['turnstile'] === true, 'and an admin can switch it on');
+ok($formBlock()['recipient'] === 'leads@pelatis.gr', 'and set the recipient');
+
+// The panel shows the editor the control, locked — the same courtesy every
+// other `editable: admin` field gets, over a field that silently vanishes.
+$editorForm = (string) as_user($EDITOR, 'GET', ['action' => 'edit', 'page' => 'epikoinonia'])->getContent();
+contains($editorForm, 'name="blocks[form][turnstile]"', 'the toggle is rendered for an editor');
+contains($editorForm, cms()->lang->t('edit.admin_only'), 'marked admin-only');
+
+rename($contactFile . '.form.bak', $contactFile);
+array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/epikoinonia.*.yml') ?: []);
 
 section('A global is locked down exactly like a page');
 // The header and the footer are page files that render on every page. The
@@ -524,11 +696,11 @@ ok(Yaml::parseFile($headerFile)['blocks'][0]['fields']['logo']['src'] === '',
     'but the src is refused — a global is not a hole in the open-proxy guard');
 
 rename($headerBackup, $headerFile);
-array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/_header.*.yml') ?: []);
+array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/_header.*.yml') ?: []);
 
 // restore
 rename($backup, $file);
 // Scoped to the fixture page: a suite run must never wipe real revision history.
-array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/home.*.yml') ?: []);
+array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/home.*.yml') ?: []);
 
 summary();

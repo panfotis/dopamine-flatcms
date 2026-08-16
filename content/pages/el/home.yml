@@ -76,3 +76,39 @@ blocks:
       address: |-
         Θεσσαλονίκη
         Ελλάδα
+  -
+    id: gallery
+    type: gallery
+    fields:
+      heading: 'Δουλειές μας'
+      photos:
+        -
+          src: /uploads/2026/08/chatgpt-image-aug-14-2026-05-53-32-pm-fca4e7.png
+          alt: 'Η αρχική σελίδα ενός πελάτη'
+          width: 1672
+          height: 941
+        -
+          src: /uploads/2026/08/38ea9d5c-2b28-464c-a3c8-432fb06b9df8-f8befb.png
+          alt: ''
+          width: 1254
+          height: 1254
+  -
+    id: video
+    type: video
+    fields:
+      heading: 'Δείτε πώς δουλεύει'
+      embed:
+        provider: youtube
+        id: dQw4w9WgXcQ
+      poster:
+        src: /uploads/2026/08/38ea9d5c-2b28-464c-a3c8-432fb06b9df8-f8befb.png
+        alt: 'Στιγμιότυπο από το βίντεο'
+        width: 1254
+        height: 1254
+      loop:
+        src: ''
+        poster:
+          src: ''
+          alt: ''
+          width: 0
+          height: 0

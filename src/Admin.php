@@ -66,6 +66,12 @@ final class Admin
             $user = $this->cms->auth->requireUser($request);
             $action = (string) $request->request->get('action', $request->query->get('action', 'list'));
 
+            // Which language this screen is editing, before any flow reads a
+            // page. Unknown values are refused by useLocale() rather than
+            // silently falling back, because "the save went to the wrong
+            // language" is not a failure anyone notices in time.
+            $this->cms->useLocale($this->localeOf($request));
+
             // Every flow that writes to content/ holds the site-wide lock for
             // as long as it writes, so the hourly backup can never commit a
             // half-applied mutation. Taken here rather than in each flow: one
@@ -99,6 +105,35 @@ final class Admin
         }
     }
 
+    /**
+     * The language the panel is working in: the request's, or the default.
+     *
+     * A form carries it as a hidden field so a save lands in the language the
+     * editor was looking at, and every link in the panel carries it as a query
+     * parameter for the same reason.
+     */
+    private function localeOf(Request $request): string
+    {
+        return (string) $request->request->get(
+            'locale',
+            $request->query->get('locale', $this->cms->defaultLocale())
+        );
+    }
+
+    /** A lock marker names one document, and a document is a page *in a language*. */
+    private function lockKey(string $id): string
+    {
+        return $this->cms->locale() . '-' . $id;
+    }
+
+    /** The `&locale=` suffix panel links carry, or nothing on a single-language site. */
+    private function localeQuery(): string
+    {
+        return count($this->cms->locales()) > 1
+            ? '&locale=' . urlencode($this->cms->locale())
+            : '';
+    }
+
     /** @param array{email: string, role: string} $user */
     private function dispatch(Request $request, array $user, string $action): Response
     {
@@ -108,6 +143,10 @@ final class Admin
             'upload'    => $this->upload($request),
             'revisions' => $this->revisions($request, $user),
             'restore'   => $this->restore($request, $user),
+            'submissions' => $this->submissions($request, $user),
+            'submission'  => $this->submission($request, $user),
+            'submission_delete' => $this->submissionDelete($request, $user),
+            'submission_retry'  => $this->submissionRetry($request, $user),
             default     => $this->list($request, $user),
         };
     }
@@ -125,9 +164,7 @@ final class Admin
             error_log('[dopamine-flatcms] admin-only action refused for '
                 . $user['email'] . ' (role: ' . $user['role'] . ')');
 
-            throw new AccessDeniedException(
-                'Αυτή η ενέργεια απαιτεί ρόλο διαχειριστή.'
-            );
+            throw new AccessDeniedException($this->cms->lang->t('err.admin_required'));
         }
     }
 
@@ -147,7 +184,7 @@ final class Admin
             return $e->getMessage();
         }
 
-        return 'Παρουσιάστηκε σφάλμα και η ενέργεια δεν ολοκληρώθηκε. Δοκιμάστε ξανά.';
+        return $this->cms->lang->t('err.generic');
     }
 
     /**
@@ -168,12 +205,43 @@ final class Admin
     /** @param array{email: string, role: string} $user */
     private function list(Request $request, array $user): Response
     {
+        $pages = $this->cms->content->list();
+
+        // Which page ids each other language has, so a row can say "not
+        // translated yet" instead of the editor finding out by not finding it.
+        // This is the payoff of filename-as-identity: the answer is a directory
+        // listing, not a key stored inside every file.
+        $elsewhere = [];
+        foreach (array_keys($this->cms->locales()) as $code) {
+            if ($code !== $this->cms->locale()) {
+                $elsewhere[$code] = array_column($this->cms->contentIn($code)->list(), 'id');
+            }
+        }
+
+        foreach ($pages as $i => $page) {
+            $pages[$i]['missing'] = array_values(array_keys(array_filter(
+                $elsewhere,
+                static fn (array $ids): bool => !in_array($page['id'], $ids, true)
+            )));
+        }
+
+        // Pages another language has and this one does not. Adding one is
+        // adding a file — page creation stays developer-only — so this is a
+        // notice, not an action.
+        $untranslated = array_values(array_diff(
+            array_unique(array_merge(...array_values($elsewhere) ?: [[]])),
+            array_column($pages, 'id')
+        ));
+
         return $this->html($this->cms->twig->render('admin/list.twig', [
-            'pages'  => $this->cms->content->list(),
+            'pages'  => $pages,
             // The header and the footer: the same edit screen, reached from a
             // second short table rather than mixed in among pages that have a
             // URL to visit.
             'globals' => $this->cms->content->globals(),
+            'locales' => $this->cms->locales(),
+            'locale'  => $this->cms->locale(),
+            'untranslated' => $untranslated,
             'user'   => $user,
             'notice' => $request->query->get('ok'),
             'warn'   => $request->query->get('warn'),
@@ -188,7 +256,7 @@ final class Admin
     {
         $page = $this->cms->content->load($id);
         if ($page === null) {
-            throw new RuntimeException('Η σελίδα δεν βρέθηκε.');
+            throw new RuntimeException($this->cms->lang->t('err.page_missing'));
         }
 
         $posted = (array) ($opts['posted'] ?? []);
@@ -262,8 +330,11 @@ final class Admin
 
         // Advisory only — see Locks. Read before touching, or you always find
         // yourself.
-        $heldBy = $this->cms->locks->heldByOther($id, $user['email']);
-        $this->cms->locks->touch($id, $user['email']);
+        // Keyed by language too: `contact` in Greek and `contact` in English
+        // are two documents, and one marker for both would warn about a
+        // collision that is not happening.
+        $heldBy = $this->cms->locks->heldByOther($this->lockKey($id), $user['email']);
+        $this->cms->locks->touch($this->lockKey($id), $user['email']);
 
         // A `link` field is a page picker, so the form needs the page list —
         // and the ids separately, so it can flag a stored id that no longer
@@ -277,6 +348,10 @@ final class Admin
             // rather than inferred from an empty slug in the template: the rule
             // has one implementation, in Content, and this is it being asked.
             'global'   => Content::isGlobal($id),
+            // Carried as a hidden field on the form and on every link, so a
+            // save lands in the language the editor was looking at.
+            'locale'   => $this->cms->locale(),
+            'locales'  => $this->cms->locales(),
             'blocks'   => $blocks,
             'seo'      => $seo,
             'seo_fields' => $seoFields,
@@ -440,7 +515,7 @@ final class Admin
                     // one, it is a worse one. Thrown from inside the
                     // transaction so the file is never touched.
                     if ($errors !== []) {
-                        throw new ValidationException('Δεν αποθηκεύτηκε τίποτα.');
+                        throw new ValidationException($this->cms->lang->t('flash.nothing_saved'));
                     }
 
                     return $page;
@@ -470,7 +545,7 @@ final class Admin
             ]);
         }
 
-        $this->cms->locks->release($id, $user['email']);
+        $this->cms->locks->release($this->lockKey($id), $user['email']);
 
         // The upload records are redeemed by the save that stores them: their
         // dimensions are now on disk beside the src, which is where the next
@@ -483,8 +558,8 @@ final class Admin
         // the sitemap all embed values owned by other pages.
         $purge = $this->cms->cf->purge([Cloudflare::tagFor($id), 'site']);
 
-        return new RedirectResponse('?action=edit&page=' . urlencode($id)
-            . ($purge['ok'] ? '&ok=' . urlencode('Οι αλλαγές αποθηκεύτηκαν.')
+        return new RedirectResponse('?action=edit&page=' . urlencode($id) . $this->localeQuery()
+            . ($purge['ok'] ? '&ok=' . urlencode($this->cms->lang->t('flash.saved'))
                             : '&warn=' . urlencode($purge['message'])), 303);
     }
 
@@ -503,7 +578,7 @@ final class Admin
         $id = (string) $request->query->get('page', '');
         $page = $this->cms->content->load($id);
         if ($page === null) {
-            throw new RuntimeException('Η σελίδα δεν βρέθηκε.');
+            throw new RuntimeException($this->cms->lang->t('err.page_missing'));
         }
 
         return $this->html($this->cms->twig->render('admin/revisions.twig', [
@@ -591,8 +666,126 @@ final class Admin
 
         $this->cms->cf->purge([Cloudflare::tagFor($id), 'site']);
 
-        return new RedirectResponse('?action=edit&page=' . urlencode($id)
-            . '&ok=' . urlencode('Η παλαιότερη έκδοση επαναφέρθηκε.'), 303);
+        return new RedirectResponse('?action=edit&page=' . urlencode($id) . $this->localeQuery()
+            . '&ok=' . urlencode($this->cms->lang->t('flash.restored')), 303);
+    }
+
+    /**
+     * Form submissions, admin only.
+     *
+     * Not in MUTATIONS, and deliberately: these live in var/, not content/, so
+     * the site-wide content lock — which exists so the hourly `git add -A` over
+     * content/ cannot capture a half-applied save — has nothing to protect
+     * here. Adding them to it would be cargo cult.
+     *
+     * @param array{email: string, role: string} $user
+     */
+    private function submissions(Request $request, array $user): Response
+    {
+        $this->requireAdmin($user);
+
+        return $this->html($this->cms->twig->render('admin/submissions.twig', [
+            'submissions' => $this->cms->submissions->all(),
+            'csrf'   => $this->csrf($request),
+            'user'   => $user,
+            'notice' => $request->query->get('ok'),
+            'warn'   => $request->query->get('warn'),
+            'retain' => (int) $this->cms->config['form']['retain_months'],
+        ]));
+    }
+
+    /** @param array{email: string, role: string} $user */
+    private function submission(Request $request, array $user): Response
+    {
+        $this->requireAdmin($user);
+
+        $record = $this->cms->submissions->get(
+            (string) $request->query->get('month', ''),
+            (string) $request->query->get('id', '')
+        );
+        if ($record === null) {
+            throw new RuntimeException($this->cms->lang->t('err.submission_missing'));
+        }
+
+        return $this->html($this->cms->twig->render('admin/submission.twig', [
+            'record' => $record,
+            'csrf'   => $this->csrf($request),
+            'user'   => $user,
+        ]));
+    }
+
+    /**
+     * Erase one submission. Admin only, CSRF-protected.
+     *
+     * The erasure path a privacy notice promises has to be a button someone can
+     * actually press, or it is a sentence.
+     *
+     * @param array{email: string, role: string} $user
+     */
+    private function submissionDelete(Request $request, array $user): Response
+    {
+        $this->requireAdmin($user);
+        $this->checkCsrf($request);
+
+        $this->cms->submissions->delete(
+            (string) $request->request->get('month', ''),
+            (string) $request->request->get('id', '')
+        );
+
+        return new RedirectResponse('?action=submissions&ok=' . urlencode($this->cms->lang->t('sub.deleted')), 303);
+    }
+
+    /**
+     * Try one unsent submission again, by hand.
+     *
+     * A record flagged `review` is left alone here as well as by the cron: an
+     * ambiguous transport error may already have been delivered, and a client
+     * getting the same lead five times is its own kind of broken.
+     *
+     * @param array{email: string, role: string} $user
+     */
+    private function submissionRetry(Request $request, array $user): Response
+    {
+        $this->requireAdmin($user);
+        $this->checkCsrf($request);
+
+        $month = (string) $request->request->get('month', '');
+        $id = (string) $request->request->get('id', '');
+        $record = $this->cms->submissions->get($month, $id);
+        if ($record === null) {
+            throw new RuntimeException($this->cms->lang->t('err.submission_missing'));
+        }
+
+        $sent = (new Form($this->cms))->deliver($record, $this->recipientFor($record));
+
+        return new RedirectResponse('?action=submissions&' . ($sent
+            ? 'ok=' . urlencode($this->cms->lang->t('sub.sent_ok'))
+            : 'warn=' . urlencode($this->cms->lang->t('sub.not_sent'))), 303);
+    }
+
+    /**
+     * The block values the submission came from, so a retry mails the same
+     * recipient the original would have.
+     *
+     * Read back off the page rather than stored on the record: the client may
+     * legitimately have changed the recipient since, and the current answer is
+     * the right one.
+     *
+     * @param  array<string, mixed> $record
+     * @return array<string, mixed>
+     */
+    private function recipientFor(array $record): array
+    {
+        $this->cms->useLocale((string) ($record['locale'] ?? $this->cms->defaultLocale()));
+        $page = $this->cms->content->load((string) ($record['page'] ?? ''));
+        if ($page === null) {
+            return [];
+        }
+
+        $block = (new Form($this->cms))->blockOn($page);
+        $schema = $block === null ? null : $this->cms->components->get((string) $block['type']);
+
+        return $schema === null ? [] : $this->cms->withDefaults($schema, $block['fields']);
     }
 
     /**
@@ -606,20 +799,30 @@ final class Admin
 
         $file = $request->files->get('file');
         if (!$file instanceof UploadedFile || !$file->isValid()) {
-            throw new RuntimeException('Η μεταφόρτωση απέτυχε.');
+            throw new RuntimeException($this->cms->lang->t('up.failed'));
         }
 
         $cfg = $this->cms->config['images'];
-        if ($file->getSize() > $cfg['max_upload']) {
-            throw new RuntimeException('Το αρχείο είναι πολύ μεγάλο.');
-        }
 
         // The client-supplied Content-Type is not evidence of anything, so sniff
         // the bytes. Deliberately not UploadedFile::getMimeType(), which needs
         // symfony/mime — one more dependency to do what ext-fileinfo already does.
         $mime = (string) (new \finfo(FILEINFO_MIME_TYPE))->file($file->getPathname());
+
+        // A background loop is the one non-image upload the panel accepts, and
+        // it takes a different route entirely: no GD, no derivatives, a much
+        // harder size cap, and MP4 only. Everything a video needs guarding
+        // against is size and type, and both are checked before a byte moves.
+        if (str_starts_with($mime, 'video/')) {
+            return $this->uploadVideo($file, $mime);
+        }
+
+        if ($file->getSize() > $cfg['max_upload']) {
+            throw new RuntimeException($this->cms->lang->t('up.too_large'));
+        }
+
         if (!in_array($mime, $cfg['allowed'], true)) {
-            throw new RuntimeException('Επιτρέπονται μόνο εικόνες (JPG, PNG, WebP).');
+            throw new RuntimeException($this->cms->lang->t('up.images_only'));
         }
 
         $bytes = (string) file_get_contents($file->getPathname());
@@ -629,10 +832,10 @@ final class Admin
         // 3.6 GB once decoded, which takes the worker out.
         $size = @getimagesizefromstring($bytes);
         if ($size === false) {
-            throw new RuntimeException('Το αρχείο δεν είναι έγκυρη εικόνα.');
+            throw new RuntimeException($this->cms->lang->t('up.not_an_image'));
         }
         if (($size[0] * $size[1]) > (int) $cfg['max_pixels']) {
-            throw new RuntimeException('Οι διαστάσεις της εικόνας είναι υπερβολικά μεγάλες.');
+            throw new RuntimeException($this->cms->lang->t('up.too_many_pixels'));
         }
 
         $scale = (int) $cfg['store_max_edge'] > 0
@@ -642,7 +845,7 @@ final class Admin
         $storedHeight = max(1, (int) round($size[1] * $scale));
         $pixelBytes = (($size[0] * $size[1]) + ($storedWidth * $storedHeight)) * 4;
         if ($pixelBytes > (int) $cfg['upload_memory_budget']) {
-            throw new RuntimeException('Οι διαστάσεις της εικόνας είναι υπερβολικά μεγάλες.');
+            throw new RuntimeException($this->cms->lang->t('up.too_many_pixels'));
         }
 
         [$bytes, $width, $height] = $this->normalize($bytes, (int) $cfg['store_max_edge'], $mime);
@@ -677,6 +880,50 @@ final class Admin
     }
 
     /**
+     * A short background loop: MP4 in, MP4 out, nothing in between.
+     *
+     * No transcoding and no renditions — that is a pipeline, not a feature, and
+     * the plan says so. What is left is the two things that actually bite: a
+     * hard size cap, because a client will otherwise upload a two-minute phone
+     * video and put it behind their hero; and a real container check, because
+     * the extension and the declared type are both the client's to choose.
+     *
+     * The bytes are stored untouched, so unlike an image there is no metadata
+     * strip. That is stated rather than assumed: an MP4 can carry GPS in a
+     * `moov` atom, and the honest mitigation is that these are produced
+     * deliberately as background footage, not shot on the client's phone at
+     * home. Say so in the panel hint rather than pretend GD-style scrubbing
+     * happened.
+     */
+    private function uploadVideo(UploadedFile $file, string $mime): Response
+    {
+        $max = (int) ($this->cms->config['video']['max_upload'] ?? 10 * 1024 * 1024);
+        if ($file->getSize() > $max) {
+            throw new RuntimeException($this->cms->lang->t('up.video_too_large', intdiv($max, 1024 * 1024)));
+        }
+
+        if ($mime !== 'video/mp4') {
+            throw new RuntimeException($this->cms->lang->t('up.mp4_only'));
+        }
+
+        $bytes = (string) file_get_contents($file->getPathname());
+
+        // finfo says "video/mp4" from the ftyp box; check the box itself too,
+        // because that is the one structure the whole claim rests on.
+        if (substr($bytes, 4, 4) !== 'ftyp') {
+            throw new RuntimeException($this->cms->lang->t('up.not_an_mp4'));
+        }
+
+        $name = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+        $slug = trim(strtolower(preg_replace('/[^a-z0-9]+/i', '-', $name) ?? ''), '-');
+        $key = date('Y/m/') . ($slug ?: 'video') . '-' . bin2hex(random_bytes(3)) . '.mp4';
+
+        $url = $this->cms->r2->put($key, $bytes, $mime);
+
+        return new JsonResponse(['ok' => true, 'url' => $url, 'video' => true]);
+    }
+
+    /**
      * Re-encode an upload to the bytes we are willing to store, and report the
      * intrinsic dimensions of the result.
      *
@@ -693,7 +940,7 @@ final class Admin
     {
         $img = @imagecreatefromstring($bytes);
         if ($img === false) {
-            throw new RuntimeException('Το αρχείο δεν είναι έγκυρη εικόνα.');
+            throw new RuntimeException($this->cms->lang->t('up.not_an_image'));
         }
 
         try {
@@ -807,7 +1054,7 @@ final class Admin
     {
         $token = (string) $request->request->get('csrf', '');
         if (!hash_equals($this->csrf($request), $token)) {
-            throw new RuntimeException('Η συνεδρία έληξε. Ανανεώστε τη σελίδα και δοκιμάστε ξανά.');
+            throw new RuntimeException($this->cms->lang->t('err.session'));
         }
     }
 }

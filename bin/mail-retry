@@ -1,0 +1,83 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * Retry submissions that failed to send. Run from cron every 15 minutes.
+ *
+ *   0,15,30,45 * * * * cd /var/www/pelatis/current && bin/mail-retry >> /var/log/flatcms-mail.log 2>&1
+ *
+ * A submission is on disk before anything tries to deliver it, so a mail outage
+ * costs the client nothing — but a record that sits there unsent forever is not
+ * delivery either. This is what makes "we retry it" true rather than intended.
+ *
+ * Two rules it will not break:
+ *
+ *   - **`review` is never retried.** An ambiguous transport error — a timeout,
+ *     a reset mid-session — may well have been delivered, and a client getting
+ *     the same lead five times is its own kind of broken. Those wait for a
+ *     person, in the panel.
+ *   - **Attempts are bounded.** A permanently-refused address must stop costing
+ *     a delivery attempt every fifteen minutes forever. Past the ceiling it is
+ *     reported and left alone.
+ *
+ * Exit code 1 when something is stuck, so cron mails you rather than a
+ * failure being visible only to whoever reads the log.
+ */
+
+declare(strict_types=1);
+
+use Dopamine\FlatCms\Cms;
+use Dopamine\FlatCms\Form;
+use Dopamine\FlatCms\Submissions;
+
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+$cms = new Cms(require dirname(__DIR__) . '/config.php');
+$form = new Form($cms);
+$max = (int) $cms->config['form']['max_attempts'];
+
+$sent = 0;
+$stuck = [];
+$review = 0;
+
+foreach ($cms->submissions->all() as $record) {
+    if (($record['status'] ?? '') === Submissions::SENT) {
+        continue;
+    }
+
+    if (($record['status'] ?? '') === Submissions::REVIEW) {
+        $review++;
+        continue;
+    }
+
+    if ((int) ($record['attempts'] ?? 0) >= $max) {
+        $stuck[] = (string) $record['id'];
+        continue;
+    }
+
+    // The recipient is read off the page as it stands now, not off the record:
+    // the client may legitimately have changed it since, and the current answer
+    // is the right one.
+    $cms->useLocale((string) ($record['locale'] ?? $cms->defaultLocale()));
+    $page = $cms->content->load((string) ($record['page'] ?? ''));
+    $block = $page === null ? null : $form->blockOn($page);
+    $schema = $block === null ? null : $cms->components->get((string) $block['type']);
+    $fields = $schema === null ? [] : $cms->withDefaults($schema, $block['fields']);
+
+    if ($form->deliver($record, $fields)) {
+        $sent++;
+    }
+}
+
+printf(
+    "mail-retry: %d sent, %d awaiting review, %d past %d attempts\n",
+    $sent,
+    $review,
+    count($stuck),
+    $max
+);
+
+if ($stuck !== []) {
+    fwrite(STDERR, 'stuck submissions: ' . implode(', ', $stuck) . "\n");
+    exit(1);
+}

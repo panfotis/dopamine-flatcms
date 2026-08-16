@@ -20,10 +20,11 @@ use Symfony\Component\Yaml\Yaml;
  *       fields:
  *         heading: "..."    <- content. This is all the client can change.
  *
- * The locale directory is there on a single-language site too. It is the final
- * storage shape, adopted now rather than at Phase 9, because moving every
- * client's pages after v1.0.0 is a migration nobody wants to run twenty times.
- * Until Phase 9 exactly one locale is ever resolved: the configured default.
+ * The locale directory is there on a single-language site too, and from Phase 9
+ * a second one beside it is a second language: one store per locale, each one
+ * a plain instance of this class pointed at its own directory. Nothing here
+ * knows about more than the language it holds — resolving which language a
+ * request is in belongs to Cms, and this is what it resolves *to*.
  *
  * The filename is the page **id**, and the id is the translation identity —
  * `contact.yml` is the same page in `el/` and `en/` with different slugs. That
@@ -43,13 +44,51 @@ final class Content
     public function __construct(
         private readonly string $dir,
         private readonly string $locale,
+        // Optional so a script that only reads content need not build one; the
+        // panel always passes it, and it is the panel that shows these.
+        private readonly ?Lang $lang = null,
     ) {
+        // The locale is now a path segment, and from Phase 9 it arrives out of
+        // a URL. Checked once, here, rather than at each of the six methods
+        // that build a path out of it.
+        self::assertSafeSegment($locale, 'locale');
+    }
+
+    /** One panel string, or the key when nobody handed us a catalogue. */
+    private function say(string $key, string|int ...$args): string
+    {
+        return $this->lang?->t($key, ...$args) ?? $key;
+    }
+
+    /** Which language this store holds. */
+    public function locale(): string
+    {
+        return $this->locale;
     }
 
     /** The directory this instance's pages live in. */
     public function pagesDir(): string
     {
         return $this->dir . '/pages/' . $this->locale;
+    }
+
+    /**
+     * One path segment, or an exception. **The** guard, for every segment that
+     * comes from outside and ends up in a filesystem path — a page id, a
+     * locale, an R2 key part.
+     *
+     * It refuses rather than strips. An earlier version stripped, so `../home`
+     * quietly resolved to `home` and a request that was plainly an attack was
+     * answered with a page. Refusing says what happened, and a legitimate id
+     * never notices the difference.
+     */
+    public static function assertSafeSegment(string $value, string $what = 'page id'): string
+    {
+        if (preg_match('/^[a-z0-9_-]+$/i', $value) !== 1) {
+            throw new RuntimeException('Invalid ' . $what . '.');
+        }
+
+        return $value;
     }
 
     /**
@@ -76,12 +115,20 @@ final class Content
     /** A page id, or an exception. The only way an id becomes part of a path. */
     private function id(string $id): string
     {
-        $clean = preg_replace('/[^a-z0-9_-]/i', '', $id) ?? '';
-        if ($clean === '') {
-            throw new RuntimeException('Invalid page id.');
-        }
+        return self::assertSafeSegment($id);
+    }
 
-        return $clean;
+    /**
+     * Where this locale's revisions live.
+     *
+     * Per locale, because `contact` is a different document in each language
+     * and a shared directory would let the Greek history and the English one
+     * overwrite each other's names — and let a restore put English copy into a
+     * Greek page.
+     */
+    private function revisionsDir(): string
+    {
+        return $this->dir . '/.revisions/' . $this->locale;
     }
 
     private function file(string $id): string
@@ -232,24 +279,22 @@ final class Content
     {
         $file = $this->file($id);
         if (!is_file($file)) {
-            throw new RuntimeException('Η σελίδα δεν βρέθηκε.');
+            throw new RuntimeException($this->say('err.page_missing'));
         }
 
         $lock = fopen($file, 'r');
         if ($lock === false || !flock($lock, LOCK_EX)) {
-            throw new RuntimeException('Could not lock the page for editing. Try again.');
+            throw new RuntimeException($this->say('err.locked'));
         }
 
         try {
             if ($baseline !== '' && !hash_equals((string) hash_file('sha256', $file), $baseline)) {
-                throw new StaleContentException(
-                    'Η σελίδα άλλαξε από αλλού όσο την επεξεργαζόσασταν.'
-                );
+                throw new StaleContentException($this->say('err.stale'));
             }
 
             $page = $this->load($id);
             if ($page === null) {
-                throw new RuntimeException('Η σελίδα δεν βρέθηκε.');
+                throw new RuntimeException($this->say('err.page_missing'));
             }
 
             // Mutate first: a refused save must not leave a revision behind,
@@ -273,7 +318,7 @@ final class Content
             return;
         }
 
-        $dir = $this->dir . '/.revisions';
+        $dir = $this->revisionsDir();
         if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
             return;
         }
@@ -309,7 +354,7 @@ final class Content
         $id = $this->id($id);
 
         $out = [];
-        foreach (glob($this->dir . '/.revisions/' . $id . '.*.yml') ?: [] as $path) {
+        foreach (glob($this->revisionsDir() . '/' . $id . '.*.yml') ?: [] as $path) {
             $name = basename($path);
             if (preg_match(self::REVISION, $name) !== 1) {
                 continue; // not written by snapshot(); not ours to offer
@@ -339,12 +384,12 @@ final class Content
         $id = $this->id($id);
 
         if (preg_match(self::REVISION, $name) !== 1 || !str_starts_with($name, $id . '.')) {
-            throw new RuntimeException('Άγνωστη έκδοση.');
+            throw new RuntimeException($this->say('err.revision_unknown'));
         }
 
-        $path = $this->dir . '/.revisions/' . $name;
+        $path = $this->revisionsDir() . '/' . $name;
         if (!is_file($path)) {
-            throw new RuntimeException('Η έκδοση δεν βρέθηκε.');
+            throw new RuntimeException($this->say('err.revision_missing'));
         }
 
         return (array) (Yaml::parseFile($path) ?? []);

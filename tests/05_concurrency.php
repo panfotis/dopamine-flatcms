@@ -57,8 +57,8 @@ $refused = admin_post([
 $body = (string) $refused->getContent();
 
 ok($refused->getStatusCode() === 200, 'the conflict re-renders the form rather than erroring out');
-contains($body, 'Η σελίδα άλλαξε από αλλού', 'the conflict is explained');
-contains($body, 'είναι ακόμα στη', 'the editor is told their text was kept');
+contains($body, cms()->lang->t('err.stale'), 'the conflict is explained');
+contains($body, cms()->lang->t('flash.conflict_help'), 'the editor is told their text was kept');
 contains($body, 'value="Τίτλος από τη σελίδα που συγκρούστηκε"',
     'the editable page title is kept with the rest of the rejected submission');
 contains($body, 'Κείμενο που δεν πρέπει να χαθεί', 'the rejected submission is re-rendered in the form');
@@ -126,10 +126,10 @@ $cms->content->transaction('_header', '', static function (array $p): array {
 ok($cms->content->revisions('_header') !== [], 'a global is snapshotted before it is overwritten, like any page');
 
 rename($headerBackup, $headerFile);
-array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/_header.*.yml') ?: []);
+array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/_header.*.yml') ?: []);
 
 rename($backup, $file);
 // Scoped to the fixture page: a suite run must never wipe real revision history.
-array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/home.*.yml') ?: []);
+array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/home.*.yml') ?: []);
 
 summary();

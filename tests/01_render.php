@@ -9,7 +9,9 @@ $cms = cms();
 section('Components load from disk');
 $types = array_keys($cms->components->all());
 sort($types);
-ok($types === ['contact_cta', 'faq', 'hero', 'site_footer', 'site_header', 'text_image'], 'six components discovered: ' . implode(', ', $types));
+ok($types === ['contact_cta', 'contact_form', 'faq', 'gallery', 'hero',
+               'site_footer', 'site_header', 'text_image', 'video'],
+    'nine components discovered: ' . implode(', ', $types));
 ok($cms->components->get('hero')['fields']['heading']['max'] === 70, 'hero.heading max parsed from schema.yml');
 ok($cms->components->get('hero')['fields']['align']['editable'] === false, 'hero.align is marked non-editable');
 ok(!array_key_exists('align', $cms->components->editableFields('hero')), 'non-editable field excluded from editable set');
@@ -23,7 +25,7 @@ contains($html, '<title>Αρχική — Demo Πελάτη</title>', 'title rend
 contains($html, 'Μικρά site, χωρίς βαρύ CMS', 'hero heading rendered');
 contains($html, '<strong>schema.yml</strong>', 'richtext HTML survives rendering');
 contains($html, 'hello@example.gr', 'contact component rendered');
-ok(substr_count($html, '<section') === 5, 'all five blocks rendered as sections');
+ok(substr_count($html, '<section') === count($page['blocks']), 'every block rendered as a section');
 
 section('Every image renders through picture.twig');
 // Mechanical, because "remember to use the partial" is not a mechanism. A
@@ -151,7 +153,12 @@ section('/sitemap.xml is generated from the content files');
 $sitemap = $cms->sitemap();
 contains($sitemap, '<?xml version="1.0" encoding="UTF-8"?>', 'it is XML');
 contains($sitemap, 'xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"', 'in the sitemap namespace');
-ok(substr_count($sitemap, '<loc>') === count($cms->content->list()), 'every page is listed once');
+// Every language's pages are in the one file, so the count is the sum.
+$everyPage = 0;
+foreach (array_keys($cms->locales()) as $code) {
+    $everyPage += count($cms->contentIn($code)->list());
+}
+ok(substr_count($sitemap, '<loc>') === $everyPage, 'every page in every language is listed once');
 contains($sitemap, '<loc>' . $base . '/</loc>', 'the home page at the site base URL');
 contains($sitemap, '<loc>' . $base . '/epikoinonia</loc>', 'and the contact page, private: true or not — it is a real page');
 ok(substr_count($sitemap, '<lastmod>') === substr_count($sitemap, '<loc>'), 'each with a lastmod');
@@ -160,12 +167,17 @@ ok((bool) preg_match('#<lastmod>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{
 missing($sitemap, '<changefreq>', 'no changefreq — Google ignores it, and a value invented to fill it is a wrong claim');
 missing($sitemap, '<priority>', 'nor priority, for the same reason');
 
-// One locale is resolved today, so one alternate: a page must list itself
-// among its own alternates for the group to be valid at all.
+// A page lists itself among its own alternates — without that the group is not
+// valid at all — plus every language that has it, plus x-default.
 contains($sitemap, 'xmlns:xhtml="http://www.w3.org/1999/xhtml"', 'the xhtml namespace is declared');
 contains($sitemap, '<xhtml:link rel="alternate" hreflang="el" href="' . $base . '/"/>',
-    'and each URL carries an alternate for the configured locale');
-ok(substr_count($sitemap, '<xhtml:link') === substr_count($sitemap, '<loc>'), 'one per URL');
+    'each URL carries an alternate for the default language');
+contains($sitemap, '<xhtml:link rel="alternate" hreflang="en" href="' . $base . '/en/"/>',
+    'and one for the second, at its prefixed URL');
+contains($sitemap, '<xhtml:link rel="alternate" hreflang="x-default" href="' . $base . '/"/>',
+    'with x-default pointing at the default language');
+ok(substr_count($sitemap, '<xhtml:link') === substr_count($sitemap, '<loc>') * (count($cms->locales()) + 1),
+    'one alternate per language per URL, plus x-default');
 
 // A noindex page asking not to be indexed and then being submitted anyway is
 // asking twice and answering differently.
@@ -179,7 +191,7 @@ file_put_contents($sitemapFile, \Symfony\Component\Yaml\Yaml::dump([
 $withHidden = cms()->sitemap();
 ok(count(cms()->content->list()) === 3, 'a third page is on disk');
 missing($withHidden, '/kryfi', 'but a noindex page is excluded from the sitemap');
-ok(substr_count($withHidden, '<loc>') === 2, 'leaving only the two indexable ones');
+ok(substr_count($withHidden, '<loc>') === $everyPage, 'leaving exactly the indexable ones');
 unlink($sitemapFile);
 
 section('/robots.txt points at the sitemap');
@@ -214,9 +226,10 @@ ok($cms->content->findBySlug('/does-not-exist') === null, 'unknown slug returns 
 ok(count($cms->content->list()) === 2, 'page list finds both pages');
 
 section('Unknown component does not fatal a live page');
+$before = substr_count($cms->renderPage($page), '<section');
 $page['blocks'][] = ['id' => 'ghost', 'type' => 'no_such_component', 'fields' => []];
 $html2 = $cms->renderPage($page);
-ok(substr_count($html2, '<section') === 5, 'unknown block skipped rather than crashing');
+ok(substr_count($html2, '<section') === $before, 'unknown block skipped rather than crashing');
 
 section('Image transformation URLs');
 // Local dev no longer diverges from production: with transform off, img()
@@ -257,6 +270,148 @@ contains($second, 'href="/epikoinonia" aria-current="page"', 'and the menu marks
 $footerSeo = cms()->seo(cms()->content->load('epikoinonia'));
 ok(!str_contains($footerSeo['description'], 'Θεσσαλονίκη, Ελλάδα'),
     'a footer sentence never becomes a page description: ' . $footerSeo['description']);
+
+section('A page may name its own layout');
+// The alternative to one optional filename is a `bare: true` boolean, then a
+// second one, then a page-type system — which §4 has said no to since v1.
+$landing = ['id' => 'l', 'title' => 'L', 'slug' => '/l', 'layout' => 'bare', 'blocks' => [
+    ['id' => 'h', 'type' => 'hero', 'fields' => ['heading' => 'Προσφορά']],
+]];
+$bare = $cms->renderPage($landing);
+contains($bare, 'Προσφορά', 'the page renders');
+missing($bare, '<header>', 'with no header');
+missing($bare, '<footer>', 'and no footer — that is the whole difference');
+contains($bare, '<title>L — Demo Πελάτη</title>', 'while the head is still built from page.seo');
+
+// Developer-owned, and it names a *template*: a value from a request would be a
+// file-read primitive. A name that does not resolve falls back rather than
+// fatalling a live client site — the same policy as an unknown component.
+foreach (['nope', '../../etc/passwd', 'admin/edit', ''] as $bad) {
+    $fellBack = $cms->renderPage(['id' => 'x', 'title' => 'X', 'slug' => '/x', 'layout' => $bad, 'blocks' => []]);
+    contains($fellBack, '<footer>', var_export($bad, true) . ' falls back to layout.twig rather than fatalling');
+}
+
+// The two heads must not diverge quietly: a change to the SEO block that
+// reaches one layout and not the other is invisible until a client shares a
+// link and gets the wrong card.
+$headOf = static function (string $file): array {
+    preg_match('#<head>(.*?)</head>#s', (string) file_get_contents(dirname(__DIR__) . '/templates/' . $file), $m);
+    preg_match_all('#page\.seo\.[a-z_.]+#', $m[1] ?? '', $keys);
+
+    return array_unique($keys[0]);
+};
+$a = $headOf('layout.twig');
+$b = $headOf('bare.twig');
+sort($a);
+sort($b);
+ok($a === $b, 'both layouts publish the same seo keys: ' . implode(', ', $a));
+
+section('A gallery renders through the same partial as every other image');
+$galleryPage = $cms->renderPage($cms->content->load('home'));
+contains($galleryPage, 'class="gallery-block"', 'the gallery component renders');
+// Every photo is a <picture>, not an <img>: the mechanical check above already
+// forbids a bare <img> in a component, and this is the positive half of it.
+$photos = $cms->content->load('home')['blocks'][array_search('gallery',
+    array_column($cms->content->load('home')['blocks'], 'id'), true)]['fields']['photos'];
+ok(substr_count($galleryPage, '<picture>') >= count($photos), 'with one <picture> per photo');
+contains($galleryPage, 'loading="lazy"', 'and lazily — a gallery is below the fold by construction');
+
+section('A video is a facade: nothing third-party loads until the visitor clicks');
+contains($galleryPage, 'class="video-facade"', 'the facade renders');
+contains($galleryPage, 'data-video-src="https://www.youtube-nocookie.com/embed/', 'pointing at the no-cookie host');
+missing($galleryPage, '<iframe', 'with no iframe on the page at all');
+missing($galleryPage, 'youtube.com/embed', 'and no request to youtube.com either — that is the whole point');
+// The iframe is built from a stored {provider, id}; pasted HTML is never stored,
+// so there is no path from what a client typed to what a browser executes.
+contains($galleryPage, '<button type="button" class="video-play">', 'the control is a real button, focusable and announced');
+
+$loopPage = $cms->renderPage(['id' => 'v', 'title' => 'V', 'slug' => '/v', 'blocks' => [
+    ['id' => 'v', 'type' => 'video', 'fields' => [
+        'loop' => ['src' => '/uploads/clip.mp4', 'poster' => ['src' => '/uploads/p.jpg', 'alt' => 'A', 'width' => 800, 'height' => 450]],
+    ]],
+]]);
+contains($loopPage, '<source src="/uploads/clip.mp4" type="video/mp4">', 'a self-hosted loop renders a <video>');
+contains($loopPage, 'autoplay loop muted playsinline', 'muted and playsinline, without which no browser will autoplay it');
+contains($loopPage, 'poster="/uploads/p.jpg"', 'with its poster');
+contains($loopPage, 'prefers-reduced-motion', 'and hidden for anyone who asked the OS for less motion');
+
+section('Two languages, resolved by URL prefix');
+$i18n = cms();
+ok(array_keys($i18n->locales()) === ['el', 'en'], 'both languages are configured');
+ok($i18n->defaultLocale() === 'el', 'and one of them is the default');
+ok($i18n->locales()['el']['prefix'] === '', 'whose prefix is empty, so its URLs are what they always were');
+
+$i18n->useLocale('en');
+$en = $i18n->content->findBySlug('/contact');
+ok($en !== null && $en['title'] === 'Contact', 'an English slug resolves in the English store');
+ok($i18n->content->findBySlug('/epikoinonia') === null, 'and the Greek slug does not resolve there');
+// The filename is the translation identity, and nothing inside the file says so.
+ok($en['id'] === 'epikoinonia', 'both languages share the page id, which is the filename: ' . $en['id']);
+
+$enHtml = $i18n->renderPage($en);
+contains($enHtml, '<html lang="en">', 'the document declares the language being rendered');
+contains($enHtml, 'We usually answer within one working day', 'with the English copy');
+contains($enHtml, 'href="/en/"', 'the menu links to English URLs, prefix included');
+contains($enHtml, 'href="/en/contact" aria-current="page"', 'and marks the current page at its prefixed URL');
+contains($enHtml, '<meta property="og:url" content="' . $base . '/en/contact">', 'og:url carries the prefix too');
+
+section('hreflang and the language switcher are one list asked twice');
+contains($enHtml, '<link rel="alternate" hreflang="en" href="' . $base . '/en/contact">', 'the page links to itself');
+contains($enHtml, '<link rel="alternate" hreflang="el" href="' . $base . '/epikoinonia">', 'and to its Greek translation');
+contains($enHtml, '<link rel="alternate" hreflang="x-default" href="' . $base . '/epikoinonia">',
+    'with x-default on the default language');
+contains($enHtml, 'class="lang-switch"', 'the header renders a switcher');
+contains($enHtml, '<a href="/epikoinonia" hreflang="el"', 'pointing at the same page in the other language');
+
+$i18n->useLocale('el');
+$elHtml = $i18n->renderPage($i18n->content->findBySlug('/epikoinonia'));
+contains($elHtml, '<html lang="el">', 'the Greek page declares Greek');
+contains($elHtml, 'href="/epikoinonia" aria-current="page"', 'and its own menu is unprefixed');
+missing($elHtml, '/en/epikoinonia', 'no Greek slug is ever served under the English prefix');
+
+section('Changing a prefix moves the URLs, with no code change');
+// The acceptance criterion for the whole phase: every link goes through
+// localeUrl(), so config is the only place a prefix is written down.
+$moved = require dirname(__DIR__) . '/config.php';
+$moved['locales']['en']['prefix'] = '/english';
+$movedCms = new \Dopamine\FlatCms\Cms($moved);
+$movedCms->useLocale('en');
+contains($movedCms->renderPage($movedCms->content->findBySlug('/contact')), 'href="/english/"',
+    'the menu follows the new prefix');
+ok($movedCms->localeOf('/english/contact') === ['en', '/contact'], 'and so does resolution');
+ok($movedCms->localeOf('/en/contact') === ['el', '/en/contact'], 'while the old prefix is no longer a language at all');
+
+section('A missing translation honours its fallback');
+$orphan = $i18n->content->pagesDir() . '/tmp-orphan.yml';
+register_shutdown_function(static fn (): bool => @unlink($orphan));
+file_put_contents($orphan, \Symfony\Component\Yaml\Yaml::dump([
+    'title' => 'Μόνο στα ελληνικά', 'slug' => '/mono-ellinika', 'blocks' => [],
+], 6, 2));
+
+$fb = cms();
+$fb->useLocale('en');
+// `fallback: default` — the link goes to the version that exists rather than
+// to nothing, and it goes there at the *default* language's URL.
+ok($fb->pageUrl('tmp-orphan') === '/mono-ellinika',
+    'with fallback: default an untranslated link resolves to the default language: ' . $fb->pageUrl('tmp-orphan'));
+
+$strict = require dirname(__DIR__) . '/config.php';
+$strict['locales']['en']['fallback'] = '404';
+$strictCms = new \Dopamine\FlatCms\Cms($strict);
+$strictCms->useLocale('en');
+ok($strictCms->pageUrl('tmp-orphan') === '',
+    'with fallback: 404 it resolves to nothing, which templates render as plain text');
+ok($strictCms->locales()['el']['fallback'] === '',
+    'and the default language carries no fallback at all — there is nothing for it to fall back to');
+
+// The switcher still offers the language, pointing at its home page: being
+// shown fewer languages on one page than on another reads as a broken site.
+$fb->useLocale('el');
+$alts = $fb->alternates($fb->content->load('tmp-orphan'));
+$enAlt = $alts[array_search('en', array_column($alts, 'locale'), true)];
+ok($enAlt['missing'] === true, 'the alternate for the untranslated language is marked missing');
+ok($enAlt['url'] === '/en/', 'and points at that language\'s home page rather than at a 404');
+@unlink($orphan);
 
 section('A missing global renders an empty region, never a fatal');
 // A site whose developer has not written a _footer.yml yet must still serve

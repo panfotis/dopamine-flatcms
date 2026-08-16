@@ -4,9 +4,10 @@
 {% block content %}
   <h1>{{ page.title }}</h1>
   <p class="sub">
-    <a href="?">← Όλες οι σελίδες</a> ·
+    <a href="?locale={{ locale }}">{{ t('nav.back') }}</a> ·
+    {% if locales|length > 1 %}{{ locales[locale].label }} · {% endif %}
     {% if global %}
-      εμφανίζεται σε όλες τις σελίδες
+      {{ t('edit.everywhere') }}
     {% else %}
       <code>{{ page.slug }}</code>
     {% endif %}
@@ -17,12 +18,12 @@
 
   {% if errors|default({})|length %}
     <div class="flash err">
-      <strong>Δεν αποθηκεύτηκε τίποτα.</strong>
+      <strong>{{ t('flash.nothing_saved') }}</strong>
       <p style="margin:.6em 0 0">
-        {{ errors|length }} {{ errors|length == 1 ? 'πεδίο χρειάζεται' : 'πεδία χρειάζονται' }}
-        συμπλήρωση — {{ errors|length == 1 ? 'είναι σημειωμένο' : 'είναι σημειωμένα' }} με κόκκινο
-        παρακάτω. <strong>Τα υπόλοιπα κείμενα που γράψατε είναι ακόμα στη φόρμα</strong>·
-        συμπληρώστε τα και πατήστε ξανά Αποθήκευση.
+        {{ errors|length == 1
+             ? t('flash.fields_need_filling', errors|length)
+             : t('flash.fields_need_filling_plural', errors|length) }}
+        {{ t('flash.text_kept') }}
       </p>
     </div>
   {% endif %}
@@ -31,19 +32,16 @@
     <div class="flash err">
       <strong>{{ conflict }}</strong>
       <p style="margin:.6em 0 0">
-        Δεν αποθηκεύτηκε τίποτα. <strong>Τα κείμενα που γράψατε είναι ακόμα στη
-        φόρμα παρακάτω</strong> — ελέγξτε τα και πατήστε ξανά Αποθήκευση για να
-        αντικαταστήσετε την άλλη έκδοση, ή ανανεώστε τη σελίδα για να τα
-        απορρίψετε.
+        {{ t('flash.conflict_help') }}
       </p>
     </div>
   {% endif %}
 
   {% if held_by %}
     <div class="flash warn">
-      Ο/Η <strong>{{ held_by.user }}</strong> άνοιξε αυτή τη σελίδα
-      {% if held_by.minutes < 1 %}μόλις τώρα{% else %}πριν {{ held_by.minutes }} λεπτά{% endif %}.
-      Συνεννοηθείτε πριν αποθηκεύσετε.
+      {{ t('flash.held_by', held_by.user, held_by.minutes < 1
+           ? t('flash.held_just_now')
+           : t('flash.held_minutes', held_by.minutes)) }}
     </div>
   {% endif %}
 
@@ -51,6 +49,10 @@
     <input type="hidden" name="action" value="save">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <input type="hidden" name="page" value="{{ page.id }}">
+    {# Which language this form is editing. Without it a save from the English
+       screen would land in the Greek file, which is the kind of mistake nobody
+       notices until the wrong copy is live. #}
+    <input type="hidden" name="locale" value="{{ locale }}">
     {# Fingerprint of the file as it was when this form was rendered. The save
        is refused if it no longer matches, so a second tab cannot silently
        overwrite what the first one saved. #}
@@ -67,8 +69,8 @@
     {% if not global %}
       <details class="card">
         <summary>
-          <h2>SEO και κοινοποίηση</h2>
-          <span class="pill">προαιρετικό</span>
+          <h2>{{ t('edit.seo') }}</h2>
+          <span class="pill">{{ t('edit.optional') }}</span>
         </summary>
         <div class="body">
           {# The same renderer as every other field, so a locked one is locked
@@ -82,12 +84,12 @@
       </details>
 
       <div class="card">
-        <header><h2>Σελίδα</h2></header>
+        <header><h2>{{ t('edit.page') }}</h2></header>
         <div class="body">
           <div class="field">
-            <label for="page-title">Τίτλος σελίδας</label>
+            <label for="page-title">{{ t('edit.page_title') }}</label>
             <input type="text" id="page-title" name="title" value="{{ page.title }}" maxlength="120">
-            <p class="hint">Εμφανίζεται στην καρτέλα του browser και στα αποτελέσματα αναζήτησης.</p>
+            <p class="hint">{{ t('edit.page_title_hint') }}</p>
           </div>
         </div>
       </div>
@@ -101,9 +103,9 @@
         </header>
         <div class="body">
           {% if block.missing %}
-            <div class="flash err">Το component «{{ block.type }}» δεν βρέθηκε στον φάκελο components/.</div>
+            <div class="flash err">{{ t('edit.missing_component', block.type) }}</div>
           {% elseif block.fields is empty %}
-            <p class="hint">Αυτή η ενότητα δεν έχει πεδία προς επεξεργασία.</p>
+            <p class="hint">{{ t('edit.no_fields') }}</p>
           {% else %}
             {% if block.hint %}<p class="hint" style="margin-bottom:16px">{{ block.hint }}</p>{% endif %}
 
@@ -127,15 +129,15 @@
     {% endfor %}
 
     <div class="savebar"><div class="inner">
-      <button class="btn" type="submit">Αποθήκευση</button>
+      <button class="btn" type="submit">{{ t('edit.save') }}</button>
       {# A global has no address to open — it is already on every page. #}
       {% if not global %}
-        <a class="btn ghost" href="{{ page.slug }}" target="_blank" rel="noopener">Προβολή σελίδας</a>
+        <a class="btn ghost" href="{{ locales[locale].prefix }}{{ page.slug }}" target="_blank" rel="noopener">{{ t('edit.view_page') }}</a>
       {% endif %}
       {% if user.role == 'admin' %}
-        <a class="btn ghost" href="?action=revisions&amp;page={{ page.id }}">Προηγούμενες εκδόσεις</a>
+        <a class="btn ghost" href="?action=revisions&amp;page={{ page.id }}&amp;locale={{ locale }}">{{ t('edit.revisions') }}</a>
       {% endif %}
-      <span class="status" id="status">Οι αλλαγές δημοσιεύονται αμέσως μετά την αποθήκευση.</span>
+      <span class="status" id="status">{{ t('edit.published') }}</span>
     </div></div>
   </form>
 {% endblock %}
@@ -159,9 +161,9 @@
               {% set demand = def.required|default(false) and not locked %}
               <div class="field{{ error ? ' has-error' : '' }}">
                 <label for="{{ id }}">
-                  {{ def.label }}
-                  {% if locked %}<span class="pill" style="margin-inline-start:6px">κλειδωμένο</span>{% endif %}
-                  {% if def.editable is same as('admin') %}<span class="pill" style="margin-inline-start:6px">μόνο διαχειριστής</span>{% endif %}
+                  {{ t(def.label) }}
+                  {% if locked %}<span class="pill" style="margin-inline-start:6px">{{ t('edit.locked') }}</span>{% endif %}
+                  {% if def.editable is same as('admin') %}<span class="pill" style="margin-inline-start:6px">{{ t('edit.admin_only') }}</span>{% endif %}
                   {% if def.max is defined and not locked %}
                     <span class="counter" data-for="{{ id }}" data-max="{{ def.max }}"></span>
                   {% endif %}
@@ -180,11 +182,11 @@
                 {% elseif def.type == 'richtext' %}
                   {% if not locked %}
                     <div class="rt-toolbar" data-rt-toolbar="{{ id }}">
-                      <button type="button" data-cmd="bold" title="Έντονα"><b>B</b></button>
-                      <button type="button" data-cmd="italic" title="Πλάγια"><i>I</i></button>
-                      <button type="button" data-cmd="insertUnorderedList" title="Λίστα">•</button>
-                      <button type="button" data-cmd="createLink" title="Σύνδεσμος">🔗</button>
-                      <button type="button" data-cmd="removeFormat" title="Καθαρισμός">✕</button>
+                      <button type="button" data-cmd="bold" title="{{ t('rt.bold') }}"><b>B</b></button>
+                      <button type="button" data-cmd="italic" title="{{ t('rt.italic') }}"><i>I</i></button>
+                      <button type="button" data-cmd="insertUnorderedList" title="{{ t('rt.list') }}">•</button>
+                      <button type="button" data-cmd="createLink" title="{{ t('rt.link') }}">🔗</button>
+                      <button type="button" data-cmd="removeFormat" title="{{ t('rt.clear') }}">✕</button>
                     </div>
                   {% endif %}
                   <div class="rt" id="{{ id }}-rt" {{ locked ? '' : 'contenteditable="true"' }}
@@ -199,11 +201,11 @@
                     <div class="controls">
                       {% if not locked %}
                         <input type="file" id="{{ id }}-file" accept="image/jpeg,image/png,image/webp" hidden>
-                        <button type="button" class="btn ghost" data-upload="{{ id }}">Αλλαγή εικόνας</button>
-                        <button type="button" class="btn ghost" data-clear="{{ id }}">Αφαίρεση</button>
+                        <button type="button" class="btn ghost" data-upload="{{ id }}">{{ t('edit.change_image') }}</button>
+                        <button type="button" class="btn ghost" data-clear="{{ id }}">{{ t('edit.remove') }}</button>
                       {% endif %}
                       <input type="hidden" id="{{ id }}" name="{{ fname }}[src]" value="{{ src }}">
-                      <p class="path" id="{{ id }}-path">{{ src ?: 'Καμία εικόνα' }}</p>
+                      <p class="path" id="{{ id }}-path">{{ src ?: t('edit.no_image') }}</p>
                     </div>
                   </div>
                   {# alt comes with the image field rather than beside it, so a
@@ -214,7 +216,7 @@
                   {% if not def.decorative %}
                     {% set altError = errors[fname ~ '[alt]']|default(null) %}
                     <div class="field{{ altError ? ' has-error' : '' }}" style="margin-top:12px">
-                      <label for="{{ id }}-alt">{{ def.fields.alt.label }}</label>
+                      <label for="{{ id }}-alt">{{ t(def.fields.alt.label) }}</label>
                       {# The same rule the save path applies, stated to the
                          browser: required exactly when there is an image. No
                          validation library — the round trip is the fallback,
@@ -226,9 +228,83 @@
                              {{ altError ? 'aria-invalid="true"' : '' }}
                              maxlength="{{ def.fields.alt.max }}" data-max="{{ def.fields.alt.max }}">
                       {% if altError %}<p class="err">{{ altError }}</p>{% endif %}
-                      <p class="hint">{{ def.fields.alt.hint }}</p>
+                      <p class="hint">{{ t(def.fields.alt.hint) }}</p>
                     </div>
                   {% endif %}
+
+                {% elseif def.type == 'image_list' %}
+                  {# A grid, not thirty stacked cards. Reorder is up/down
+                     buttons rather than drag: ten lines, keyboard-accessible
+                     for free, and no library in a project with no front-end
+                     build. Add dragging if someone actually complains. #}
+                  <div class="gallery" id="{{ id }}-grid" data-gallery="{{ id }}"
+                       data-name="{{ fname }}" data-max="{{ def.max|default(60) }}"
+                       data-decorative="{{ def.decorative|default(false) ? '1' : '' }}"
+                       data-alt-label="{{ t(def.fields.alt.label) }}">
+                    {% for i, photo in value|default([]) %}
+                      <figure class="tile" data-tile>
+                        <div class="thumb" style="background-image:url('{{ photo.src }}')"></div>
+                        <input type="hidden" name="{{ fname }}[{{ i }}][src]" value="{{ photo.src }}">
+                        {% if not def.decorative %}
+                          {# Optional here and required on a standalone image:
+                             thirty forced descriptions produce thirty junk
+                             strings, which a screen reader reads out instead
+                             of skipping. #}
+                          <input type="text" class="alt" name="{{ fname }}[{{ i }}][alt]"
+                                 value="{{ photo.alt|default('') }}" maxlength="120"
+                                 placeholder="{{ t(def.fields.alt.label) }}" {{ locked ? 'readonly' : '' }}>
+                        {% endif %}
+                        {% if not locked %}
+                          <div class="tools">
+                            <button type="button" data-move="-1" title="{{ t('edit.move_earlier') }}">↑</button>
+                            <button type="button" data-move="1" title="{{ t('edit.move_later') }}">↓</button>
+                            <button type="button" data-drop title="{{ t('edit.remove') }}">✕</button>
+                          </div>
+                        {% endif %}
+                      </figure>
+                    {% endfor %}
+                  </div>
+                  {% if not locked %}
+                    <input type="file" id="{{ id }}-files" accept="image/jpeg,image/png,image/webp" multiple hidden>
+                    <button type="button" class="btn ghost" data-gallery-add="{{ id }}">{{ t('edit.add_photos') }}</button>
+                    <span class="hint" data-gallery-status="{{ id }}"></span>
+                  {% endif %}
+
+                {% elseif def.type == 'video_embed' %}
+                  {# The client pastes what is in their address bar. What is
+                     stored is a provider and an id, and the template builds the
+                     iframe — pasted HTML is never stored, so it can never be
+                     rendered. #}
+                  <input type="url" id="{{ id }}" name="{{ fname }}"
+                         value="{{ value.provider|default('') == 'youtube' ? 'https://www.youtube.com/watch?v=' ~ value.id
+                                 : (value.provider|default('') == 'vimeo' ? 'https://vimeo.com/' ~ value.id : '') }}"
+                         {{ locked ? 'readonly' : '' }} placeholder="https://www.youtube.com/watch?v=…">
+                  {% if value.provider|default('') %}
+                    <p class="hint">{{ t('edit.stored_as', value.provider, value.id) }}</p>
+                  {% endif %}
+
+                {% elseif def.type == 'video_loop' %}
+                  <div class="media">
+                    <div class="thumb" id="{{ id }}-thumb"
+                         style="{% if value.poster.src|default('') %}background-image:url('{{ value.poster.src }}'){% endif %}"></div>
+                    <div class="controls">
+                      {% if not locked %}
+                        <input type="file" id="{{ id }}-file" accept="video/mp4" hidden>
+                        <button type="button" class="btn ghost" data-upload="{{ id }}">{{ t('edit.change_video') }}</button>
+                        <button type="button" class="btn ghost" data-clear="{{ id }}">{{ t('edit.remove') }}</button>
+                      {% endif %}
+                      <input type="hidden" id="{{ id }}" name="{{ fname }}[src]" value="{{ value.src|default('') }}">
+                      <p class="path" id="{{ id }}-path">{{ value.src|default('') ?: t('edit.no_video') }}</p>
+                    </div>
+                  </div>
+                  {# The poster is what a visitor with autoplay off actually
+                     sees, so it is an ordinary image field with everything that
+                     comes with one — including a required description. #}
+                  {{ _self.field(
+                       {'type': 'image', 'label': t('edit.poster'), 'decorative': def.decorative|default(false),
+                        'fields': def.fields.poster.fields, 'hint': t('edit.poster_hint')},
+                       id ~ '-poster', fname ~ '[poster]', value.poster|default({}), locked, pages, page_ids, errors
+                     ) }}
 
                 {% elseif def.type == 'select' %}
                   <select id="{{ id }}" name="{{ fname }}" {{ locked ? 'disabled' : '' }}>
@@ -251,7 +327,7 @@
                      the slug is resolved at render time — so renaming a slug
                      cannot leave a dead href behind. #}
                   <select id="{{ id }}" name="{{ fname }}" {{ locked ? 'disabled' : '' }}>
-                    <option value="">— Καμία σελίδα —</option>
+                    <option value="">{{ t('edit.no_page') }}</option>
                     {% for p in pages|default([]) %}
                       <option value="{{ p.id }}" {{ value == p.id ? 'selected' : '' }}>{{ p.title }} ({{ p.slug }})</option>
                     {% endfor %}
@@ -259,7 +335,7 @@
                   {% if locked %}<input type="hidden" name="{{ fname }}" value="{{ value }}">{% endif %}
                   {% if value and value not in page_ids|default([]) %}
                     <p class="hint" style="color:#b4232a">
-                      Η σελίδα «{{ value }}» δεν υπάρχει πια. Ο σύνδεσμος εμφανίζεται ως απλό κείμενο.
+                      {{ t('edit.dead_link', value) }}
                     </p>
                   {% endif %}
 
@@ -272,7 +348,7 @@
                 {% endif %}
 
                 {% if error %}<p class="err">{{ error }}</p>{% endif %}
-                {% if def.hint is defined %}<p class="hint">{{ def.hint }}</p>{% endif %}
+                {% if def.hint is defined %}<p class="hint">{{ t(def.hint) }}</p>{% endif %}
               </div>
 {% endmacro %}
 
@@ -286,18 +362,18 @@
 {% macro repeater(def, id, fname, rows, locked, pages, page_ids, role, errors) %}
   <div class="field">
     <label>
-      {{ def.label }}
-      {% if locked %}<span class="pill" style="margin-inline-start:6px">κλειδωμένο</span>{% endif %}
-      <span class="pill" style="margin-inline-start:6px">έως {{ def.max }}</span>
+      {{ t(def.label) }}
+      {% if locked %}<span class="pill" style="margin-inline-start:6px">{{ t('edit.locked') }}</span>{% endif %}
+      <span class="pill" style="margin-inline-start:6px">{{ t('edit.up_to', def.max) }}</span>
     </label>
-    {% if def.hint is defined %}<p class="hint">{{ def.hint }}</p>{% endif %}
+    {% if def.hint is defined %}<p class="hint">{{ t(def.hint) }}</p>{% endif %}
 
     <div class="repeater" id="{{ id }}-rows" data-repeater="{{ id }}" data-max="{{ def.max }}">
       {% for i, row in (rows is iterable ? rows : []) %}
         <div class="repeater-row" data-row>
           <header>
-            <strong>{{ row[def.item_label]|default('')|striptags|slice(0, 60) ?: def.label }}</strong>
-            {% if not locked %}<button type="button" class="btn ghost" data-row-remove>Αφαίρεση</button>{% endif %}
+            <strong>{{ row[def.item_label]|default('')|striptags|slice(0, 60) ?: t(def.label) }}</strong>
+            {% if not locked %}<button type="button" class="btn ghost" data-row-remove>{{ t('edit.remove_row') }}</button>{% endif %}
           </header>
           {% for subName, subDef in def.fields %}
             {{ _self.field(
@@ -316,15 +392,15 @@
     </div>
 
     {% if not locked %}
-      <button type="button" class="btn ghost" data-row-add="{{ id }}">Προσθήκη</button>
+      <button type="button" class="btn ghost" data-row-add="{{ id }}">{{ t('edit.add_row') }}</button>
       {# __INDEX__ is replaced on insert. A <template> keeps the blank row out
          of the form until it is wanted — an empty row that posts is an empty
          row the save path has to refuse. #}
       <template id="{{ id }}-template">
         <div class="repeater-row" data-row>
           <header>
-            <strong>{{ def.label }}</strong>
-            <button type="button" class="btn ghost" data-row-remove>Αφαίρεση</button>
+            <strong>{{ t(def.label) }}</strong>
+            <button type="button" class="btn ghost" data-row-remove>{{ t('edit.remove_row') }}</button>
           </header>
           {% for subName, subDef in def.fields %}
             {{ _self.field(
@@ -345,6 +421,25 @@
 {% endmacro %}
 
 {% block foot %}
+{# Every string the script below shows, in one object. Inlining t() into each
+   line would mean a translator hunting through JavaScript for them, and one
+   escaping mistake away from a broken panel. `%1`/`%2` rather than sprintf,
+   because JavaScript has no sprintf and two replaces are not worth a helper. #}
+<script>
+  const T = {
+    linkPrompt: {{ t('rt.link_prompt')|json_encode|raw }},
+    uploading: {{ t('edit.uploading')|json_encode|raw }},
+    uploadingN: {{ t('edit.uploading_n')|json_encode|raw }},
+    uploadFailed: {{ t('up.failed')|json_encode|raw }},
+    imageUploaded: {{ t('edit.image_uploaded')|json_encode|raw }},
+    videoUploaded: {{ t('edit.video_uploaded')|json_encode|raw }},
+    noImage: {{ t('edit.no_image')|json_encode|raw }},
+    atLimit: {{ t('edit.at_limit')|json_encode|raw }},
+    uploadDone: {{ t('edit.upload_done')|json_encode|raw }},
+    uploadSomeFailed: {{ t('edit.upload_some_failed')|json_encode|raw }},
+    unsaved: {{ t('edit.unsaved')|json_encode|raw }},
+  };
+</script>
 <script>
 (function () {
   const form = document.getElementById('editor');
@@ -399,7 +494,7 @@
       if (!btn) return;
       rt.focus();
       if (btn.dataset.cmd === 'createLink') {
-        const url = prompt('Διεύθυνση συνδέσμου:', 'https://');
+        const url = prompt(T.linkPrompt, 'https://');
         if (url) document.execCommand('createLink', false, url);
       } else {
         document.execCommand(btn.dataset.cmd, false, null);
@@ -427,16 +522,19 @@
       body.append('file', file.files[0]);
 
       btn.disabled = true;
-      status.textContent = 'Μεταφόρτωση…';
+      status.textContent = T.uploading;
       try {
         const res = await fetch('?action=upload', { method: 'POST', body });
         const data = await res.json();
-        if (!data.ok) throw new Error(data.message || 'Η μεταφόρτωση απέτυχε.');
+        if (!data.ok) throw new Error(data.message || T.uploadFailed);
         hidden.value = data.url;
-        thumb.style.backgroundImage = "url('" + (data.preview || data.url) + "')";
+        // A video has no thumbnail of its own — its poster is a separate image
+        // field with its own preview, so painting the mp4 URL in here would
+        // just break the tile.
+        if (!data.video) thumb.style.backgroundImage = "url('" + (data.preview || data.url) + "')";
         path.textContent = data.url;
-        if (alt) alt.required = true;
-        status.textContent = 'Η εικόνα ανέβηκε. Πατήστε Αποθήκευση.';
+        if (alt && !data.video) alt.required = true;
+        status.textContent = data.video ? T.videoUploaded : T.imageUploaded;
         touch();
       } catch (err) {
         status.textContent = err.message;
@@ -452,12 +550,111 @@
     btn.addEventListener('click', () => {
       document.getElementById(id).value = '';
       document.getElementById(id + '-thumb').style.backgroundImage = '';
-      document.getElementById(id + '-path').textContent = 'Καμία εικόνα';
+      document.getElementById(id + '-path').textContent = T.noImage;
       // No image, no alt to demand — same condition the save path uses.
       const alt = document.getElementById(id + '-alt');
       if (alt) alt.required = false;
       touch();
     });
+  });
+
+  /* ---- galleries -------------------------------------------------------
+     A grid of tiles, each one hidden src + optional alt. Reorder is up/down
+     buttons rather than drag: ten lines, keyboard-accessible for free, and no
+     library in a project with no front-end build. Indices are rewritten after
+     every change because the input *names* carry them — the server re-keys
+     with array_values() anyway, but duplicate names inside one form would lose
+     rows before they ever got there. */
+  document.querySelectorAll('[data-gallery]').forEach(grid => {
+    const id = grid.dataset.gallery;
+    const name = grid.dataset.name;
+    const max = parseInt(grid.dataset.max, 10) || 60;
+    const decorative = grid.dataset.decorative === '1';
+    const files = document.getElementById(id + '-files');
+    const add = document.querySelector('[data-gallery-add="' + id + '"]');
+    const note = document.querySelector('[data-gallery-status="' + id + '"]');
+    if (!add) return;   // locked field: no controls were rendered
+
+    const renumber = () => {
+      grid.querySelectorAll('[data-tile]').forEach((tile, i) => {
+        tile.querySelectorAll('input').forEach(input => {
+          input.name = input.name.replace(/\[\d+\]/, '[' + i + ']');
+        });
+      });
+      add.disabled = grid.querySelectorAll('[data-tile]').length >= max;
+    };
+
+    const tile = (url, preview) => {
+      const fig = document.createElement('figure');
+      fig.className = 'tile';
+      fig.setAttribute('data-tile', '');
+      fig.innerHTML =
+        '<div class="thumb"></div>' +
+        '<input type="hidden" name="' + name + '[0][src]">' +
+        (decorative ? '' :
+          '<input type="text" class="alt" name="' + name + '[0][alt]" maxlength="120" placeholder="'
+          + grid.dataset.altLabel + '">') +
+        '<div class="tools"><button type="button" data-move="-1">↑</button>' +
+        '<button type="button" data-move="1">↓</button>' +
+        '<button type="button" data-drop>✕</button></div>';
+      fig.querySelector('.thumb').style.backgroundImage = "url('" + (preview || url) + "')";
+      fig.querySelector('input[type=hidden]').value = url;
+      grid.appendChild(fig);
+    };
+
+    add.addEventListener('click', () => files.click());
+
+    files.addEventListener('change', async () => {
+      const picked = Array.from(files.files);
+      files.value = '';
+      const room = max - grid.querySelectorAll('[data-tile]').length;
+      if (room <= 0) { note.textContent = T.atLimit; return; }
+
+      add.disabled = true;
+      let done = 0;
+      let failed = false;
+      // One at a time on purpose: thirty parallel uploads through GD is how a
+      // shared worker pool runs out mid-gallery, and the client sees half a
+      // grid with no idea which half saved.
+      for (const f of picked.slice(0, room)) {
+        note.textContent = T.uploadingN.replace('%1', ++done).replace('%2', Math.min(picked.length, room));
+        const body = new FormData();
+        body.append('action', 'upload');
+        body.append('csrf', csrf);
+        body.append('file', f);
+        try {
+          const res = await fetch('?action=upload', { method: 'POST', body });
+          const data = await res.json();
+          if (!data.ok) throw new Error('upload failed');
+          tile(data.url, data.preview);
+        } catch (err) {
+          failed = true;
+        }
+      }
+      renumber();
+      touch();
+      note.textContent = failed ? T.uploadSomeFailed : T.uploadDone;
+      add.disabled = false;
+    });
+
+    grid.addEventListener('click', e => {
+      const fig = e.target.closest('[data-tile]');
+      if (!fig) return;
+
+      if (e.target.hasAttribute('data-drop')) {
+        fig.remove();
+      } else if (e.target.hasAttribute('data-move')) {
+        const dir = parseInt(e.target.dataset.move, 10);
+        const sibling = dir < 0 ? fig.previousElementSibling : fig.nextElementSibling;
+        if (sibling) grid.insertBefore(dir < 0 ? fig : sibling, dir < 0 ? sibling : fig);
+      } else {
+        return;
+      }
+      renumber();
+      touch();
+    });
+
+    renumber();
   });
 
   /* ---- list repeaters -------------------------------------------------

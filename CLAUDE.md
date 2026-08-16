@@ -71,7 +71,11 @@ full in §10 of the build plan.
     `Admin::MUTATIONS`). The hourly backup takes it exclusively, so a commit can
     never capture a half-applied save. Adding a writing action means adding it
     to that list.
-13. **`Fields::map()` is the only schema walk.** The top level, an image's
+13. **A form's visitor inputs are `form:` in the component schema, never
+    `fields:`.** A client who could edit that list could add an input, and an
+    input is where a value comes from. The recipient and the Turnstile toggle
+    are `editable: admin` and refused server-side, for the same reason.
+14. **`Fields::map()` is the only schema walk.** The top level, an image's
     src/alt pair and a list's rows all go through it, so "undeclared keys are
     dropped", "`editable` is enforced" and "`required` is checked" have one
     implementation rather than one per nesting depth. A second recursive walk
@@ -92,19 +96,22 @@ full in §10 of the build plan.
   there fails closed; JWT verification uses a library because a bug there fails
   open.)
 - Comments explain *why*, not *what*. Assume the reader can read PHP.
-- User-facing strings in the panel are Greek **today**, and hardcoded inline.
-  Panel i18n lands with the repo split (plan §3.1): a `t()` helper over
-  `lang/<locale>.php` arrays, **English as the source language and the default**,
-  language picked per site by `ADMIN_LOCALE`. Until then keep writing Greek
-  inline — do not start introducing keys piecemeal.
+- User-facing strings go through `t()` (`Lang`), never inline. `lang/en.php` is
+  the **source language and the default**; `lang/el.php` is a translation, and
+  `ADMIN_LOCALE` picks per site. A missing key renders as itself, so a
+  component's own `label:` in Greek passes through untouched while a built-in
+  key resolves. `bin/doctor` reports a translation that has fallen behind.
+  Two catalogues: `$cms->lang` is the panel's, `$cms->siteLang()` is the
+  language of the page a visitor is reading — form refusals use the second.
 
 ## Dependencies
 
 Current: `twig/twig`, `symfony/yaml`, `symfony/dotenv`, `firebase/php-jwt` (v7 — v6 carries
 CVE-2025-45769), `symfony/html-sanitizer` (which pulls `league/uri` and two PSR
 HTTP interface packages transitively), `symfony/http-foundation` (no transitive
-dependencies; deliberately *not* `symfony/mime`, so sniff uploads with `finfo`
-rather than `UploadedFile::getMimeType()`). Extensions: `ext-curl`, `ext-dom`,
+dependencies), `symfony/mailer` (Phase 7; it pulls `symfony/mime` transitively —
+uploads still sniff with `finfo` rather than `UploadedFile::getMimeType()`, which
+is now a deliberate choice rather than a forced one). Extensions: `ext-curl`, `ext-dom`,
 `ext-exif`, `ext-fileinfo`, `ext-gd`, `ext-json`, `ext-openssl` (tests mint Access tokens).
 `ext-exif` is there because uploads are re-encoded to strip GPS, which discards
 the orientation tag too — so the rotation has to be baked into the pixels before
@@ -112,9 +119,7 @@ that happens, or every portrait on the site is sideways. `bin/doctor` checks the
 same list against the *running* interpreter, since Composer resolves under the
 CLI php and the site runs under php-fpm.
 
-Test suite: 742 checks across seven files. Run all of them, not just the new ones.
-
-Planned, per the build plan: `symfony/mailer`.
+Test suite: 942 checks across eight files. Run all of them, not just the new ones.
 
 **Do not add anything else without asking.** Explicitly rejected, with reasons:
 
@@ -127,7 +132,8 @@ Planned, per the build plan: `symfony/mailer`.
 ## Layout
 
 ```
-src/          Cms Admin Auth Components Content Fields Locks Media R2
+src/          Cms Admin Auth Components Content Fields Form Lang Locks Media
+              R2 Submissions
               Cloudflare AccessDeniedException StaleContentException
               bootstrap.php — process-level error handlers, not a class
 config/       roles.yml — email -> admin|editor, committed, no secrets
@@ -137,14 +143,21 @@ content/      pages/<locale>/*.yml, uploads/, .revisions/, redirects.yml
               **global**: an ordinary page file that renders on every page
               instead of at a URL. `Content::isGlobal()` is the only copy of
               that rule and `Content::list()` the only place it is applied.
+              One directory per configured locale; resolution is by URL prefix
+              and `Cms::useLocale()` is the whole resolver, called once per
+              request. Revisions live under `.revisions/<locale>/`.
               A page carries `seo:` beside `title`/`slug`/`nav`; `/sitemap.xml`
               and `/robots.txt` are generated from those files, never stored.
               All of it tracked in git — that is the backup. Submissions live
-              in var/. The locale directory is the permanent shape; Phase 9
+              in var/submissions/, gitignored: visitor PII must never reach the
+              hourly content push. bin/mail-retry redelivers, bin/prune-
+              submissions enforces retention, and neither is optional. The locale directory is the permanent shape; Phase 9
               resolves a second one beside it rather than migrating.
 bin/          doctor deploy.sh rollback.sh release.sh backup restore-drill
-              new-site
-templates/    layout.twig, picture.twig, 404.twig, 500.twig, admin/*.twig
+              new-site mail-retry prune-submissions
+lang/         en.php (source) + el.php — panel and engine strings
+templates/    layout.twig, bare.twig (no header/footer; `layout: bare`),
+              picture.twig, video_facade.twig, 404.twig, 500.twig, admin/*.twig
               Every image on the site renders through picture.twig. A component
               that writes its own <img> is caught by 01_render.php.
 public/       docroot: index.php, admin.php, img.php, router.php

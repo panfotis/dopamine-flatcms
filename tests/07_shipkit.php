@@ -264,7 +264,12 @@ $roles = $sandbox . '/roles.yml';
  */
 $doctor = static function (array $files, array $env = []) use ($sandbox, $roles): array {
     exec('rm -rf ' . escapeshellarg($sandbox));
-    mkdir($sandbox . '/content/pages/el', 0775, true);
+    // One directory per configured language: doctor refuses a locale that has
+    // no content directory, because that is a language the site claims to
+    // serve and cannot.
+    foreach (array_keys(cms()->locales()) as $localeCode) {
+        mkdir($sandbox . '/content/pages/' . $localeCode, 0775, true);
+    }
     mkdir($sandbox . '/content/uploads', 0775, true);
     file_put_contents($roles, "- { email: a@b.gr, role: admin }\n");
 
@@ -606,8 +611,19 @@ $git = static fn (string $dir, string $args): array
 sh('git init --quiet --bare ' . escapeshellarg($backupRoot . '/remote.git'));
 sh('git clone --quiet ' . escapeshellarg($backupRoot . '/remote.git') . ' ' . escapeshellarg($backupRoot . '/content'));
 
-mkdir($backupRoot . '/content/pages/el', 0775, true);
+// Every configured language, because bin/restore-drill runs bin/doctor against
+// the clone and doctor refuses a language with no content directory.
+foreach (array_keys(cms()->locales()) as $localeCode) {
+    mkdir($backupRoot . '/content/pages/' . $localeCode, 0775, true);
+}
 mkdir($backupRoot . '/content/uploads/2026/08', 0775, true);
+foreach (array_keys(cms()->locales()) as $localeCode) {
+    file_put_contents($backupRoot . '/content/pages/' . $localeCode . '/home.yml', Yaml::dump([
+        'title'  => 'Αντίγραφο',
+        'slug'   => '/',
+        'blocks' => [],
+    ], 6, 2));
+}
 file_put_contents($backupRoot . '/content/pages/el/home.yml', Yaml::dump([
     'title'  => 'Αρχική',
     'slug'   => '/',

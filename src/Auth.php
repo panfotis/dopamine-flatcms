@@ -37,6 +37,10 @@ final class Auth
     public function __construct(
         private readonly array $config,
         private readonly string $cacheDir,
+        // The panel's catalogue, so a refusal reads in the language the person
+        // reading it uses. Optional: Auth is constructed in tests that have no
+        // interest in wording.
+        private readonly ?Lang $lang = null,
     ) {
     }
 
@@ -91,10 +95,7 @@ final class Auth
             // a person to the panel. The message says so, because the reader
             // authenticated perfectly well and "try logging in again" is
             // useless advice to them.
-            throw new AccessDeniedException(
-                'Ο λογαριασμός σας αναγνωρίστηκε αλλά δεν έχει πρόσβαση σε αυτό το site. '
-                . 'Ζητήστε από τον διαχειριστή να σας προσθέσει.'
-            );
+            throw new AccessDeniedException($this->lang?->t('err.not_listed') ?? 'err.not_listed');
         }
 
         return ['email' => $email, 'role' => $role];

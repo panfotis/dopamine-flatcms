@@ -77,7 +77,7 @@ is why the pilot site is Phase 8 — see §6.
 | Form delivery | SMTP relay **and** stored on disk | A bounced message must not vanish |
 | Turnstile | `editable: admin` toggle, default off, keys in `.env` | Most sites never need it; a control the client can switch off is not a control |
 | Submissions location | `var/submissions/`, gitignored | Visitor PII must not reach a git remote |
-| Panel language | `t()` over a per-locale PHP array, picked by `admin_locale` config | ~50 strings; a catalogue system is the wrong shape for a flat map |
+| Panel language | `t()` over a per-locale PHP array, picked by `admin_locale` config | ~90 strings; a catalogue system is the wrong shape for a flat map |
 | Panel source language | **English**, `el` is a translation | The core is a distributed package; a Greek default is a fork waiting to happen |
 | Panel language selection | **Per site, not per user** | One install, one client; Access gives no place to store a preference |
 | Repo split | **After the pilot**, before Phase 9 | Validate the product before paying package/release overhead |
@@ -382,7 +382,12 @@ orphans disappear on the next save instead of persisting unsanitised.
 No page types. Four pages can have four entirely different component sets.
 Instead of a type system:
 
-- **`layout:`** — optional per-page wrapper, defaults to `layout.twig`
+- **`layout:`** — optional per-page wrapper, defaults to `layout.twig`.
+  `layout: bare` renders the page with no header and no footer, which is what a
+  landing page or a page that opens inside an iframe wants. Developer-owned
+  (§10.3), because it names a template and a value from a request would be a
+  file-read primitive; a name that does not resolve falls back rather than
+  fatalling, and `bin/doctor` warns about it
 - **Presets** — `content/_presets/landing.yml` to copy when starting a page.
   A convention, never loaded at runtime.
 
@@ -465,15 +470,15 @@ Each phase ends with the full suite green.
 | 1 | ~~`symfony/html-sanitizer`~~ **done** | 0.5–1 d |
 | 2 | ~~`symfony/http-foundation`~~ **done** | 1.5–2 d |
 | 3 | ~~Roles + revision restore~~ **done** | 1 d |
-| 4 | Media core: image object, bounded GD transformations, `<picture>`, recursive sanitise, `list`, `link` picker | 5–7 d |
-| 5 | Ship kit: atomic deploy, content backup, doctor, nav, redirects, 500, site kit | 3–5 d |
-| 6 | SEO + sitemap | 1–1.5 d |
+| 4 | ~~Media core: image object, bounded GD transformations, `<picture>`, recursive sanitise, `list`, `link` picker~~ **done** | 5–7 d |
+| 5 | ~~Ship kit: atomic deploy, content backup, doctor, nav, redirects, 500, site kit~~ **done** | 3–5 d |
+| 6 | ~~SEO + sitemap~~ **done** | 1–1.5 d |
 | 6.5 | ~~Site header + footer as global blocks~~ **done** | 1–1.5 d |
-| 7 | Contact form | 3–4 d *(deferred — only when a client needs a form)* |
+| 7 | ~~Contact form~~ **done** | 3–4 d |
 | 8 | **Pilot client site — the launch gate** | site only |
-| — | Repo split, incl. panel i18n (§3.1), then `v1.0.0` | 1.5–2 d |
-| 9 | i18n | 3–4 d |
-| 10 | `image_list` + video | 3–4 d *(only when a client pays for a gallery)* |
+| — | Panel i18n (§3.1) **done**; repo split + `v1.0.0` still gated on the pilot | 1.5–2 d |
+| 9 | ~~i18n~~ **done** | 3–4 d |
+| 10 | ~~`image_list` + video~~ **done** | 3–4 d |
 | | **Platform total** | **~24–34 dev days** |
 
 Then each client site is design + components + content migration + launch:
@@ -996,19 +1001,13 @@ site-wide after one purge; `GET /_header` is a 404; `_header` is absent from
 `/sitemap.xml`, the menu and the `link` picker; a save to a global rides the same
 transaction, baseline and revision path as a page; and the full suite is green.
 
-### Phase 7 — Contact form *(deferred)*
+### Phase 7 — Contact form
 
-**Not built before the pilot.** `contact_cta` already renders phone, email and
-address, which is a working contact page for most Greek SMBs. Build this when a
-client actually needs a form — the cost of doing it against a live site is
-higher than doing it now, but not by enough to justify 3–4 days spent on spec.
+Built. The two things Phase 0 put in place for it — `private: true` on the page
+that carries the form, and `var/submissions/` gitignored — are what made it a
+feature rather than a retrofit, exactly as intended.
 
-Two things stay in place while it is deferred, because both are cheap now and
-expensive to retrofit: `private: true` on any page that will carry a form (Phase
-0's caching decision — already set on `content/pages/el/epikoinonia.yml`), and
-`var/submissions/` staying gitignored. Do not remove either as dead code.
-
-The spec below is complete and stays as written.
+The spec below is what was built, with two deviations recorded at the end.
 
 Client edits: heading, intro, success message, GDPR consent text. The **input
 fields are developer-defined** in the schema. The **recipient is
@@ -1098,6 +1097,20 @@ CSV export is deferred — the panel list covers a brochure site's volume. When 
 lands it must prefix `= + - @` with `'`, or the file executes formulas in Excel.
 Written here so the next person doesn't rediscover it.
 
+**As built, two deviations:**
+
+- **The real client IP comes from nginx, not from PHP.** `set_real_ip_from` +
+  `real_ip_header CF-Connecting-IP` (nginx.conf.example ships it, with the
+  refresh cron for the ranges) makes `REMOTE_ADDR` correct before PHP sees it,
+  and nginx checks who it is talking to before believing the header — which PHP
+  cannot. `FORM_TRUST_CF_IP` reads the header directly for an origin that cannot
+  do that, and defaults to **off**: on a directly reachable origin it lets
+  anyone mint their own rate-limit bucket.
+- **The rate limiter runs before the CSRF check, not after.** The spec put it
+  first in the pipeline and that is what "first" has to mean: a flood of
+  tokenless POSTs still costs a session start and a hash each, and the counter
+  is the cheapest possible refusal.
+
 **Done when:** a submission survives a mail failure on disk, is visible as
 unsent, and a retry delivers it without losing the record; ambiguous SMTP
 timeouts are flagged for admin review rather than blindly retried forever;
@@ -1176,12 +1189,14 @@ Only when a client is paying for a gallery.
 `image_list`: bulk select/drag, parallel upload, thumbnail grid, reorder,
 inline alt.
 
-**Open question, decide when a client actually pays for this:** required alt
-(Phase 4) does not scale to a 30-photo grid — the client uploads a gallery and
-cannot save until they have written thirty descriptions, which produces thirty
-junk strings rather than thirty descriptions. Either `decorative` applies to the
-whole list, or `required` relaxes for `image_list` specifically. Do not guess
-now; a real gallery client will make the answer obvious.
+**Open question, now decided: `required` relaxes for `image_list`.** Alt stays
+required on a standalone `image` and is never demanded of a gallery row. Thirty
+forced descriptions produce thirty junk strings, and a screen reader reads those
+out instead of skipping them — the failure mode is worse than the gap. The input
+is still rendered, with its hint, and `decorative: true` on the field still
+forces `alt=""` for a gallery that genuinely carries no information. One switch,
+`require: false` in the field context, which is the same one the conflict
+re-render already uses.
 
 Reorder is up/down buttons, not drag-and-drop: ten lines, keyboard-accessible
 for free, and no library in a project with no front-end build. Add dragging if
@@ -1193,10 +1208,16 @@ never pasted HTML. Facade rendering — thumbnail plus play button, iframe on cl
 via `youtube-nocookie.com`, so nothing third-party loads (and no cookie banner is
 forced) until the visitor acts.
 
-**Thumbnail fetching is SSRF** and v1 treated it as free. The oEmbed response's
-`thumbnail_url` is third-party controlled: host allowlist (`i.ytimg.com`,
-`i.vimeocdn.com`), `FOLLOWLOCATION=false`, 5s timeout, 5 MB cap, magic-byte
-check, and a failed fetch must never fail the save.
+**Thumbnail fetching was specified and then not built, deliberately.** The
+spec was right that the oEmbed `thumbnail_url` is third-party controlled and
+that fetching it is SSRF — host allowlist, no redirects, timeout, size cap,
+magic bytes, and a failure that cannot fail the save. What it did not ask is
+whether the fetch earns any of that. It does not: the poster is an ordinary
+`image` field beside the embed, uploaded like every other image on the site.
+That removes the SSRF surface rather than guarding it, costs nothing the client
+does not already know how to do, and gives a better frame than the provider's
+automatic one. If a client ever asks for the automatic thumbnail, the guarded
+fetch above is the specification to build.
 
 `video_loop`: MP4 in R2, hard 10 MB cap, poster, always
 `muted autoplay loop playsinline`. No transcoding, no multipart upload.
@@ -1406,7 +1427,9 @@ tests alone are not enough for these operational flows.
 - [ ] R2 **only if this site needs it** (a gallery, or uploads past a few hundred MB): bucket + custom domain + scoped token; `media_bases` matches. Otherwise skip — uploads are in git.
 - [ ] `shared/var/cache/images/` writable by `www-data`, bounded and monitored (derivatives regenerate; no backup needed)
 - [ ] Cloudflare public-HTML cache rule, admin/form bypass, cache purge token; HIT/BYPASS and purge verified against the real zone
-- [ ] SMTP relay; SPF + DKIM on the client's domain
+- [ ] `set_real_ip_from` + `real_ip_header CF-Connecting-IP` with the Cloudflare ranges, refreshed by cron — without it the form's rate limiter treats the whole internet as one bucket
+- [ ] SMTP relay; SPF + DKIM on the client's domain; `MAIL_DSN`, `FORM_TO` and `FORM_FROM` set — an unconfigured box stores every submission unsent
+- [ ] `bin/mail-retry` on a 15-minute cron and `bin/prune-submissions` daily, both monitored: a retry nobody runs is not delivery, and a retention policy nobody runs is a sentence in a privacy notice
 - [ ] Turnstile keys in `.env` **only if** the site turns the toggle on — off is the default and the normal case
 - [ ] `shared/content/` is a separate private git remote; monitored hourly `git add -A`/commit/push job; weekly clean-clone restore proves pages and images work
 - [ ] `shared/var/submissions/` is excluded from content git; admin-only access; retry and 12-month retention jobs monitored; encrypted off-host backup expires after 30 days
@@ -1533,6 +1556,43 @@ tests alone are not enough for these operational flows.
 30. **Estimates include production work.** The platform range is now 24–34 days,
     reflecting the media, form, backup and deployment behavior the launch gate
     actually requires.
+
+### Panel-language amendment (v2.4)
+
+35. **Panel i18n landed before the repo split, not with it.** §2 pairs them
+    because the split is what makes a Greek default a fork risk; the helper
+    itself has no dependency on the split, and shipping it first means the
+    pilot is built against the panel every later site gets. English is the
+    source and the default, `el` is a translation, `ADMIN_LOCALE` picks per
+    site, and an unrecognised value renders English rather than failing.
+36. **Two catalogues, not one.** The panel speaks `ADMIN_LOCALE` to the person
+    editing; the handful of engine strings a *visitor* sees — the contact
+    form's refusals — speak the language of the page they appear on. One global
+    would make one of those two wrong on every bilingual site.
+37. **A missing key renders as itself.** Which is also why a component's own
+    `label:` needs no branching: a built-in key like `field.alt` translates, and
+    a developer's literal "Κεντρική ενότητα" passes through untouched.
+    `bin/doctor` reports a translation that has fallen behind.
+
+### i18n and media amendment (v2.3)
+
+32. **Locale resolution is a swap, not a parameter.** `Cms::useLocale()` is
+    called once per request by the entry point and swaps `$cms->content` for
+    that language's store; nav, sitemap, links, the panel and the save path go
+    on asking the same property and are in the right language for free. The
+    alternative — threading a locale argument through twelve methods with no
+    opinion about it — was rejected. Revisions moved to
+    `.revisions/<locale>/`, because `contact` is a different document in each
+    language and one history for both lets a restore put English copy into a
+    Greek page.
+33. **`assertSafeSegment()` refuses rather than strips.** The old page-id guard
+    stripped, so `../home` quietly resolved to `home` and an obvious attack was
+    answered with a page. One guard now covers the page id and the locale, and
+    the locale is matched against the configured map before it reaches it.
+34. **Video thumbnails are uploaded, not fetched.** §10 specified a
+    guarded oEmbed fetch; the poster is an ordinary `image` field instead,
+    which removes the SSRF surface rather than guarding it. The `image_list`
+    alt question is decided the same way — see Phase 10.
 
 ### Shared-content amendment (v2.2)
 

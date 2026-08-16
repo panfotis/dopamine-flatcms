@@ -10,3 +10,22 @@ fields:
     type: image
     label: Λογότυπο
     hint: Κενό = εμφανίζεται το όνομα του site ως κείμενο.
+
+  # Read aloud by a screen reader to tell the two navigations apart, so it has
+  # to be in the language of the page — and _header.yml is per language, which
+  # makes that free. `editable: false` for the same reason `hero.align` is: it
+  # is a developer's decision, not copy, and the client changing it silently
+  # breaks a page nobody sighted would notice.
+  nav_label:
+    type: text
+    label: Ετικέτα μενού (screen reader)
+    editable: false
+    max: 40
+    default: Κύρια πλοήγηση
+
+  lang_label:
+    type: text
+    label: Ετικέτα επιλογής γλώσσας (screen reader)
+    editable: false
+    max: 40
+    default: Γλώσσα
