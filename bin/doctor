@@ -78,12 +78,14 @@ foreach ([
     'var/cache'        => $config['paths']['cache'],
     'var/locks'        => dirname($config['paths']['cache']) . '/locks',
 ] as $label => $dir) {
-    if (!is_dir($dir)) {
-        // Created on demand by the code that needs it, so only the parent has
-        // to exist — but if the parent is unwritable, it never will be.
+    // Runtime directories are created recursively. On a clean checkout both
+    // `var` and its children may be absent, so find the nearest ancestor PHP
+    // would actually need permission to write into rather than stopping after
+    // one dirname() call at another path that does not exist yet.
+    while (!is_dir($dir) && dirname($dir) !== $dir) {
         $dir = dirname($dir);
     }
-    if (!is_writable($dir)) {
+    if (!is_dir($dir) || !is_writable($dir)) {
         $fail(sprintf('%s is not writable by this user: %s', $label, $dir));
     }
 }

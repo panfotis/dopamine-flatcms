@@ -295,6 +295,15 @@ $goodPage = static fn (string $slug, string $title = 'T'): string => Yaml::dump(
 [$s, $o] = $doctor(['pages/el/home.yml' => $goodPage('/')]);
 ok($s === 0, 'the sandbox baseline is healthy: ' . trim($o));
 
+// A package checkout does not contain the gitignored var/ tree. The runtime
+// creates it recursively, so doctor must assess the nearest existing ancestor
+// instead of rejecting a perfectly writable clean checkout.
+[$s, $o] = $doctor(
+    ['pages/el/home.yml' => $goodPage('/')],
+    ['VAR_PATH' => $sandbox . '/missing/var']
+);
+ok($s === 0, 'missing runtime directories are valid beneath a writable ancestor: ' . trim($o));
+
 foreach ([
     'malformed YAML' => [
         ['pages/el/home.yml' => "title: [unclosed\n"],

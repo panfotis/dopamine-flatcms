@@ -563,7 +563,7 @@ tests/09_package.php     clean Composer install, archive boundary, package
                          fallbacks, site overrides and installed CLI tools
 ```
 
-973 checks: `ddev exec bash tests/run.sh`. Run all of them after touching
+974 checks: `ddev exec bash tests/run.sh`. Run all of them after touching
 `Fields`, `Admin`, `Components`, `Media` or anything in `bin/`.
 
 CI (`.github/workflows/ci.yml`) runs lint, `composer audit`, `bin/doctor`, and

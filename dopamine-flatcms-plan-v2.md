@@ -5,7 +5,7 @@ prototype, then amended with a production-readiness review. What changed and
 why is in §13.
 
 **Status (2026-08-16):** Platform Phases 0–7 and 9–10 are implemented, the
-Composer engine/skeleton split is implemented, and **973 checks pass**. Phase 8
+Composer engine/skeleton split is implemented, and **974 checks pass**. Phase 8
 remains the real pilot-site launch and operational cycle; that cannot be
 declared complete by platform code alone.
 **Audience:** Claude Code in VS Code, against DDEV. Read this and `CLAUDE.md`
