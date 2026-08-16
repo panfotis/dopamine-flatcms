@@ -223,6 +223,14 @@ section('The encoder produces real derivatives, once, atomically');
 $uploads = $root . '/content/uploads';
 @mkdir($uploads, 0775, true);
 
+// content/uploads/ is tracked in git now, so a run that dies half way through
+// must not leave a fixture behind for the backup job to commit. The unlinks at
+// the end of this section are the normal path; this is the one that survives an
+// exception.
+register_shutdown_function(static function () use ($uploads): void {
+    array_map('unlink', glob($uploads . '/_derive.*') ?: []);
+});
+
 // An opaque JPEG and a PNG with a genuinely transparent corner.
 $jpegSrc = $uploads . '/_derive.jpg';
 $im = imagecreatetruecolor(1200, 800);
