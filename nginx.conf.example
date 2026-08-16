@@ -2,16 +2,16 @@ server {
     listen 443 ssl http2;
     server_name pelatis.gr;
 
-    # Docroot is public/ — content/, src/, vendor/ and config.php sit above it
-    # and are never reachable over HTTP.
-    root /var/www/pelatis/public;
+    # current is the atomic release symlink. content/, src/, vendor/ and
+    # config.php sit above its public/ docroot and are never reachable over HTTP.
+    root /var/www/pelatis/current/public;
     index index.php;
 
     ssl_certificate     /etc/letsencrypt/live/pelatis.gr/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/pelatis.gr/privkey.pem;
 
     # Pretty URLs: every path that is not a real file goes to index.php,
-    # which resolves it against content/pages/*.yml by slug.
+    # which resolves it against content/pages/<locale>/*.yml by slug.
     location / {
         try_files $uri $uri/ /index.php$is_args$args;
     }

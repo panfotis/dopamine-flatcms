@@ -298,4 +298,34 @@ ok($grew < 32 * 1024 * 1024,
 
 @unlink($phoneFile);
 
+section('The upload memory budget catches images just below max_pixels');
+// 38.5 MP is below the coarse 40 MP ceiling, but the source plus the 2400px
+// normalized destination is ~172 MB of pixel buffers. That must be rejected
+// before GD decodes it on a 256 MB production worker.
+$nearLimit = "\x89PNG\r\n\x1a\n" . pack('N', 13) . 'IHDR'
+    . pack('N', 7000) . pack('N', 5500) . "\x08\x02\x00\x00\x00" . pack('N', 0);
+$nearFile = sys_get_temp_dir() . '/dopamine-38mp-' . bin2hex(random_bytes(4)) . '.png';
+file_put_contents($nearFile, $nearLimit);
+
+$nearSize = @getimagesizefromstring($nearLimit);
+ok(($nearSize[0] * $nearSize[1]) < $cfg['images']['max_pixels'],
+    'the fixture is deliberately below max_pixels, so that guard alone cannot save it');
+
+$nearRefused = admin(Request::create(
+    '/admin.php',
+    'POST',
+    ['action' => 'upload', 'csrf' => 'test-token'],
+    [],
+    ['file' => new \Symfony\Component\HttpFoundation\File\UploadedFile(
+        $nearFile,
+        'large-but-under-the-old-limit.png',
+        'image/png',
+        null,
+        true
+    )]
+));
+ok($nearRefused->getStatusCode() === 400, 'the combined source/destination memory budget refuses it');
+contains((string) $nearRefused->getContent(), 'διαστάσεις', 'with the same actionable dimensions message');
+@unlink($nearFile);
+
 summary();

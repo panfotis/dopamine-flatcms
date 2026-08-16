@@ -21,6 +21,12 @@
 
 set -euo pipefail
 
+if [ -n "${ENV_FILE:-}" ]; then
+  # shellcheck source=bin/site-env.sh
+  . "$(dirname "$0")/site-env.sh"
+  site_env_load "$ENV_FILE" 1
+fi
+
 remote="${BACKUP_REMOTE:-}"
 php="${PHP_BIN:-php}"
 release="${RELEASE_PATH:-${DEPLOY_ROOT:-/var/www/pelatis}/current}"

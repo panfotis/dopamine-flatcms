@@ -46,6 +46,7 @@ $refused = admin_post([
     'action'   => 'save',
     'csrf'     => 'test-token',
     'page'     => 'home',
+    'title'    => 'Τίτλος από τη σελίδα που συγκρούστηκε',
     'baseline' => str_repeat('0', 64),   // stale by construction
     'blocks'   => [
         'hero' => [
@@ -58,6 +59,8 @@ $body = (string) $refused->getContent();
 ok($refused->getStatusCode() === 200, 'the conflict re-renders the form rather than erroring out');
 contains($body, 'Η σελίδα άλλαξε από αλλού', 'the conflict is explained');
 contains($body, 'είναι ακόμα στη', 'the editor is told their text was kept');
+contains($body, 'value="Τίτλος από τη σελίδα που συγκρούστηκε"',
+    'the editable page title is kept with the rest of the rejected submission');
 contains($body, 'Κείμενο που δεν πρέπει να χαθεί', 'the rejected submission is re-rendered in the form');
 ok(Yaml::parseFile($file)['blocks'][0]['fields']['heading'] === 'Αλλαγή από τον συνάδελφο', 'and nothing was written to disk');
 

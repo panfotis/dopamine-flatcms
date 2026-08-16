@@ -303,6 +303,7 @@ $refused = admin_post([
     'action'   => 'save',
     'csrf'     => 'the-real-token',
     'page'     => 'home',
+    'title'    => 'Νέος τίτλος που δεν πρέπει να χαθεί',
     'baseline' => (string) hash_file('sha256', $badFile),
     'blocks'   => [
         // Required, at the top level of a block.
@@ -324,6 +325,8 @@ ok(glob(dirname(__DIR__) . '/content/.revisions/home.*.yml') === [],
     'nor did it burn a revision — the history keeps the last version that was real');
 
 contains($body, 'name="blocks[hero][heading]"', 'the client gets the form back, not an error page');
+contains($body, 'value="Νέος τίτλος που δεν πρέπει να χαθεί"',
+    'and the editable page title survives the refusal too');
 contains($body, 'Κείμενο που δεν πρέπει να χαθεί', 'still holding what they typed in the fields that were fine');
 contains($body, '3 πεδία χρειάζονται', 'told how many fields need attention — all of them, in one pass');
 ok(substr_count($body, 'class="err"') === 3, 'with one inline message each, beside the box that caused it');

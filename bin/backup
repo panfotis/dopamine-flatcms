@@ -22,6 +22,15 @@
 
 set -euo pipefail
 
+# An explicit ENV_FILE makes the same script reusable for every site instead of
+# falling back to the historical pelatis path. Tests pass paths directly and do
+# not need an environment file.
+if [ -n "${ENV_FILE:-}" ]; then
+  # shellcheck source=bin/site-env.sh
+  . "$(dirname "$0")/site-env.sh"
+  site_env_load "$ENV_FILE" 1
+fi
+
 content="${CONTENT_PATH:-/var/www/pelatis/shared/content}"
 var="${VAR_PATH:-/var/www/pelatis/shared/var}"
 alert="${BACKUP_ALERT:-}"
@@ -53,7 +62,8 @@ git add -A || fail "git add failed"
 if git diff --cached --quiet; then
   # Not an error and not worth an alert: most hours nobody edits anything.
   # Still push, in case an earlier run committed and failed to push.
-  git push --quiet 2>/dev/null || true
+  git push --quiet \
+    || fail "git push failed — a pending local commit has still not reached the off-box recovery point"
   echo "backup: nothing to commit"
   exit 0
 fi

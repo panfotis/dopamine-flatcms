@@ -128,7 +128,7 @@ if (is_dir($cacheDir)) {
 // Composer resolved these under the CLI php; php-fpm can be a different build
 // with a different extension set, and that difference only ever shows up as a
 // fatal on the one request that needs it.
-foreach (['curl', 'dom', 'exif', 'gd', 'json', 'openssl'] as $ext) {
+foreach (['curl', 'dom', 'exif', 'fileinfo', 'gd', 'json', 'openssl'] as $ext) {
     if (!extension_loaded($ext)) {
         $fail('required PHP extension missing: ext-' . $ext);
     }

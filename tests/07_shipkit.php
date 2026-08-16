@@ -15,6 +15,8 @@ use Symfony\Component\Yaml\Yaml;
 
 $root = dirname(__DIR__);
 $cms = cms();
+$liveHttp = getenv('TEST_LIVE_HTTP') !== '0';
+$testBaseUrl = rtrim(getenv('TEST_BASE_URL') ?: 'https://dopamine-flatcms.ddev.site', '/');
 
 /** Run a shell command in the project root and hand back status + output. */
 function sh(string $command, array $env = []): array
@@ -32,7 +34,7 @@ function sh(string $command, array $env = []): array
 }
 
 $curl = static fn (string $path, string $flags = '-sik'): string => (string) shell_exec(
-    'curl ' . $flags . ' ' . escapeshellarg('https://dopamine-flatcms.ddev.site' . $path) . ' 2>&1'
+    'curl ' . $flags . ' ' . escapeshellarg($testBaseUrl . $path) . ' 2>&1'
 );
 
 // ── Navigation ──────────────────────────────────────────────────────────────
@@ -89,11 +91,13 @@ file_put_contents($contact, Yaml::dump($page, 6, 2));
 ok(cms()->redirectFor('/contact.html') === '/nea-epikoinonia', 'and follows that slug when it is renamed');
 rename($contact . '.redir.bak', $contact);
 
-$live = $curl('/contact.html');
-contains($live, '301', 'over HTTP the old path 301s');
-contains($live, 'location: /epikoinonia', 'to the current slug');
-missing($curl('/definitely-not-a-page'), '301', 'while an unlisted path is not redirected anywhere');
-contains($curl('/definitely-not-a-page'), '404', 'it is a 404');
+if ($liveHttp) {
+    $live = $curl('/contact.html');
+    contains($live, '301', 'over HTTP the old path 301s');
+    contains($live, 'location: /epikoinonia', 'to the current slug');
+    missing($curl('/definitely-not-a-page'), '301', 'while an unlisted path is not redirected anywhere');
+    contains($curl('/definitely-not-a-page'), '404', 'it is a 404');
+}
 
 // ── Error handling ──────────────────────────────────────────────────────────
 
@@ -117,13 +121,15 @@ file_put_contents($victim, Yaml::dump([
     'blocks' => [['id' => 'b', 'type' => '_broken', 'fields' => []]],
 ], 6, 2));
 
-$boom = $curl('/_broken');
-contains($boom, '500', 'the response is a 500');
-contains($boom, 'Κάτι πήγε στραβά', '500.twig is what the visitor sees');
-missing($boom, 'Unknown "no_such_twig_function"', 'the Twig message does not reach the page');
-missing($boom, '/var/www', 'nor any filesystem path');
-missing($boom, '#0 ', 'nor a stack trace');
-contains($boom, 'cache-control: no-store', 'and a broken page is never cached');
+if ($liveHttp) {
+    $boom = $curl('/_broken');
+    contains($boom, '500', 'the response is a 500');
+    contains($boom, 'Κάτι πήγε στραβά', '500.twig is what the visitor sees');
+    missing($boom, 'Unknown "no_such_twig_function"', 'the Twig message does not reach the page');
+    missing($boom, '/var/www', 'nor any filesystem path');
+    missing($boom, '#0 ', 'nor a stack trace');
+    contains($boom, 'cache-control: no-store', 'and a broken page is never cached');
+}
 
 // Away immediately, not at shutdown: bin/doctor runs later in this file and a
 // deliberately broken component would fail it for the wrong reason.
@@ -137,7 +143,9 @@ section('SITE_NOINDEX keeps a pre-launch domain out of the index');
 
 ok($cms->config['site']['noindex'] === false, 'off by default — a live site must not quietly deindex itself');
 ok($cms->robotsHeader() === null, 'so no header is offered');
-missing($curl('/'), 'x-robots-tag', 'and none reaches the wire');
+if ($liveHttp) {
+    missing($curl('/'), 'x-robots-tag', 'and none reaches the wire');
+}
 
 putenv('SITE_NOINDEX=1');
 $flagged = require $root . '/config.php';
@@ -163,23 +171,25 @@ section('/sitemap.xml and /robots.txt are served, and tagged for purging');
 // work if the server hands anything that is not a real file to index.php. The
 // DDEV default config carried a `location = /robots.txt` that served it as a
 // static file and 404'd — right in production, broken on every dev machine.
-$sitemapLive = $curl('/sitemap.xml');
-contains($sitemapLive, '200', '/sitemap.xml serves 200 over HTTP');
-contains($sitemapLive, 'content-type: application/xml', 'as XML');
-contains($sitemapLive, '<urlset', 'with a urlset');
-contains($sitemapLive, '<loc>https://dopamine-flatcms.ddev.site/</loc>', 'listing the home page at this host');
+if ($liveHttp) {
+    $sitemapLive = $curl('/sitemap.xml');
+    contains($sitemapLive, '200', '/sitemap.xml serves 200 over HTTP');
+    contains($sitemapLive, 'content-type: application/xml', 'as XML');
+    contains($sitemapLive, '<urlset', 'with a urlset');
+    contains($sitemapLive, '<loc>' . $cms->config['site']['base_url'] . '/</loc>', 'listing the home page at this host');
 
-$robotsLive = $curl('/robots.txt');
-contains($robotsLive, '200', '/robots.txt serves 200 over HTTP');
-contains($robotsLive, 'content-type: text/plain', 'as plain text');
-contains($robotsLive, 'Sitemap: https://dopamine-flatcms.ddev.site/sitemap.xml', 'and points at the sitemap');
+    $robotsLive = $curl('/robots.txt');
+    contains($robotsLive, '200', '/robots.txt serves 200 over HTTP');
+    contains($robotsLive, 'content-type: text/plain', 'as plain text');
+    contains($robotsLive, 'Sitemap: ' . $cms->config['site']['base_url'] . '/sitemap.xml', 'and points at the sitemap');
 
-// The tag is the whole reason this is not stale a minute after a client adds a
-// page: `site` is what every save purges, and a per-page tag never would be.
-foreach (['/sitemap.xml' => $sitemapLive, '/robots.txt' => $robotsLive] as $path => $head) {
-    contains($head, 'cache-tag: site', $path . ' carries the site cache tag');
-    missing($head, 'cache-tag: page:', '...and no page tag (' . $path . ')');
-    contains($head, 's-maxage=31536000', '...while still being held at the edge (' . $path . ')');
+    // The tag is the whole reason this is not stale a minute after a client adds a
+    // page: `site` is what every save purges, and a per-page tag never would be.
+    foreach (['/sitemap.xml' => $sitemapLive, '/robots.txt' => $robotsLive] as $path => $head) {
+        contains($head, 'cache-tag: site', $path . ' carries the site cache tag');
+        missing($head, 'cache-tag: page:', '...and no page tag (' . $path . ')');
+        contains($head, 's-maxage=31536000', '...while still being held at the edge (' . $path . ')');
+    }
 }
 
 // Nothing caches the sitemap on this side of the edge, so a page added right
@@ -190,8 +200,10 @@ register_shutdown_function(static fn (): bool => @unlink($newPage));
 file_put_contents($newPage, Yaml::dump([
     'title' => 'Νέα', 'slug' => '/nea-selida', 'blocks' => [],
 ], 6, 2));
-contains($curl('/sitemap.xml'), '<loc>https://dopamine-flatcms.ddev.site/nea-selida</loc>',
-    'a page added a second ago is already in the sitemap — it is generated, not stored');
+if ($liveHttp) {
+    contains($curl('/sitemap.xml'), '<loc>' . $cms->config['site']['base_url'] . '/nea-selida</loc>',
+        'a page added a second ago is already in the sitemap — it is generated, not stored');
+}
 unlink($newPage);
 
 // And every write path purges `site` alongside the page tag, which is the half
@@ -463,12 +475,22 @@ contains($o, 'refuses to load', '...and reports it as a config failure, not a pa
 
 section('Every script is at least syntactically a script');
 
-foreach (['deploy.sh', 'rollback.sh', 'release.sh', 'backup', 'restore-drill', 'new-site'] as $script) {
+foreach (['deploy.sh', 'rollback.sh', 'release.sh', 'site-env.sh', 'backup', 'restore-drill', 'new-site'] as $script) {
     ok(is_executable($root . '/bin/' . $script), 'bin/' . $script . ' is executable');
     [$s] = sh('bash -n ' . escapeshellarg('bin/' . $script));
     ok($s === 0, '...and parses');
 }
 ok(is_executable($root . '/bin/doctor'), 'bin/doctor is executable');
+
+$siteEnvFixture = $root . '/var/cache/site-env-' . bin2hex(random_bytes(4));
+file_put_contents($siteEnvFixture, "CONTENT_PATH=/from/shared/env\nCF_ZONE_ID=zone-from-env\n");
+[$s, $out] = sh('bash -c ' . escapeshellarg(
+    '. bin/site-env.sh; site_env_load ' . escapeshellarg($siteEnvFixture)
+    . ' 1; printf "%s|%s" "$CONTENT_PATH" "$CF_ZONE_ID"'
+));
+ok($s === 0 && $out === '/from/shared/env|zone-from-env',
+    'the operational scripts load paths and secrets from the same shared environment file as PHP');
+unlink($siteEnvFixture);
 
 section('current moves atomically, and a rollback moves it back');
 
@@ -551,6 +573,15 @@ foreach ([
     ok($at !== false && $at < $switchAt, $step . ' runs before current moves');
 }
 contains($deployText, 'release_switch "$root" "$previous"', 'and a failed post-switch smoke test switches back');
+contains($deployText, 'tests/run.sh --portable',
+    'deploy runs all test files without assuming a DDEV router exists on the VPS');
+ok(strpos($deployText, 'site_env_load "$env_file" 1') > strpos($deployText, 'tests/run.sh --portable'),
+    'the live environment is loaded only after isolated tests, so tests cannot mutate shared content');
+contains($deployText, 'ENV_FILE="$env_file"', 'doctor and the release smoke test receive the shared environment');
+
+$nginx = (string) file_get_contents($root . '/nginx.conf.example');
+contains($nginx, 'root /var/www/pelatis/current/public;',
+    'the production vhost serves the atomic current release rather than a stale public directory');
 
 // Everything, not by tag: a template or CSS change has no page id, so tag
 // purging would leave a year of stale HTML on every page it touched.
@@ -629,6 +660,14 @@ ok($s === 1, 'a failed push fails the job');
 contains($out, 'ALERTED:', 'and calls the monitored alert hook');
 contains($out, 'off-box recovery point has not moved', '...saying what it actually means');
 
+// That failed run already committed locally. With no new file change, the next
+// run takes the clean-index branch — it must keep failing until the pending
+// commit actually reaches the remote, not turn green just because git diff is clean.
+[$s, $out] = sh('bin/backup', ['BACKUP_ALERT' => 'echo ALERTED:'] + $backupEnv);
+ok($s === 1, 'a clean-index retry still fails while its pending commit cannot be pushed');
+contains($out, 'pending local commit', 'and names the recovery point that is still only local');
+contains($out, 'ALERTED:', 'the retry remains monitored rather than silently recovering');
+
 [$s, $out] = sh('bin/backup', ['CONTENT_PATH' => $backupRoot . '/var', 'VAR_PATH' => $backupRoot . '/var']);
 ok($s === 1, 'and a content directory that is not a git repository at all is refused');
 contains($out, 'not a git repository', '...rather than silently backing up nothing');
@@ -691,6 +730,8 @@ contains((string) file_get_contents($scaffold . '/config.php'), 'Πελάτης 
 contains((string) file_get_contents($scaffold . '/.env.example'), 'SITE_NOINDEX=1',
     'and a new site starts noindexed, because nobody has approved the copy yet');
 contains((string) file_get_contents($scaffold . '/nginx.conf.example'), 'pelatis.gr', 'the nginx example names the domain');
+contains((string) file_get_contents($scaffold . '/nginx.conf.example'), '/var/www/pelatis.gr/current/public',
+    'and its docroot uses the same deploy root as the generated environment');
 contains($out, 'composer install', 'and the next steps say so, since there is no vendor/ yet');
 
 // A real new site runs `composer install` here. Borrowing this one's vendor/ is

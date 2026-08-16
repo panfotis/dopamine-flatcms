@@ -235,6 +235,9 @@ DEPLOY_ROOT=/var/www/pelatis DEPLOY_REPO=git@github.com:dope/pelatis.git \
   bin/deploy.sh v1.4.0
 ```
 
+`shared/.env` must exist before the first deploy. The deploy, doctor, smoke
+server and PHP-FPM all read that same file; it is not copied into a release.
+
 Fetch the exact revision → `composer install --no-dev -o` → `composer audit` →
 the test suite → `bin/doctor` **against the shared content this release is
 about to serve** → a smoke test of the release serving itself → *then* flip
@@ -277,16 +280,19 @@ stops the deploy instead of the site.
 # Content backup. The recovery point is at most one hour, not "whenever
 # someone remembered". Holds the site-wide content lock, so it can never
 # commit a half-applied save.
-17 * * * *  cd /var/www/pelatis/current && BACKUP_ALERT='/usr/local/bin/alert' bin/backup
+17 * * * *  cd /var/www/pelatis/current && ENV_FILE=/var/www/pelatis/shared/.env \
+              BACKUP_ALERT='/usr/local/bin/alert' bin/backup
 
 # The drill that makes the backup a backup: clone the remote somewhere else,
 # check every referenced image is in it, run doctor against the result.
 # A green backup cron without this proves a push happened, nothing more.
-40 4 * * 1  cd /var/www/pelatis/current && BACKUP_REMOTE=git@github.com:dope/pelatis-content.git \
+40 4 * * 1  cd /var/www/pelatis/current && ENV_FILE=/var/www/pelatis/shared/.env \
+              BACKUP_REMOTE=git@github.com:dope/pelatis-content.git \
               DRILL_ALERT='/usr/local/bin/alert' bin/restore-drill
 
 # Disk, derivative-cache growth, permissions, content health.
-*/30 * * * * cd /var/www/pelatis/current && bin/doctor --quiet || /usr/local/bin/alert 'doctor failed'
+*/30 * * * * cd /var/www/pelatis/current && ENV_FILE=/var/www/pelatis/shared/.env \
+              bin/doctor --quiet || /usr/local/bin/alert 'doctor failed'
 
 # Public smoke check.
 */5 * * * *  curl -fsS -o /dev/null https://pelatis.gr/ || /usr/local/bin/alert 'site down'
@@ -315,28 +321,20 @@ Copies code, components and templates — never content, uploads, revisions or
 secrets. The scaffold starts with `SITE_NOINDEX=1`, because nobody has approved
 the copy yet.
 
-Set secrets as environment variables rather than editing `config.php`
-(in `/etc/php/8.4/fpm/pool.d/pelatis.conf`):
+Copy `.env.example` to `/var/www/pelatis/shared/.env`, fill it, make it readable
+only by the deploy/PHP-FPM users, and point the FPM pool at that one file
+(`/etc/php/8.4/fpm/pool.d/pelatis.conf`):
 
 ```ini
-env[AUTH_MODE]              = cf_access
-env[AUTH_DEV_BYPASS]        = 0
-env[CF_ACCESS_TEAM_DOMAIN]  = dope.cloudflareaccess.com
-env[CF_ACCESS_AUD]          = 4f2c…
-env[R2_ENABLED]             = 1
-env[R2_ACCOUNT_ID]          = …
-env[R2_ACCESS_KEY_ID]       = …
-env[R2_SECRET_ACCESS_KEY]   = …
-env[R2_BUCKET]              = pelatis-media
-env[R2_PUBLIC_BASE]         = https://media.pelatis.gr
-env[CF_IMAGES_ENABLED]      = 1
-env[CF_PURGE_ENABLED]       = 1
-env[CF_ZONE_ID]             = …
-env[CF_API_TOKEN]           = …
+env[ENV_FILE] = /var/www/pelatis/shared/.env
 ```
 
-**`AUTH_DEV_BYPASS=0` in production.** With it on, anything arriving with a
-loopback address is treated as logged in.
+The standard atomic layout also discovers `shared/.env` automatically; the
+explicit FPM value makes the contract visible in server configuration and keeps
+working if releases are mounted elsewhere.
+
+**`AUTH_DEV_BYPASS=0` in production.** With it on, authentication is skipped
+for every panel request, regardless of its source address.
 
 ---
 
@@ -544,7 +542,7 @@ tests/07_shipkit.php     nav, redirects, 500.twig, SITE_NOINDEX, sitemap and
                          rollback, backup and restore drill
 ```
 
-660 checks: `ddev exec bash tests/run.sh`. Run all of them after touching
+693 checks: `ddev exec bash tests/run.sh`. Run all of them after touching
 `Fields`, `Admin`, `Components`, `Media` or anything in `bin/`.
 
 CI (`.github/workflows/ci.yml`) runs the lint, `composer audit`, `bin/doctor`

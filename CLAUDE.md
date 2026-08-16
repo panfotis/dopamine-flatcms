@@ -100,21 +100,21 @@ full in §10 of the build plan.
 
 ## Dependencies
 
-Current: `twig/twig`, `symfony/yaml`, `firebase/php-jwt` (v7 — v6 carries
+Current: `twig/twig`, `symfony/yaml`, `symfony/dotenv`, `firebase/php-jwt` (v7 — v6 carries
 CVE-2025-45769), `symfony/html-sanitizer` (which pulls `league/uri` and two PSR
 HTTP interface packages transitively), `symfony/http-foundation` (no transitive
 dependencies; deliberately *not* `symfony/mime`, so sniff uploads with `finfo`
 rather than `UploadedFile::getMimeType()`). Extensions: `ext-curl`, `ext-dom`,
-`ext-exif`, `ext-gd`, `ext-json`, `ext-openssl` (tests mint Access tokens).
+`ext-exif`, `ext-fileinfo`, `ext-gd`, `ext-json`, `ext-openssl` (tests mint Access tokens).
 `ext-exif` is there because uploads are re-encoded to strip GPS, which discards
 the orientation tag too — so the rotation has to be baked into the pixels before
 that happens, or every portrait on the site is sideways. `bin/doctor` checks the
 same list against the *running* interpreter, since Composer resolves under the
 CLI php and the site runs under php-fpm.
 
-Test suite: 660 checks across seven files. Run all of them, not just the new ones.
+Test suite: 693 checks across seven files. Run all of them, not just the new ones.
 
-Planned, per the build plan: `symfony/mailer`, `symfony/dotenv`.
+Planned, per the build plan: `symfony/mailer`.
 
 **Do not add anything else without asking.** Explicitly rejected, with reasons:
 

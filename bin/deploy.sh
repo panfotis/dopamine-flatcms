@@ -29,6 +29,7 @@
 set -euo pipefail
 
 root="${DEPLOY_ROOT:-/var/www/pelatis}"
+env_file="${ENV_FILE:-$root/shared/.env}"
 repo="${DEPLOY_REPO:-}"
 keep="${DEPLOY_KEEP:-3}"
 php="${PHP_BIN:-php}"
@@ -38,9 +39,12 @@ revision="${1:-}"
 
 [ -n "$revision" ] || { echo "usage: bin/deploy.sh <git-revision>" >&2; exit 2; }
 [ -n "$repo" ] || { echo "DEPLOY_REPO is not set" >&2; exit 2; }
+[ -f "$env_file" ] || { echo "production environment file not found: $env_file" >&2; exit 2; }
 
 # shellcheck source=bin/release.sh
 . "$(dirname "$0")/release.sh"
+# shellcheck source=bin/site-env.sh
+. "$(dirname "$0")/site-env.sh"
 
 step() { printf '\n\033[1m── %s\033[0m\n' "$1"; }
 
@@ -71,7 +75,11 @@ step "Auditing dependencies"
 COMPOSER_HOME="$root/shared" "$composer" audit --working-dir="$release" --no-interaction
 
 step "Running the test suite"
-(cd "$release" && bash tests/run.sh)
+(cd "$release" && bash tests/run.sh --portable)
+
+# Only after tests have run in their isolated fixture environment. Loading this
+# earlier would let a test mutation follow CONTENT_PATH into live shared state.
+site_env_load "$env_file" 1
 
 # Against the *shared* content this release is about to serve, not against the
 # fixtures in the release. A schema rename that breaks a live page is exactly
@@ -80,6 +88,7 @@ step "Checking shared content"
 env CONTENT_PATH="$root/shared/content" \
     VAR_PATH="$root/shared/var" \
     UPLOADS_PATH="$root/shared/content/uploads" \
+    ENV_FILE="$env_file" \
     "$php" "$release/bin/doctor"
 
 # The release serving itself, before anything points at it. Catches a missing
@@ -87,7 +96,11 @@ env CONTENT_PATH="$root/shared/content" \
 # host and fails on this one.
 step "Smoke-testing the new release"
 smoke_port="${SMOKE_PORT:-8781}"
-"$php" -S "127.0.0.1:$smoke_port" -t "$release/public" "$release/public/router.php" >/dev/null 2>&1 &
+env CONTENT_PATH="$root/shared/content" \
+    VAR_PATH="$root/shared/var" \
+    UPLOADS_PATH="$root/shared/content/uploads" \
+    ENV_FILE="$env_file" \
+    "$php" -S "127.0.0.1:$smoke_port" -t "$release/public" "$release/public/router.php" >/dev/null 2>&1 &
 smoke_pid=$!
 trap 'kill "$smoke_pid" 2>/dev/null || true; cleanup_failed_build' EXIT
 sleep 1

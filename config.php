@@ -9,6 +9,30 @@
 
 declare(strict_types=1);
 
+use Symfony\Component\Dotenv\Dotenv;
+
+// One environment file is shared by every atomic release. ENV_FILE is the
+// explicit production contract; the two layout-aware candidates make the same
+// setup work when PHP resolves `current` either as the symlink name or as the
+// concrete releases/<timestamp> directory. A project-local .env remains handy
+// outside that layout. Existing process variables win over file values.
+$envFile = getenv('ENV_FILE');
+$envCandidates = is_string($envFile) && $envFile !== '' ? [$envFile] : [__DIR__ . '/.env'];
+
+if (basename(__DIR__) === 'current') {
+    $envCandidates[] = dirname(__DIR__) . '/shared/.env';
+}
+if (basename(dirname(__DIR__)) === 'releases') {
+    $envCandidates[] = dirname(__DIR__, 2) . '/shared/.env';
+}
+
+foreach ($envCandidates as $candidate) {
+    if (is_file($candidate)) {
+        (new Dotenv())->usePutenv()->loadEnv($candidate, 'APP_ENV', 'dev');
+        break;
+    }
+}
+
 if (!function_exists('env')) {
     function env(string $key, ?string $default = null): ?string
     {
@@ -146,6 +170,10 @@ $config = [
         // A 40 MP guard costs ~160 MB peak in GD; a crafted 30000×30000 PNG is
         // a few hundred KB on disk and ~3.6 GB decoded.
         'max_pixels'  => 40_000_000,
+        // Decoding the source and scaling it means both pixel buffers coexist.
+        // This second bound accounts for that destination rather than assuming
+        // max_pixels is the whole bill; it leaves headroom in a 256 MB worker.
+        'upload_memory_budget' => 128 * 1024 * 1024,
 
         /**
          * The local derivative contract, settled before any GD code exists

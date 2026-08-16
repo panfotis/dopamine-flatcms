@@ -43,7 +43,8 @@ not merely hidden in the UI (§10).
 ### Not built, and needed before a client site ships
 
 Deploy process · navigation/menus · redirects from old sites · 500 page ·
-new-site scaffold · staging noindex.
+new-site scaffold · staging noindex · **an editable site header and footer**
+(both are hardcoded markup in `layout.twig` today; Phase 6.5 makes them blocks).
 
 **These block launch. Phase 0 closes their production contracts and Phases 3–7
 build them; they are not "later".** This includes SEO and a contact form, which
@@ -69,6 +70,8 @@ is why the pilot site is Phase 8 — see §6.
 | Page identity | The **filename**, shared across locales | One identifier, nothing to keep in sync |
 | Internal links | Store the page id, not the URL | A slug change must never break a link |
 | Page types | None — a page is a free-form list of blocks | Constraints only pay off if clients compose pages |
+| Site header/footer | **Global blocks** in `_header.yml` / `_footer.yml`, rendered into every layout | A logo, a phone number and a row of social links are content; a second storage mechanism for them is not |
+| Global identity | A page id starting with `_` is **not routable** | One prefix rule, instead of a `routable:` key, a second directory, or a globals store carrying its own transaction, baseline and revision code |
 | i18n | One content file per language | Allows genuinely different slugs per language |
 | Locale resolution | **URL prefix only** | See Phase 9; host-based is a separate, later mode |
 | Form delivery | SMTP relay **and** stored on disk | A bounced message must not vanish |
@@ -82,7 +85,11 @@ is why the pilot site is Phase 8 — see §6.
 
 ### Out of scope
 
-- Adding/removing/reordering components from the panel
+- Adding/removing/reordering components from the panel — **including in a
+  global.** `_header.yml` and `_footer.yml` are page files, so §10.1 and §10.3
+  already cover them and are not relaxed because the file is shared
+- Per-page header/footer overrides (that is what `layout:` is for), and any
+  region beyond the two
 - Self-service account management (Access decides who gets in)
 - Draft/publish workflow — saving publishes
 - A general media library (per-field upload only; `image_list` is a grid inside one field, not a shared asset browser)
@@ -336,6 +343,14 @@ blocks:
 Plus globals `img()`, `site()` and (from Phase 5) `nav`. A component must never
 read another block's values; shared values belong on the page.
 
+A component may be placed in a page or in a global (§4, Globals), and the
+variables are identical either way: a header or footer block receives the
+**current** `page` and the same `nav`, so a `site_header` can mark `aria-current`
+on the active item. Nothing in the contract changes and no component needs to
+know where it was placed. `layout.twig` owns the `<header>`, `<main>` and
+`<footer>` landmarks — a global's component renders the contents, not a second
+landmark element.
+
 ### Why there is no `object` field type
 
 A block **is** an object — a map validated against a schema. So is a `list`
@@ -374,6 +389,35 @@ Instead of a type system:
 **Page creation is developer-only.** The panel lists and edits pages that exist;
 adding one is adding a file. Set that expectation with clients: a new Services
 page is five minutes of your time, not self-service.
+
+### Globals
+
+A page file whose id starts with `_` is a **global**: content that renders on
+every page rather than at a URL of its own.
+
+```
+content/pages/el/_header.yml
+content/pages/el/_footer.yml
+```
+
+It is an ordinary page file — `title:` (the panel's label for it) and `blocks:` —
+so it gets `load()`, `save()`, `transaction()`, `baseline()`, `snapshot()`,
+`revisions()`, `restore()`, the advisory locks, CSRF, the role table and
+`Fields::map()` without a line of code that is only about globals. That is the
+whole reason for the choice: a dedicated `content/globals.yml` would be a second
+copy of the page machinery, and a second save path is a second place for §10.1,
+§10.2 and §10.3 to drift apart.
+
+The prefix means exactly one thing: **not routable.** A global has no slug, is
+never served at a URL, never in `/sitemap.xml`, never in `nav()`, and never
+offered as a `link` target. `Content::isGlobal()` is the only copy of that rule,
+and `Content::list()` — already the single feed for routing, the sitemap,
+`nav()`, `pageUrl()` and the panel's page table — is the only place it is
+applied. The panel lists globals separately, off a sibling `Content::globals()`.
+
+A global carries no `seo:`, and its blocks are not in `page.blocks`, so
+`Cms::pageSummary()` cannot pull the site logo into a page's `og:image` or the
+footer address into its meta description.
 
 ---
 
@@ -424,6 +468,7 @@ Each phase ends with the full suite green.
 | 4 | Media core: image object, bounded GD transformations, `<picture>`, recursive sanitise, `list`, `link` picker | 5–7 d |
 | 5 | Ship kit: atomic deploy, content backup, doctor, nav, redirects, 500, site kit | 3–5 d |
 | 6 | SEO + sitemap | 1–1.5 d |
+| 6.5 | Site header + footer as global blocks | 1–1.5 d |
 | 7 | Contact form | 3–4 d *(deferred — only when a client needs a form)* |
 | 8 | **Pilot client site — the launch gate** | site only |
 | — | Repo split, incl. panel i18n (§3.1), then `v1.0.0` | 1.5–2 d |
@@ -887,6 +932,68 @@ lists every page with a `lastmod` and excludes `noindex` ones; `/robots.txt`
 points at it; saving any page purges the `site` tag so the sitemap is not stale;
 `seo` renders as a collapsed card that an editor can ignore.
 
+### Phase 6.5 — Site header and footer
+
+The last engine change before the pilot. Numbered 6.5 so the deferred Phase 7 and
+everything after it keep the numbers they already have in the tests, the commits
+and this document.
+
+Today `layout.twig` hardcodes the menu and a `©` line, so a client who wants a
+logo, a phone number, opening hours or a row of social links in the footer has
+nowhere to put them. Config keys are not the cheap way out: a logo is an `image`
+field, which means the upload path — `finfo` sniff, GD re-encode that strips
+EXIF/GPS, R2, server-derived `width`/`height` — and `picture.twig` derivatives. A
+string in `config.php` carries none of that. What a given site's header holds is
+also not known up front and differs per client, which is exactly the variation
+`schema.yml` absorbs without engine code.
+
+The design is §4, "Globals". Header and footer blocks **replace** the hardcoded
+markup rather than sitting beside it: the layout keeps the landmarks and the site
+CSS, and a `site_header` component renders the menu from the `nav` variable it
+already receives.
+
+1. **`src/Content.php`** — `isGlobal()`, and `list()`/`globals()` over one
+   private scan. `list()` keeps its current return shape and now excludes
+   globals; that single change is what removes them from routing, the sitemap,
+   `nav()`, `pageUrl()` and the panel's page table at once.
+2. **`src/Cms.php`** — extract the block loop in `renderPage()` into
+   `renderBlocks(array $blocks, array $shared): array` and call it three times:
+   `_header`, the page, `_footer`. A missing global file renders as an empty
+   region, never a fatal — the same policy as the unknown-component skip beside
+   it. Cost is two extra YAML parses per render, on a path that already parses
+   every page file for `nav()`, behind the edge cache.
+3. **`templates/layout.twig`** — drop the hardcoded `<nav class="site-nav">` and
+   the `©` line; render `header_blocks` inside `<header>` and `footer_blocks`
+   inside `<footer>`. The `.site-nav` / `.site-footer` CSS stays in the layout's
+   `<style>`, which is where all site CSS lives; components ship none.
+4. **`components/site_header/`, `components/site_footer/`** — the starter pair,
+   two files each and no registration, per §4. `site_header.twig` renders a logo
+   `image` plus the `nav` loop, carrying the `aria-label` and `aria-current` that
+   move out of the layout; `site_footer.twig` renders a copyright `text`, contact
+   details and a `list` of links. A `list` is what makes social URLs and footer
+   links client-editable **rows** without making blocks client-editable.
+5. **`content/pages/el/_header.yml`, `_footer.yml`** — seeds carrying those two
+   blocks, so a fresh site starts with today's output rather than a blank header.
+6. **`src/Admin.php` + `templates/admin/list.twig`** — a second short table for
+   `content->globals()`, linking to the existing `?action=edit&page=_header`. The
+   edit, save, upload, revisions and restore flows are untouched.
+7. **SEO card off for globals** — `edit.twig` hides it and `save()` skips the SEO
+   walk when `isGlobal()`, so an inert `seo:` map is never written into a global
+   and no editor is shown a card that does nothing.
+8. **`bin/doctor`** — validate the globals' blocks with the same walk as pages
+   (it iterates `list()` today, which now excludes them), and warn when a global
+   file is missing, since the menu now lives in one.
+
+**Cache purging needs no new code, and that is deliberate.** Every page response
+already carries the `site` tag and every save already purges it (Phase 6), so
+editing the header purges the whole site by the rule that is already there.
+
+**Done when:** the menu and footer render from `_header.yml`/`_footer.yml` on
+every page; an editor changes the footer phone number in the panel and sees it
+site-wide after one purge; `GET /_header` is a 404; `_header` is absent from
+`/sitemap.xml`, the menu and the `link` picker; a save to a global rides the same
+transaction, baseline and revision path as a page; and the full suite is green.
+
 ### Phase 7 — Contact form *(deferred)*
 
 **Not built before the pilot.** `contact_cta` already renders phone, email and
@@ -1144,6 +1251,23 @@ blocks:
       image: { src: '…', alt: '', width: 2400, height: 1600 }
 ```
 
+A **global** is the same file with fewer keys — no `slug`, no `nav`, no `seo`,
+no `private`, because it is never served at a URL (§4, Globals):
+
+```yaml
+# content/pages/el/_footer.yml
+# The leading underscore is the whole rule: not routable.
+title: Υποσέλιδο          # the panel's label for it, not a page title
+blocks:
+  - id: footer
+    type: site_footer
+    fields:
+      copyright: '…'
+      phone: '…'
+      social:                # a `list` — the client edits rows, not blocks
+        - { label: Instagram, url: 'https://…' }
+```
+
 ---
 
 ## 9. Fixed in the review pass
@@ -1206,6 +1330,12 @@ A change that weakens one is a bug even if the tests pass.
     them.
 12. **Restoring a revision re-runs sanitisation.** Never a file copy.
 
+**Globals add no invariant, and must not add a save path.** The `_` prefix (§4,
+Globals) is a *routing* rule, not a security boundary: a global is a page file,
+so what protects it is 1, 2 and 3 above, unchanged. A separate store for shared
+content would have meant a second implementation of all three, which is a second
+place for them to drift — which is why there isn't one.
+
 `tests/03_lockdown.php` and `tests/04_hardening.php` defend these. Extend them
 when adding a field type; never weaken them to make a feature pass.
 
@@ -1223,6 +1353,20 @@ ddev exec bash tests/run.sh     # 268 checks
 - `04_hardening.php` (65) — every issue in §9, plus roles-file and `editable` fail-closed cases
 - `05_concurrency.php` (16) — stale-save refusal, work preservation, presence markers
 - `06_production.php` (65) — §10.7 boot guard, production paths, atomic release, derivative contract, form caching
+
+Phase 6.5 adds, to the files that already exist rather than to a new one:
+
+- `01_render` — header and footer blocks appear on a page render, inside the
+  right landmark; a missing global file renders the page without them and
+  without a fatal
+- `02_admin` — the panel lists both globals; a save to `_header` writes; the
+  edit screen still emits no add/reorder/type input, and no SEO card
+- `03_lockdown` — the hostile-input battery aimed at `page=_header`: undeclared
+  field dropped, `editable: false` refused, `blocks[x][type]` ignored
+- `04_hardening` — `GET /_header` is a 404; `_header` is not in `/sitemap.xml`,
+  not in `nav()`, not an option in the `link` picker
+- `05_concurrency` — one stale-baseline conflict on `_header`, proving a global
+  rides the same transaction as a page
 
 Rules: every phase adds assertions; a new field type requires a hostile-input
 case; the suite is green before a phase is done. Assertions may be **rewritten**
@@ -1387,3 +1531,16 @@ tests alone are not enough for these operational flows.
 30. **Estimates include production work.** The platform range is now 24–34 days,
     reflecting the media, form, backup and deployment behavior the launch gate
     actually requires.
+
+### Shared-content amendment (v2.2)
+
+31. **Content above the page now exists, as non-routable page files.** v2 had no
+    place for a logo, a footer address or a row of social links: `layout.twig`
+    hardcoded the menu and the copyright line, and §4 said only "shared values
+    belong on the page". Phase 6.5 makes header and footer global blocks in
+    `_header.yml` / `_footer.yml`, where the leading underscore means "not
+    routable" and nothing else. A dedicated `content/globals.yml` with its own
+    transaction, baseline, revision and admin-save code was rejected: it would
+    have been a second copy of the page machinery, and therefore a second place
+    for the save invariants to drift. Config keys were rejected too — a logo is
+    an `image` field, which is the upload pipeline, not a string.

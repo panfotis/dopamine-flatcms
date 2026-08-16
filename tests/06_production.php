@@ -18,6 +18,8 @@ use Dopamine\FlatCms\Content;
 use Dopamine\FlatCms\Media;
 
 $root = dirname(__DIR__);
+$liveHttp = getenv('TEST_LIVE_HTTP') !== '0';
+$testBaseUrl = rtrim(getenv('TEST_BASE_URL') ?: 'https://dopamine-flatcms.ddev.site', '/');
 
 /** Load the fixture env into an array without touching this process's env. */
 function fixture_env(string $file): array
@@ -75,14 +77,38 @@ ok(($paths['cache'] ?? '') === $env['VAR_PATH'] . '/cache', 'config.php puts the
 ok(($paths['uploads'] ?? '') === $env['UPLOADS_PATH'], 'config.php resolves UPLOADS_PATH');
 ok(($paths['roles'] ?? '') === $env['ROLES_FILE'], 'config.php resolves ROLES_FILE');
 
+// Production does not export twenty values into every command. PHP entrypoints
+// load the one shared file, selected explicitly by ENV_FILE; prove that path in
+// a child process so Dotenv's process-level state cannot leak into this suite.
+$dotenvRoot = $root . '/var/cache/dotenv-' . bin2hex(random_bytes(4));
+mkdir($dotenvRoot, 0775, true);
+$dotenv = $dotenvRoot . '/.env';
+file_put_contents($dotenv, implode("\n", [
+    'APP_ENV=dev',
+    'CONTENT_PATH=' . $dotenvRoot . '/content',
+    'VAR_PATH=' . $dotenvRoot . '/var',
+    'UPLOADS_PATH=' . $dotenvRoot . '/content/uploads',
+    '',
+]));
+$envProbe = $dotenvRoot . '/probe.php';
+file_put_contents($envProbe, "<?php\nrequire " . var_export($root . '/vendor/autoload.php', true) . ";\n"
+    . "\$c = require " . var_export($root . '/config.php', true) . ";\n"
+    . "echo json_encode(\$c['paths']);\n");
+$fromFile = json_decode(run($envProbe, ['ENV_FILE' => $dotenv]), true);
+ok(($fromFile['content'] ?? '') === $dotenvRoot . '/content', 'ENV_FILE loads shared content configuration');
+ok(($fromFile['cache'] ?? '') === $dotenvRoot . '/var/cache', 'and shared var configuration in the same process');
+unlink($envProbe);
+unlink($dotenv);
+rmdir($dotenvRoot);
+
 // ── 2. Release discipline and page-storage shape ────────────────────────────
 
 section('Releases stay 0.x, and page storage has one permanent shape');
 
 $cmsBoot = require $root . '/config.php';
 $composer = json_decode((string) file_get_contents($root . '/composer.json'), true);
-ok(str_starts_with((string) ($composer['version'] ?? ''), '0.'),
-    'the package is ' . ($composer['version'] ?? '?') . ' — no stability promise before the pilot');
+ok(!array_key_exists('version', $composer),
+    'composer.json leaves versioning to git tags, so Composer can publish it cleanly');
 ok(($composer['license'] ?? '') === 'proprietary', 'license is still proprietary; going public is a deliberate decision, not a slip');
 
 // content/pages/<locale>/<id>.yml is the permanent shape. Phase 5 adopts it —
@@ -304,35 +330,37 @@ section('The R2 source adapter reads over HTTPS, and only over HTTPS');
 // The same bytes, reached the other way: config points media_bases and the R2
 // public base at this site's own HTTPS origin, so the fetch path runs for real
 // — redirects off, byte cap, timeout and all — without a bucket.
-$r2cfg = $cms->config;
-$r2cfg['r2']['public_base'] = 'https://dopamine-flatcms.ddev.site';
-$r2cms = new Cms($r2cfg);
-$r2bases = $r2cms->fieldContext()['media_bases'];
-$remote = 'https://dopamine-flatcms.ddev.site/uploads/_derive.jpg';
+if ($liveHttp) {
+    $r2cfg = $cms->config;
+    $r2cfg['r2']['public_base'] = $testBaseUrl;
+    $r2cms = new Cms($r2cfg);
+    $r2bases = $r2cms->fieldContext()['media_bases'];
+    $remote = $testBaseUrl . '/uploads/_derive.jpg';
 
-ok(in_array('https://dopamine-flatcms.ddev.site/', $r2bases, true), 'the R2 public base is appended to media_bases when configured');
+    ok(in_array($testBaseUrl . '/', $r2bases, true), 'the R2 public base is appended to media_bases when configured');
 
-$viaR2 = Media::encode(
-    $r2cfg,
-    Media::spec($r2cfg['images'], $r2bases, ['src' => $remote, 'w' => '640', 'f' => 'webp'])
-);
-ok($viaR2 !== null && is_file($viaR2['path']), 'a src under the R2 base is fetched and encoded');
-ok(@getimagesize($viaR2['path'])[0] === 640, 'to the same width the local adapter produces');
+    $viaR2 = Media::encode(
+        $r2cfg,
+        Media::spec($r2cfg['images'], $r2bases, ['src' => $remote, 'w' => '640', 'f' => 'webp'])
+    );
+    ok($viaR2 !== null && is_file($viaR2['path']), 'a src under the R2 base is fetched and encoded');
+    ok(@getimagesize($viaR2['path'])[0] === 640, 'to the same width the local adapter produces');
 
-// Content-addressed: the same bytes reached through either adapter are the same
-// derivative, so switching R2_ENABLED does not invalidate a cache.
-ok(basename($viaR2['path']) === basename($webp['path']),
-    'and to the same cache entry, because the key is the source content hash');
+    // Content-addressed: the same bytes reached through either adapter are the same
+    // derivative, so switching R2_ENABLED does not invalidate a cache.
+    ok(basename($viaR2['path']) === basename($webp['path']),
+        'and to the same cache entry, because the key is the source content hash');
 
-$plain = str_replace('https://', 'http://', $remote);
-$httpBases = array_map(static fn (string $b): string => str_replace('https://', 'http://', $b), $r2bases);
-$httpCfg = $r2cfg;
-$httpCfg['r2']['public_base'] = 'http://dopamine-flatcms.ddev.site';
-ok(Media::encode($httpCfg, Media::spec($httpCfg['images'], $httpBases, ['src' => $plain, 'w' => '640'])) === null,
-    'plain HTTP is refused: this runs on an anonymous GET and a downgraded fetch is not one we made');
+    $plain = str_replace('https://', 'http://', $remote);
+    $httpBases = array_map(static fn (string $b): string => str_replace('https://', 'http://', $b), $r2bases);
+    $httpCfg = $r2cfg;
+    $httpCfg['r2']['public_base'] = str_replace('https://', 'http://', $testBaseUrl);
+    ok(Media::encode($httpCfg, Media::spec($httpCfg['images'], $httpBases, ['src' => $plain, 'w' => '640'])) === null,
+        'plain HTTP is refused: this runs on an anonymous GET and a downgraded fetch is not one we made');
 
-ok(Media::spec($r2cfg['images'], $r2bases, ['src' => 'https://evil.tld/uploads/x.jpg', 'w' => '640']) === null,
-    'and a host that is not the configured base never reaches the adapter at all');
+    ok(Media::spec($r2cfg['images'], $r2bases, ['src' => 'https://evil.tld/uploads/x.jpg', 'w' => '640']) === null,
+        'and a host that is not the configured base never reaches the adapter at all');
+}
 
 section('AVIF is refused on the way in as well as on the way out');
 ok(!in_array('image/avif', $cms->config['images']['allowed'], true), 'avif is not an accepted upload type');
@@ -365,13 +393,15 @@ contains($bh, 'Cache-Tag: page:home,site', 'and still carries its purge tags');
 
 // Over real HTTP, through nginx, as Cloudflare would see it.
 $curl = static fn (string $path): string => (string) shell_exec(
-    'curl -sI ' . escapeshellarg('http://localhost' . $path) . ' 2>&1'
+    'curl -sI ' . escapeshellarg($testBaseUrl . $path) . ' 2>&1'
 );
-$live = $curl('/epikoinonia');
-ok(str_contains($live, '200'), 'the contact page serves 200 over HTTP');
-ok(stripos($live, 'no-store') !== false, 'and the live response really is no-store');
-ok(stripos($live, 's-maxage') === false, 'the live response offers the edge nothing');
-ok(stripos($curl('/'), 's-maxage=31536000') !== false, 'while the home page is still edge-cached for a year');
+if ($liveHttp) {
+    $live = $curl('/epikoinonia');
+    ok(str_contains($live, '200'), 'the contact page serves 200 over HTTP');
+    ok(stripos($live, 'no-store') !== false, 'and the live response really is no-store');
+    ok(stripos($live, 's-maxage') === false, 'the live response offers the edge nothing');
+    ok(stripos($curl('/'), 's-maxage=31536000') !== false, 'while the home page is still edge-cached for a year');
+}
 
 // ── 6. Production boot guard ────────────────────────────────────────────────
 

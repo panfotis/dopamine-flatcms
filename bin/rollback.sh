@@ -14,6 +14,10 @@ root="${DEPLOY_ROOT:-/var/www/pelatis}"
 
 # shellcheck source=bin/release.sh
 . "$(dirname "$0")/release.sh"
+# shellcheck source=bin/site-env.sh
+. "$(dirname "$0")/site-env.sh"
+
+site_env_load "$root/shared/.env" 1
 
 previous="$(release_previous "$root")"
 [ -n "$previous" ] || { echo "no previous release to roll back to" >&2; exit 1; }

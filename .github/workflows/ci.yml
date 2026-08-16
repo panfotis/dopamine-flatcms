@@ -18,7 +18,7 @@ jobs:
           # Pinned to the version production runs. A suite green on 8.5 and red
           # on 8.4 is worse than no CI.
           php-version: '8.4'
-          extensions: curl, dom, exif, gd, json, openssl
+          extensions: curl, dom, exif, fileinfo, gd, json, openssl
           coverage: none
           ini-values: memory_limit=256M
 
@@ -34,6 +34,7 @@ jobs:
           bash -n bin/deploy.sh
           bash -n bin/rollback.sh
           bash -n bin/release.sh
+          bash -n bin/site-env.sh
           bash -n bin/backup
           bash -n bin/restore-drill
           bash -n bin/new-site
@@ -41,11 +42,5 @@ jobs:
       - name: Doctor
         run: php bin/doctor
 
-      # 06 and 07 make real HTTPS requests to the DDEV origin, which does not
-      # exist here. They are the deploy's job; the rest run on every push.
       - name: Tests
-        run: |
-          for t in tests/0[1-5]_*.php; do
-            echo "── $(basename "$t")"
-            php "$t"
-          done
+        run: bash tests/run.sh --portable

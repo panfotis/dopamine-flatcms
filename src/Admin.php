@@ -190,6 +190,15 @@ final class Admin
         $posted = (array) ($opts['posted'] ?? []);
         $context = $this->context();
 
+        // Blocks and SEO already survive a refused/stale save. The title is the
+        // one editable value outside both maps, so preserve it explicitly too.
+        if (array_key_exists('posted_title', $opts) && $opts['posted_title'] !== null) {
+            $page['title'] = Fields::sanitise(
+                ['type' => 'text', 'max' => 120],
+                $opts['posted_title']
+            );
+        }
+
         // Decorate each block with its schema so the template can build the form.
         $blocks = [];
         foreach ($page['blocks'] as $block) {
@@ -338,6 +347,9 @@ final class Admin
         $id = (string) $request->request->get('page', '');
         $posted = (array) $request->request->all('blocks');
         $postedSeo = (array) $request->request->all('seo');
+        $postedTitle = $request->request->has('title')
+            ? Fields::sanitise(['type' => 'text', 'max' => 120], $request->request->get('title'))
+            : null;
         $context = $this->context();
 
         // Field name -> message, filled in by the walk below and handed to the
@@ -359,7 +371,7 @@ final class Admin
             $this->cms->content->transaction(
                 $id,
                 (string) $request->request->get('baseline', ''),
-                function (array $page) use ($request, $user, $posted, $postedSeo, $context, &$errors): array {
+                function (array $page) use ($user, $posted, $postedSeo, $postedTitle, $context, &$errors): array {
                     foreach ($page['blocks'] as $i => $block) {
                         $schema = $this->cms->components->get((string) $block['type']);
                         if ($schema === null) {
@@ -400,11 +412,8 @@ final class Admin
                     }
 
                     // Page title is the one non-block field a client may edit.
-                    if ($request->request->has('title')) {
-                        $page['title'] = Fields::sanitise(
-                            ['type' => 'text', 'max' => 120],
-                            $request->request->get('title')
-                        );
+                    if ($postedTitle !== null) {
+                        $page['title'] = $postedTitle;
                     }
 
                     // Nothing is written while a single field is refused: a
@@ -424,6 +433,7 @@ final class Admin
             $response = $this->edit($request, $user, $id, [
                 'posted'     => $posted,
                 'posted_seo' => $postedSeo,
+                'posted_title' => $postedTitle,
                 'errors'     => $errors,
             ]);
             $response->setStatusCode(422);
@@ -436,6 +446,7 @@ final class Admin
             return $this->edit($request, $user, $id, [
                 'posted'     => $posted,
                 'posted_seo' => $postedSeo,
+                'posted_title' => $postedTitle,
                 'conflict'   => $e->getMessage(),
             ]);
         }
@@ -599,6 +610,16 @@ final class Admin
             throw new RuntimeException('Το αρχείο δεν είναι έγκυρη εικόνα.');
         }
         if (($size[0] * $size[1]) > (int) $cfg['max_pixels']) {
+            throw new RuntimeException('Οι διαστάσεις της εικόνας είναι υπερβολικά μεγάλες.');
+        }
+
+        $scale = (int) $cfg['store_max_edge'] > 0
+            ? min(1, (int) $cfg['store_max_edge'] / max($size[0], $size[1]))
+            : 1;
+        $storedWidth = max(1, (int) round($size[0] * $scale));
+        $storedHeight = max(1, (int) round($size[1] * $scale));
+        $pixelBytes = (($size[0] * $size[1]) + ($storedWidth * $storedHeight)) * 4;
+        if ($pixelBytes > (int) $cfg['upload_memory_budget']) {
             throw new RuntimeException('Οι διαστάσεις της εικόνας είναι υπερβολικά μεγάλες.');
         }
 
