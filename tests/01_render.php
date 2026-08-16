@@ -317,7 +317,9 @@ ok(substr_count($galleryPage, '<picture>') >= count($photos), 'with one <picture
 contains($galleryPage, 'loading="lazy"', 'and lazily — a gallery is below the fold by construction');
 
 section('A video is a facade: nothing third-party loads until the visitor clicks');
-contains($galleryPage, 'class="video-facade"', 'the facade renders');
+ok(str_contains($galleryPage, 'class="video-facade"')
+    && str_contains($galleryPage, "while (box && !box.classList.contains('video-facade'))"),
+    'the facade renders and its script finds this instance past adjacent styles');
 contains($galleryPage, 'data-video-src="https://www.youtube-nocookie.com/embed/', 'pointing at the no-cookie host');
 missing($galleryPage, '<iframe', 'with no iframe on the page at all');
 missing($galleryPage, 'youtube.com/embed', 'and no request to youtube.com either — that is the whole point');

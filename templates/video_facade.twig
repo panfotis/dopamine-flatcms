@@ -58,12 +58,23 @@
     /* Replaced on click and never before: that is the whole contract. */
     (function (script) {
       var box = script.previousElementSibling;
-      box.querySelector('.video-play').addEventListener('click', function () {
+      /* A scoped style currently sits between the facade and this script.
+         Walk back to this instance without touching any other video facade. */
+      while (box && !box.classList.contains('video-facade')) {
+        box = box.previousElementSibling;
+      }
+      if (!box) return;
+
+      var button = box.querySelector('.video-play');
+      if (!button) return;
+
+      button.addEventListener('click', function () {
         var frame = document.createElement('iframe');
         frame.src = box.dataset.videoSrc;
         frame.allow = 'accelerometer; autoplay; encrypted-media; picture-in-picture';
         frame.allowFullscreen = true;
-        frame.title = box.querySelector('.sr-only').textContent;
+        var title = box.querySelector('.sr-only');
+        frame.title = title ? title.textContent : 'Video';
         box.replaceChildren(frame);
       });
     })(document.currentScript);
