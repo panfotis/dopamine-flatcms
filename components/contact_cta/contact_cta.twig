@@ -1,0 +1,19 @@
+{# Component: contact_cta #}
+<section class="contact-cta">
+  <div class="wrap">
+    <h2>{{ fields.heading }}</h2>
+    <ul>
+      {% if fields.phone %}<li><span>Τηλέφωνο</span><a href="tel:{{ fields.phone|replace({' ': ''}) }}">{{ fields.phone }}</a></li>{% endif %}
+      {% if fields.email %}<li><span>Email</span><a href="mailto:{{ fields.email }}">{{ fields.email }}</a></li>{% endif %}
+      {% if fields.address %}<li><span>Διεύθυνση</span>{{ fields.address|nl2br }}</li>{% endif %}
+    </ul>
+  </div>
+</section>
+
+<style>
+  .contact-cta{padding:64px 0;background:#f6f7f9;border-top:1px solid #e4e7eb}
+  .contact-cta ul{list-style:none;padding:0;margin:0;display:grid;gap:22px}
+  .contact-cta li span{display:block;font-size:12px;text-transform:uppercase;
+    letter-spacing:.07em;color:#5c6470;margin-bottom:3px}
+  @media (min-width:700px){.contact-cta ul{grid-template-columns:repeat(3,1fr)}}
+</style>

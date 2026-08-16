@@ -1,0 +1,32 @@
+label: Κείμενο με εικόνα
+description: Ενότητα με τίτλο, κείμενο και εικόνα στο πλάι.
+
+fields:
+  heading:
+    type: text
+    label: Τίτλος
+    max: 80
+
+  body:
+    type: richtext
+    label: Κείμενο
+    hint: Επιτρέπονται έντονα, πλάγια, λίστες και σύνδεσμοι.
+
+  image:
+    type: image
+    label: Εικόνα
+
+  image_alt:
+    type: text
+    label: Περιγραφή εικόνας
+    max: 120
+    hint: Για άτομα που χρησιμοποιούν αναγνώστη οθόνης. Βοηθά και το SEO.
+
+  media_side:
+    type: select
+    label: Θέση εικόνας
+    editable: false
+    options:
+      end: Δεξιά
+      start: Αριστερά
+    default: end

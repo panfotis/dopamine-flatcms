@@ -1,0 +1,256 @@
+{% extends 'admin/_layout.twig' %}
+{% block title %}{{ page.title }}{% endblock %}
+
+{% block content %}
+  <h1>{{ page.title }}</h1>
+  <p class="sub">
+    <a href="?">← Όλες οι σελίδες</a> ·
+    <code>{{ page.slug }}</code>
+  </p>
+
+  {% if notice %}<div class="flash ok">{{ notice }}</div>{% endif %}
+  {% if warn %}<div class="flash warn">{{ warn }}</div>{% endif %}
+
+  {% if conflict %}
+    <div class="flash err">
+      <strong>{{ conflict }}</strong>
+      <p style="margin:.6em 0 0">
+        Δεν αποθηκεύτηκε τίποτα. <strong>Τα κείμενα που γράψατε είναι ακόμα στη
+        φόρμα παρακάτω</strong> — ελέγξτε τα και πατήστε ξανά Αποθήκευση για να
+        αντικαταστήσετε την άλλη έκδοση, ή ανανεώστε τη σελίδα για να τα
+        απορρίψετε.
+      </p>
+    </div>
+  {% endif %}
+
+  {% if held_by %}
+    <div class="flash warn">
+      Ο/Η <strong>{{ held_by.user }}</strong> άνοιξε αυτή τη σελίδα
+      {% if held_by.minutes < 1 %}μόλις τώρα{% else %}πριν {{ held_by.minutes }} λεπτά{% endif %}.
+      Συνεννοηθείτε πριν αποθηκεύσετε.
+    </div>
+  {% endif %}
+
+  <form method="post" id="editor" enctype="multipart/form-data">
+    <input type="hidden" name="action" value="save">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="page" value="{{ page.id }}">
+    {# Fingerprint of the file as it was when this form was rendered. The save
+       is refused if it no longer matches, so a second tab cannot silently
+       overwrite what the first one saved. #}
+    <input type="hidden" name="baseline" value="{{ baseline }}">
+
+    <div class="card">
+      <header><h2>Σελίδα</h2></header>
+      <div class="body">
+        <div class="field">
+          <label for="page-title">Τίτλος σελίδας</label>
+          <input type="text" id="page-title" name="title" value="{{ page.title }}" maxlength="120">
+          <p class="hint">Εμφανίζεται στην καρτέλα του browser και στα αποτελέσματα αναζήτησης.</p>
+        </div>
+      </div>
+    </div>
+
+    {% for block in blocks %}
+      <div class="card">
+        <header>
+          <h2>{{ block.label }}</h2>
+          <span class="pill">{{ block.type }}</span>
+        </header>
+        <div class="body">
+          {% if block.missing %}
+            <div class="flash err">Το component «{{ block.type }}» δεν βρέθηκε στον φάκελο components/.</div>
+          {% elseif block.fields is empty %}
+            <p class="hint">Αυτή η ενότητα δεν έχει πεδία προς επεξεργασία.</p>
+          {% else %}
+            {% if block.hint %}<p class="hint" style="margin-bottom:16px">{{ block.hint }}</p>{% endif %}
+
+            {% for name, def in block.fields %}
+              {% set value = block.values[name]|default('') %}
+              {% set id = block.id ~ '-' ~ name %}
+              {% set fname = 'blocks[' ~ block.id ~ '][' ~ name ~ ']' %}
+              {% set locked = def.editable is same as(false) %}
+
+              <div class="field">
+                <label for="{{ id }}">
+                  {{ def.label }}
+                  {% if locked %}<span class="pill" style="margin-inline-start:6px">κλειδωμένο</span>{% endif %}
+                  {% if def.max is defined and not locked %}
+                    <span class="counter" data-for="{{ id }}" data-max="{{ def.max }}"></span>
+                  {% endif %}
+                </label>
+
+                {% if def.type == 'textarea' %}
+                  <textarea id="{{ id }}" name="{{ fname }}" {{ locked ? 'readonly' : '' }}
+                            {% if def.max is defined %}data-max="{{ def.max }}"{% endif %}>{{ value }}</textarea>
+
+                {% elseif def.type == 'richtext' %}
+                  {% if not locked %}
+                    <div class="rt-toolbar" data-rt-toolbar="{{ id }}">
+                      <button type="button" data-cmd="bold" title="Έντονα"><b>B</b></button>
+                      <button type="button" data-cmd="italic" title="Πλάγια"><i>I</i></button>
+                      <button type="button" data-cmd="insertUnorderedList" title="Λίστα">•</button>
+                      <button type="button" data-cmd="createLink" title="Σύνδεσμος">🔗</button>
+                      <button type="button" data-cmd="removeFormat" title="Καθαρισμός">✕</button>
+                    </div>
+                  {% endif %}
+                  <div class="rt" id="{{ id }}-rt" {{ locked ? '' : 'contenteditable="true"' }}
+                       data-target="{{ id }}">{{ value|raw }}</div>
+                  <textarea id="{{ id }}" name="{{ fname }}" hidden>{{ value }}</textarea>
+
+                {% elseif def.type == 'image' %}
+                  <div class="media">
+                    <div class="thumb" id="{{ id }}-thumb"
+                         style="{% if value %}background-image:url('{{ value }}'){% endif %}"></div>
+                    <div class="controls">
+                      {% if not locked %}
+                        <input type="file" id="{{ id }}-file" accept="image/*" hidden>
+                        <button type="button" class="btn ghost" data-upload="{{ id }}">Αλλαγή εικόνας</button>
+                        <button type="button" class="btn ghost" data-clear="{{ id }}">Αφαίρεση</button>
+                      {% endif %}
+                      <input type="hidden" id="{{ id }}" name="{{ fname }}" value="{{ value }}">
+                      <p class="path" id="{{ id }}-path">{{ value ?: 'Καμία εικόνα' }}</p>
+                    </div>
+                  </div>
+
+                {% elseif def.type == 'select' %}
+                  <select id="{{ id }}" name="{{ fname }}" {{ locked ? 'disabled' : '' }}>
+                    {% for optValue, optLabel in def.options|default({}) %}
+                      <option value="{{ optValue }}" {{ value == optValue ? 'selected' : '' }}>{{ optLabel }}</option>
+                    {% endfor %}
+                  </select>
+                  {% if locked %}<input type="hidden" name="{{ fname }}" value="{{ value }}">{% endif %}
+
+                {% else %}
+                  <input type="text" id="{{ id }}" name="{{ fname }}" value="{{ value }}"
+                         {{ locked ? 'readonly' : '' }}
+                         {% if def.max is defined %}maxlength="{{ def.max }}" data-max="{{ def.max }}"{% endif %}
+                         {% if def.placeholder is defined %}placeholder="{{ def.placeholder }}"{% endif %}>
+                {% endif %}
+
+                {% if def.hint is defined %}<p class="hint">{{ def.hint }}</p>{% endif %}
+              </div>
+            {% endfor %}
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+
+    <div class="savebar"><div class="inner">
+      <button class="btn" type="submit">Αποθήκευση</button>
+      <a class="btn ghost" href="{{ page.slug }}" target="_blank" rel="noopener">Προβολή σελίδας</a>
+      <span class="status" id="status">Οι αλλαγές δημοσιεύονται αμέσως μετά την αποθήκευση.</span>
+    </div></div>
+  </form>
+{% endblock %}
+
+{% block foot %}
+<script>
+(function () {
+  const form = document.getElementById('editor');
+  const status = document.getElementById('status');
+  const csrf = form.querySelector('[name=csrf]').value;
+  let dirty = false;
+  const touch = () => { dirty = true; };
+
+  /* ---- character counters ------------------------------------------- */
+  document.querySelectorAll('.counter[data-for]').forEach(el => {
+    const input = document.getElementById(el.dataset.for);
+    if (!input) return;
+    const max = parseInt(el.dataset.max, 10);
+    const paint = () => {
+      const n = (input.value || '').length;
+      el.textContent = n + '/' + max;
+      el.classList.toggle('over', n > max);
+    };
+    input.addEventListener('input', paint);
+    paint();
+  });
+
+  /* ---- minimal rich text --------------------------------------------
+     A contenteditable with four buttons. Deliberately tiny: the server
+     strips everything except p/br/strong/em/u/a/ul/ol/li anyway, so there
+     is no point offering the client formatting that will be thrown away. */
+  document.querySelectorAll('.rt[contenteditable]').forEach(rt => {
+    const target = document.getElementById(rt.dataset.target);
+    const sync = () => { target.value = rt.innerHTML; touch(); };
+    rt.addEventListener('input', sync);
+
+    rt.addEventListener('paste', e => {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+      document.execCommand('insertText', false, text);
+    });
+
+    const bar = document.querySelector('[data-rt-toolbar="' + rt.dataset.target + '"]');
+    if (!bar) return;
+    bar.addEventListener('click', e => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      rt.focus();
+      if (btn.dataset.cmd === 'createLink') {
+        const url = prompt('Διεύθυνση συνδέσμου:', 'https://');
+        if (url) document.execCommand('createLink', false, url);
+      } else {
+        document.execCommand(btn.dataset.cmd, false, null);
+      }
+      sync();
+    });
+  });
+
+  /* ---- image upload --------------------------------------------------- */
+  document.querySelectorAll('[data-upload]').forEach(btn => {
+    const id = btn.dataset.upload;
+    const file = document.getElementById(id + '-file');
+    const hidden = document.getElementById(id);
+    const thumb = document.getElementById(id + '-thumb');
+    const path = document.getElementById(id + '-path');
+
+    btn.addEventListener('click', () => file.click());
+
+    file.addEventListener('change', async () => {
+      if (!file.files.length) return;
+      const body = new FormData();
+      body.append('action', 'upload');
+      body.append('csrf', csrf);
+      body.append('file', file.files[0]);
+
+      btn.disabled = true;
+      status.textContent = 'Μεταφόρτωση…';
+      try {
+        const res = await fetch('?action=upload', { method: 'POST', body });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.message || 'Η μεταφόρτωση απέτυχε.');
+        hidden.value = data.url;
+        thumb.style.backgroundImage = "url('" + (data.preview || data.url) + "')";
+        path.textContent = data.url;
+        status.textContent = 'Η εικόνα ανέβηκε. Πατήστε Αποθήκευση.';
+        touch();
+      } catch (err) {
+        status.textContent = err.message;
+      } finally {
+        btn.disabled = false;
+        file.value = '';
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-clear]').forEach(btn => {
+    const id = btn.dataset.clear;
+    btn.addEventListener('click', () => {
+      document.getElementById(id).value = '';
+      document.getElementById(id + '-thumb').style.backgroundImage = '';
+      document.getElementById(id + '-path').textContent = 'Καμία εικόνα';
+      touch();
+    });
+  });
+
+  /* ---- don't lose work ------------------------------------------------ */
+  form.addEventListener('input', touch);
+  form.addEventListener('submit', () => { dirty = false; });
+  window.addEventListener('beforeunload', e => {
+    if (dirty) { e.preventDefault(); e.returnValue = ''; }
+  });
+})();
+</script>
+{% endblock %}

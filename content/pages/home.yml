@@ -1,0 +1,44 @@
+# Managed by Dopamine FlatCMS. Structure is edited here, content in /admin.
+title: Αρχική
+slug: /
+meta:
+  description: 'Δείγμα σελίδας για το FlatCMS.'
+blocks:
+  -
+    id: hero
+    type: hero
+    fields:
+      heading: 'Μικρά site, χωρίς βαρύ CMS leme!'
+      subheading: 'Στατική ταχύτητα, flat αρχεία, και ένα panel που ο πελάτης δεν μπορεί να χαλάσει.'
+      image: /uploads/2026/08/fotispan-sm-7ed239.png
+      cta_label: Επικοινωνία
+      cta_url: /epikoinonia
+      align: center
+  -
+    id: intro
+    type: text_image
+    fields:
+      heading: 'Τι κάνει διαφορετικά'
+      body: '<p>Κάθε ενότητα είναι ένας φάκελος με ένα <strong>schema.yml</strong> και ένα template. Το panel φτιάχνεται μόνο του από το schema.</p><ul><li>Χωρίς βάση δεδομένων</li><li>Χωρίς build step</li><li>Οι αλλαγές είναι live σε δευτερόλεπτα</li></ul>'
+      image: ''
+      image_alt: ''
+      media_side: end
+  -
+    id: second
+    type: text_image
+    fields:
+      heading: 'Ο πελάτης αλλάζει μόνο κείμενα'
+      body: '<p>Δεν υπάρχει κουμπί «προσθήκη ενότητας». Δεν υπάρχει drag &amp; drop. Ο πελάτης βλέπει τα πεδία που του δίνεις — τίποτα άλλο.</p>'
+      image: ''
+      image_alt: ''
+      media_side: start
+  -
+    id: contact
+    type: contact_cta
+    fields:
+      heading: 'Πείτε μας τι χρειάζεστε'
+      phone: '+30 210 0000000'
+      email: hello@example.gr
+      address: |-
+        Θεσσαλονίκη
+        Ελλάδα

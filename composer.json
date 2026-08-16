@@ -1,0 +1,27 @@
+{
+    "name": "dopamine/flatcms",
+    "description": "Flat-file CMS for small client sites. Locked components, text-only editing, Cloudflare Access auth, R2 media, edge cache purge.",
+    "type": "project",
+    "license": "proprietary",
+    "//": "Stays 0.x through the pilot (plan §3): storage and contracts still change, so there is no stability promise to make. v1.0.0 is cut only after the repo split's cold-install test and the pilot's first real edit/deploy/backup/restore cycle. Asserted in tests/06_production.php; the field goes away at the split, when git tags take over.",
+    "version": "0.1.0",
+    "require": {
+        "php": ">=8.4",
+        "ext-curl": "*",
+        "ext-dom": "*",
+        "ext-gd": "*",
+        "ext-json": "*",
+        "firebase/php-jwt": "^7.0",
+        "symfony/html-sanitizer": "^8.1",
+        "symfony/yaml": "^7.2",
+        "twig/twig": "^3.21"
+    },
+    "autoload": {
+        "psr-4": {
+            "Dopamine\\FlatCms\\": "src/"
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}

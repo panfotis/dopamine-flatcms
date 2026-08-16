@@ -1,0 +1,30 @@
+# Managed by Dopamine FlatCMS. Structure is edited here, content in /admin.
+title: Επικοινωνία
+slug: /epikoinonia
+# v1 policy: pages carrying a form are private and bypass edge caching. The
+# form lands in Phase 7; the caching decision is made now so Phase 7 cannot
+# quietly ship a cached CSRF token. See Cms::cacheHeaders().
+private: true
+meta:
+  description: 'Στοιχεία επικοινωνίας.'
+blocks:
+  -
+    id: hero
+    type: hero
+    fields:
+      heading: Επικοινωνία
+      subheading: 'Απαντάμε συνήθως εντός μίας εργάσιμης.'
+      image: /uploads/2026/08/38ea9d5c-2b28-464c-a3c8-432fb06b9df8-f8befb.png
+      cta_label: ''
+      cta_url: ''
+      align: start
+  -
+    id: details
+    type: contact_cta
+    fields:
+      heading: Στοιχεία
+      phone: '+30 210 0000000'
+      email: hello@example.gr
+      address: |-
+        Θεσσαλονίκη
+        Ελλάδα

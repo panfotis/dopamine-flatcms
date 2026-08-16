@@ -1,0 +1,28 @@
+{% extends 'admin/_layout.twig' %}
+{% block title %}Σελίδες{% endblock %}
+
+{% block content %}
+  <h1>Σελίδες</h1>
+  <p class="sub">Επιλέξτε σελίδα για να αλλάξετε τα κείμενα και τις εικόνες της.</p>
+
+  {% if notice %}<div class="flash ok">{{ notice }}</div>{% endif %}
+  {% if warn %}<div class="flash warn">{{ warn }}</div>{% endif %}
+
+  <div class="card">
+    <table>
+      <tr><th>Σελίδα</th><th>Διεύθυνση</th><th></th></tr>
+      {% for p in pages %}
+        <tr>
+          <td><strong>{{ p.title }}</strong></td>
+          <td><code>{{ p.slug }}</code></td>
+          <td style="text-align:end">
+            <a class="btn ghost" href="{{ p.slug }}" target="_blank" rel="noopener">Προβολή</a>
+            <a class="btn" href="?action=edit&amp;page={{ p.id }}">Επεξεργασία</a>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="3">Δεν βρέθηκαν σελίδες.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+{% endblock %}

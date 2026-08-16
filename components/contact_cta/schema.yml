@@ -1,0 +1,24 @@
+label: Στοιχεία επικοινωνίας
+description: Κλείσιμο σελίδας με τηλέφωνο, email και διεύθυνση.
+
+fields:
+  heading:
+    type: text
+    label: Τίτλος
+    max: 60
+    required: true
+
+  phone:
+    type: text
+    label: Τηλέφωνο
+    max: 30
+
+  email:
+    type: text
+    label: Email
+    max: 60
+
+  address:
+    type: textarea
+    label: Διεύθυνση
+    max: 140

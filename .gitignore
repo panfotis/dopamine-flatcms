@@ -1,0 +1,9 @@
+/vendor/
+/var/cache/
+/var/*.log
+/public/uploads/
+/content/.revisions/
+.env
+*.bak
+*.tmp
+var/locks/

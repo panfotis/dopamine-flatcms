@@ -1,0 +1,38 @@
+name: flatcms
+type: php
+docroot: public
+php_version: "8.4"
+webserver_type: nginx-fpm
+composer_version: "2"
+xdebug_enabled: false
+
+# No database anywhere in this project. Dropping the container saves ~300 MB of
+# RAM per project — worth it when several DDEV projects are up at once.
+omit_containers: [db]
+
+web_environment:
+  # Skips Cloudflare Access locally. This is the ONLY place it may be 1.
+  # It is an explicit flag: the code never infers it from REMOTE_ADDR, because
+  # in DDEV every request arrives from the router container anyway.
+  - AUTH_DEV_BYPASS=1
+  - AUTH_MODE=cf_access
+
+  # Must match the DDEV URL: img() builds absolute URLs from it when
+  # Cloudflare transformations are on.
+  - SITE_BASE_URL=https://flatcms.ddev.site
+
+  # Mailpit ships with DDEV — `ddev mailpit` opens the inbox. Used from the
+  # contact-form phase onward.
+  - MAIL_DSN=smtp://localhost:1025
+
+  # Cloudflare features off locally: uploads fall back to public/uploads,
+  # images are served untransformed, saves skip the purge call.
+  - R2_ENABLED=
+  - CF_IMAGES_ENABLED=
+  - CF_PURGE_ENABLED=
+
+hooks:
+  post-start:
+    - exec: composer install --no-interaction
+    # Writable by the web user, and never committed.
+    - exec: mkdir -p var/cache var/locks public/uploads content/.revisions

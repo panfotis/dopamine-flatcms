@@ -1,0 +1,53 @@
+server {
+    listen 443 ssl http2;
+    server_name pelatis.gr;
+
+    # Docroot is public/ — content/, src/, vendor/ and config.php sit above it
+    # and are never reachable over HTTP.
+    root /var/www/pelatis/public;
+    index index.php;
+
+    ssl_certificate     /etc/letsencrypt/live/pelatis.gr/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/pelatis.gr/privkey.pem;
+
+    # Pretty URLs: every path that is not a real file goes to index.php,
+    # which resolves it against content/pages/*.yml by slug.
+    location / {
+        try_files $uri $uri/ /index.php$is_args$args;
+    }
+
+    # The admin panel. Cloudflare Access sits in front of this path; PHP
+    # verifies the Access JWT so the origin cannot be hit directly.
+    location = /admin.php {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php8.4-fpm-pelatis.sock;
+
+        # Never let the panel be cached anywhere.
+        add_header Cache-Control "no-store, private" always;
+    }
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php8.4-fpm-pelatis.sock;
+    }
+
+    # Local upload fallback (only used when R2_ENABLED=0).
+    location /uploads/ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+        # Uploaded files are never executed, whatever their extension.
+        location ~ \.php$ { return 403; }
+    }
+
+    # Belt and braces: block dotfiles and any stray YAML under the docroot.
+    location ~ /\.        { deny all; }
+    location ~ \.ya?ml$   { deny all; }
+
+    client_max_body_size 16m;
+}
+
+server {
+    listen 80;
+    server_name pelatis.gr;
+    return 301 https://$host$request_uri;
+}
