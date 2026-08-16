@@ -1,0 +1,33 @@
+label: Υποσέλιδο
+description: Το κάτω μέρος κάθε σελίδας — κείμενο και σύνδεσμοι.
+
+fields:
+  # The copyright line is built by the template from the current year and the
+  # site name, so nobody has to remember to change it in January. This is the
+  # line beside it: address, VAT number, opening hours — whatever this client
+  # actually publishes.
+  note:
+    type: textarea
+    label: Κείμενο υποσέλιδου
+    max: 200
+    hint: Π.χ. διεύθυνση, ΑΦΜ ή ωράριο. Μία με δύο γραμμές.
+
+  # A repeater, so social profiles and a privacy-policy link are rows the
+  # client adds and removes — not blocks. `url` accepts an absolute address, a
+  # site-relative path, mailto: and tel:, and nothing else.
+  links:
+    type: list
+    label: Σύνδεσμοι
+    max: 10
+    item_label: label
+    hint: Social προφίλ ή σελίδες όπως όροι χρήσης. Ο πελάτης προσθέτει και αφαιρεί γραμμές.
+    fields:
+      label:
+        type: text
+        label: Κείμενο
+        max: 40
+        required: true
+      url:
+        type: url
+        label: Διεύθυνση
+        placeholder: https://instagram.com/…

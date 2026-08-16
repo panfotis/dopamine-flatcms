@@ -112,7 +112,7 @@ that happens, or every portrait on the site is sideways. `bin/doctor` checks the
 same list against the *running* interpreter, since Composer resolves under the
 CLI php and the site runs under php-fpm.
 
-Test suite: 693 checks across seven files. Run all of them, not just the new ones.
+Test suite: 742 checks across seven files. Run all of them, not just the new ones.
 
 Planned, per the build plan: `symfony/mailer`.
 
@@ -133,6 +133,10 @@ src/          Cms Admin Auth Components Content Fields Locks Media R2
 config/       roles.yml — email -> admin|editor, committed, no secrets
 components/   <name>/schema.yml + <name>.twig — one folder per component
 content/      pages/<locale>/*.yml, uploads/, .revisions/, redirects.yml
+              A page id starting with `_` — `_header`, `_footer` — is a
+              **global**: an ordinary page file that renders on every page
+              instead of at a URL. `Content::isGlobal()` is the only copy of
+              that rule and `Content::list()` the only place it is applied.
               A page carries `seo:` beside `title`/`slug`/`nav`; `/sitemap.xml`
               and `/robots.txt` are generated from those files, never stored.
               All of it tracked in git — that is the backup. Submissions live

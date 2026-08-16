@@ -38,30 +38,25 @@
   h2{font-size:clamp(1.5rem,3vw,2.25rem);letter-spacing:-.01em}
   .btn{display:inline-block;background:var(--accent);color:#fff;text-decoration:none;
        padding:.85em 1.6em;border-radius:8px;font-weight:600}
-  .site-footer{border-top:1px solid var(--line);margin-top:80px;padding:32px 0;color:var(--muted);font-size:15px}
-  .site-nav{border-bottom:1px solid var(--line)}
-  .site-nav .wrap{display:flex;gap:26px;padding-block:18px}
-  .site-nav a{color:var(--ink);text-decoration:none;font-weight:500}
-  .site-nav a[aria-current]{color:var(--accent)}
 </style>
 </head>
 <body>
-{# Order comes from each page's `nav:` key, not from the slug sort Content::list
-   happens to return. A page with no `nav:` is simply not in the menu. #}
-{% if nav %}
-  <nav class="site-nav" aria-label="Κύρια πλοήγηση">
-    <div class="wrap">
-      {% for item in nav %}
-        <a href="{{ item.url }}"{{ item.url == page.slug ? ' aria-current="page"' : '' }}>{{ item.label }}</a>
-      {% endfor %}
-    </div>
-  </nav>
+{# The header and the footer are content, not markup: `_header.yml` and
+   `_footer.yml`, edited in the panel like any page. This file owns the
+   landmarks and the site-wide CSS above; the components own what is inside
+   them, and ship their own styles the way every other component does.
+
+   Wrapped in a condition so a site with no `_header.yml` renders no empty
+   landmark — and renders at all, which is the point of the missing-file
+   policy in Cms::renderGlobal(). #}
+{% if header_blocks %}
+  <header>{% for block in header_blocks %}{{ block|raw }}{% endfor %}</header>
 {% endif %}
 <main>
   {% for block in blocks %}{{ block|raw }}{% endfor %}
 </main>
-<footer class="site-footer">
-  <div class="wrap">© {{ "now"|date("Y") }} {{ site('name') }}</div>
-</footer>
+{% if footer_blocks %}
+  <footer>{% for block in footer_blocks %}{{ block|raw }}{% endfor %}</footer>
+{% endif %}
 </body>
 </html>

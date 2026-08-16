@@ -1,0 +1,14 @@
+# Managed by Dopamine FlatCMS. Structure is edited here, content in /admin.
+# The leading underscore is the whole rule: this file is never served at a URL.
+# It renders inside <header> on every page.
+title: Κεφαλίδα
+blocks:
+  -
+    id: header
+    type: site_header
+    fields:
+      logo:
+        src: ''
+        alt: ''
+        width: 0
+        height: 0

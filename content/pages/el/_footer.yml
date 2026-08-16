@@ -1,0 +1,14 @@
+# Managed by Dopamine FlatCMS. Structure is edited here, content in /admin.
+# The leading underscore is the whole rule: this file is never served at a URL.
+# It renders inside <footer> on every page.
+title: Υποσέλιδο
+blocks:
+  -
+    id: footer
+    type: site_footer
+    fields:
+      note: 'Θεσσαλονίκη, Ελλάδα'
+      links:
+        -
+          label: Επικοινωνία
+          url: /epikoinonia

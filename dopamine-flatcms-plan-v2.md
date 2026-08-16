@@ -43,8 +43,8 @@ not merely hidden in the UI (§10).
 ### Not built, and needed before a client site ships
 
 Deploy process · navigation/menus · redirects from old sites · 500 page ·
-new-site scaffold · staging noindex · **an editable site header and footer**
-(both are hardcoded markup in `layout.twig` today; Phase 6.5 makes them blocks).
+new-site scaffold · staging noindex. *(The editable site header and footer that
+were on this list are Phase 6.5, done.)*
 
 **These block launch. Phase 0 closes their production contracts and Phases 3–7
 build them; they are not "later".** This includes SEO and a contact form, which
@@ -468,7 +468,7 @@ Each phase ends with the full suite green.
 | 4 | Media core: image object, bounded GD transformations, `<picture>`, recursive sanitise, `list`, `link` picker | 5–7 d |
 | 5 | Ship kit: atomic deploy, content backup, doctor, nav, redirects, 500, site kit | 3–5 d |
 | 6 | SEO + sitemap | 1–1.5 d |
-| 6.5 | Site header + footer as global blocks | 1–1.5 d |
+| 6.5 | ~~Site header + footer as global blocks~~ **done** | 1–1.5 d |
 | 7 | Contact form | 3–4 d *(deferred — only when a client needs a form)* |
 | 8 | **Pilot client site — the launch gate** | site only |
 | — | Repo split, incl. panel i18n (§3.1), then `v1.0.0` | 1.5–2 d |
@@ -964,8 +964,10 @@ already receives.
    every page file for `nav()`, behind the edge cache.
 3. **`templates/layout.twig`** — drop the hardcoded `<nav class="site-nav">` and
    the `©` line; render `header_blocks` inside `<header>` and `footer_blocks`
-   inside `<footer>`. The `.site-nav` / `.site-footer` CSS stays in the layout's
-   `<style>`, which is where all site CSS lives; components ship none.
+   inside `<footer>`, each behind a condition so a missing global leaves no
+   empty landmark. The nav and footer CSS goes with the markup, into the
+   components' own `<style>` blocks, exactly as every other component ships its
+   styles; the layout keeps the tokens and the page-wide rules.
 4. **`components/site_header/`, `components/site_footer/`** — the starter pair,
    two files each and no registration, per §4. `site_header.twig` renders a logo
    `image` plus the `nav` loop, carrying the `aria-label` and `aria-current` that

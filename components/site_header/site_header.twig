@@ -1,0 +1,42 @@
+{# Component: site_header — placed in _header.yml, so it renders on every page.
+
+   `nav` and `page` arrive exactly as they do in a page block: this template has
+   no idea it was rendered from a different file, and does not need one. #}
+<div class="site-head">
+  <div class="wrap">
+    <a class="brand" href="/">
+      {% if fields.logo.src|default('') %}
+        {% include 'picture.twig' with {
+             image: fields.logo,
+             widths: [640],
+             sizes: '200px',
+             lazy: false
+           } only %}
+      {% else %}
+        {{ site('name') }}
+      {% endif %}
+    </a>
+
+    {# Order comes from each page's `nav:` key, not from the slug sort
+       Content::list() happens to return. A page with no `nav:` is not in the
+       menu — which is how a landing page stays reachable but unlisted. #}
+    {% if nav %}
+      <nav class="site-nav" aria-label="Κύρια πλοήγηση">
+        {% for item in nav %}
+          <a href="{{ item.url }}"{{ item.url == page.slug ? ' aria-current="page"' : '' }}>{{ item.label }}</a>
+        {% endfor %}
+      </nav>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+  .site-head{border-bottom:1px solid var(--line)}
+  .site-head .wrap{display:flex;align-items:center;justify-content:space-between;
+    gap:26px;flex-wrap:wrap;padding-block:18px}
+  .site-head .brand{color:var(--ink);text-decoration:none;font-weight:700;font-size:18px}
+  .site-head .brand img{max-height:44px;width:auto}
+  .site-nav{display:flex;gap:26px;flex-wrap:wrap}
+  .site-nav a{color:var(--ink);text-decoration:none;font-weight:500}
+  .site-nav a[aria-current]{color:var(--accent)}
+</style>

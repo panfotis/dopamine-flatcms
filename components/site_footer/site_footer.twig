@@ -1,0 +1,27 @@
+{# Component: site_footer — placed in _footer.yml, so it renders on every page.
+
+   The year is computed, not typed. A client asked to maintain "© 2026" updates
+   it in March of the year after, or never. #}
+<div class="site-foot wrap">
+  <p class="copy">© {{ "now"|date("Y") }} {{ site('name') }}</p>
+  {% if fields.note %}<p class="note">{{ fields.note|nl2br }}</p>{% endif %}
+
+  {% if fields.links %}
+    <ul class="foot-links">
+      {% for item in fields.links %}
+        {# A row whose url was rejected by the sanitiser renders as plain text
+           rather than as a dead href — the same rule the hero's CTA follows. #}
+        <li>{% if item.url %}<a href="{{ item.url }}">{{ item.label }}</a>
+            {%- else %}{{ item.label }}{% endif %}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</div>
+
+<style>
+  .site-foot{border-top:1px solid var(--line);margin-top:80px;padding:32px 0;
+    color:var(--muted);font-size:15px;display:grid;gap:10px}
+  .site-foot p{margin:0}
+  .foot-links{list-style:none;padding:0;margin:0;display:flex;gap:20px;flex-wrap:wrap}
+  .foot-links a{color:var(--muted)}
+</style>

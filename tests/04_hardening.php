@@ -328,4 +328,29 @@ ok($nearRefused->getStatusCode() === 400, 'the combined source/destination memor
 contains((string) $nearRefused->getContent(), 'διαστάσεις', 'with the same actionable dimensions message');
 @unlink($nearFile);
 
+section('A global is content, never a URL');
+// One rule, applied in one place — Content::list() — which is why routing, the
+// sitemap, the menu and the link picker all agree without four separate checks.
+$globalCms = cms();
+$ids = array_column($globalCms->content->list(), 'id');
+ok(!in_array('_header', $ids, true) && !in_array('_footer', $ids, true),
+    'globals are absent from the page list: ' . implode(', ', $ids));
+ok(array_column($globalCms->content->globals(), 'id') === ['_footer', '_header'],
+    'and present in globals(), which is what the panel lists');
+
+ok($globalCms->content->findBySlug('/_header') === null, 'no slug resolves to a global');
+ok($globalCms->content->findBySlug('/header') === null, 'nor does the name without its prefix');
+missing($globalCms->sitemap(), '_header', 'the sitemap does not list one');
+missing($globalCms->sitemap(), '_footer', 'nor the other');
+$navIds = array_column($globalCms->nav(), 'id');
+ok(array_filter($navIds, static fn (string $id): bool => str_starts_with($id, '_')) === [],
+    'the menu never contains one: ' . implode(', ', $navIds));
+ok($globalCms->pageUrl('_header') === '', 'and a link field pointing at one resolves to nothing, like a deleted page');
+
+// The prefix is a routing rule, not a path guard: the id regex is what stops a
+// traversal, and it does so by collapsing the attempt to a plain id.
+ok($globalCms->content->load('../_header') !== null,
+    'a traversal attempt is stripped to a bare id rather than escaping the directory');
+ok($globalCms->content->load('../../config') === null, 'and cannot reach outside the pages directory');
+
 summary();

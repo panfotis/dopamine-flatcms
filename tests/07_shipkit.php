@@ -114,15 +114,15 @@ mkdir($broken, 0775, true);
 file_put_contents($broken . '/schema.yml', "label: Broken\nfields: {}\n");
 file_put_contents($broken . '/_broken.twig', '{{ no_such_twig_function() }}');
 
-$victim = $root . '/content/pages/el/_broken.yml';
+$victim = $root . '/content/pages/el/tmp-broken.yml';
 file_put_contents($victim, Yaml::dump([
     'title'  => 'Broken',
-    'slug'   => '/_broken',
+    'slug'   => '/tmp-broken',
     'blocks' => [['id' => 'b', 'type' => '_broken', 'fields' => []]],
 ], 6, 2));
 
 if ($liveHttp) {
-    $boom = $curl('/_broken');
+    $boom = $curl('/tmp-broken');
     contains($boom, '500', 'the response is a 500');
     contains($boom, 'Κάτι πήγε στραβά', '500.twig is what the visitor sees');
     missing($boom, 'Unknown "no_such_twig_function"', 'the Twig message does not reach the page');
@@ -195,7 +195,7 @@ if ($liveHttp) {
 // Nothing caches the sitemap on this side of the edge, so a page added right
 // now is in it on the next request. Everything after that is Cloudflare's, and
 // the `site` tag above is what makes the purge reach it.
-$newPage = $root . '/content/pages/el/_sitemap.yml';
+$newPage = $root . '/content/pages/el/tmp-sitemap.yml';
 register_shutdown_function(static fn (): bool => @unlink($newPage));
 file_put_contents($newPage, Yaml::dump([
     'title' => 'Νέα', 'slug' => '/nea-selida', 'blocks' => [],

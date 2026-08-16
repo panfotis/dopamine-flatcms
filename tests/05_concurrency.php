@@ -95,6 +95,39 @@ file_put_contents($lockFile, json_encode(['user' => 'fotis@wearedope.com', 'at' 
 ok($locks->heldByOther('home', 'pelatis@example.gr') === null, 'a marker older than the TTL is ignored');
 @unlink($lockFile);
 
+section('A global rides the same transaction as a page');
+// It is a page file, so lock, baseline and snapshot are not reimplemented for
+// it — this is the proof rather than an assumption.
+$headerFile = dirname(__DIR__) . '/content/pages/el/_header.yml';
+$headerBackup = $headerFile . '.concurrency.bak';
+copy($headerFile, $headerBackup);
+
+$staleGlobal = $cms->content->baseline('_header');
+$header = $cms->content->load('_header');
+$header['blocks'][0]['fields']['logo']['alt'] = 'Αλλαγή από τον συνάδελφο';
+$cms->content->save('_header', $header);
+
+$caughtGlobal = null;
+try {
+    $cms->content->transaction('_header', $staleGlobal, static fn (array $p): array => $p);
+} catch (StaleContentException $e) {
+    $caughtGlobal = $e;
+}
+ok($caughtGlobal instanceof StaleContentException, 'a stale save to the header is refused with the same typed exception');
+ok(Yaml::parseFile($headerFile)['blocks'][0]['fields']['logo']['alt'] === 'Αλλαγή από τον συνάδελφο',
+    "and the other person's header edit survived intact");
+// A refused transaction leaves no snapshot behind, so this asks after one that
+// is allowed to complete.
+$cms->content->transaction('_header', '', static function (array $p): array {
+    $p['blocks'][0]['fields']['logo']['alt'] = 'Δεύτερη αλλαγή';
+
+    return $p;
+});
+ok($cms->content->revisions('_header') !== [], 'a global is snapshotted before it is overwritten, like any page');
+
+rename($headerBackup, $headerFile);
+array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/_header.*.yml') ?: []);
+
 rename($backup, $file);
 // Scoped to the fixture page: a suite run must never wipe real revision history.
 array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/home.*.yml') ?: []);

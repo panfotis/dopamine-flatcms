@@ -52,6 +52,27 @@ final class Content
         return $this->dir . '/pages/' . $this->locale;
     }
 
+    /**
+     * A page id starting with `_` is a **global**: content that renders on
+     * every page — the site header, the site footer — rather than at a URL of
+     * its own.
+     *
+     * The prefix is the whole rule, and it means exactly one thing: **not
+     * routable**. Everything else about a global is an ordinary page file, and
+     * that is the point — load, save, transaction, baseline, snapshot,
+     * revisions, restore, the locks and the schema walk already work on it. A
+     * dedicated globals store would have been a second copy of all of them,
+     * and therefore a second place for the save invariants to drift.
+     *
+     * This is the only copy of the rule. list() is the only place it is
+     * applied, because list() is already the single feed for routing, the
+     * sitemap, nav(), pageUrl() and the panel's page table.
+     */
+    public static function isGlobal(string $id): bool
+    {
+        return str_starts_with($id, '_');
+    }
+
     /** A page id, or an exception. The only way an id becomes part of a path. */
     private function id(string $id): string
     {
@@ -69,14 +90,43 @@ final class Content
     }
 
     /**
+     * The routable pages. Globals are not among them, which is what keeps them
+     * out of routing, the sitemap, the menu, the link picker and the panel's
+     * page table without a second check in any of those five places.
+     *
      * @return list<array{id:string, title:string, slug:string,
      *                    nav:array<string,mixed>|null, noindex:bool, mtime:int}>
      */
     public function list(): array
     {
+        return $this->scan(false);
+    }
+
+    /**
+     * The globals, in the same shape — `_header`, `_footer`. Only the panel and
+     * bin/doctor ask for these; the render path loads them by id.
+     *
+     * @return list<array{id:string, title:string, slug:string,
+     *                    nav:array<string,mixed>|null, noindex:bool, mtime:int}>
+     */
+    public function globals(): array
+    {
+        return $this->scan(true);
+    }
+
+    /**
+     * @return list<array{id:string, title:string, slug:string,
+     *                    nav:array<string,mixed>|null, noindex:bool, mtime:int}>
+     */
+    private function scan(bool $global): array
+    {
         $out = [];
         foreach (glob($this->pagesDir() . '/*.yml') ?: [] as $file) {
             $id = basename($file, '.yml');
+            if (self::isGlobal($id) !== $global) {
+                continue;
+            }
+
             $data = Yaml::parseFile($file) ?? [];
             $out[] = [
                 'id'    => $id,

@@ -476,6 +476,56 @@ missing($html2, 'evil.gr', 'nor any laundered link');
 ok(array_diff(array_column(cms()->content->revisions('home'), 'file'), $namesBefore) !== [],
     'the version being replaced was snapshotted first — a restore is undoable');
 
+section('A global is locked down exactly like a page');
+// The header and the footer are page files that render on every page. The
+// rule does not relax because the file is shared — this is the same hostile
+// save, aimed at `_header`.
+$headerFile = dirname(__DIR__) . '/content/pages/el/_header.yml';
+$headerBackup = $headerFile . '.lockdown.bak';
+copy($headerFile, $headerBackup);
+
+$hostileGlobal = admin_post([
+    'action'   => 'save',
+    'csrf'     => 'test-token',
+    'page'     => '_header',
+    'baseline' => (string) hash_file('sha256', $headerFile),
+    'blocks'   => [
+        'header' => [
+            'logo'    => ['src' => '/uploads/2026/08/nope.jpg', 'alt' => 'Λογότυπο'],
+            'type'    => 'hero',                    // retype the block
+            'id'      => 'somethingelse',           // rename it
+            'onclick' => 'alert(1)',                // a field the schema never declared
+        ],
+        'injected' => ['note' => 'a block that is not in the file'],
+    ],
+    'title' => 'Χακαρισμένος τίτλος',
+]);
+ok($hostileGlobal->getStatusCode() === 303, 'the save is accepted — the payload is what gets refused');
+
+$storedHeader = Yaml::parseFile($headerFile);
+ok(count($storedHeader['blocks']) === 1, 'no block was added from the request');
+ok($storedHeader['blocks'][0]['type'] === 'site_header', 'the block was not retyped');
+ok($storedHeader['blocks'][0]['id'] === 'header', 'nor renamed');
+ok(!array_key_exists('onclick', $storedHeader['blocks'][0]['fields']), 'an undeclared field is dropped');
+ok($storedHeader['title'] === 'Κεφαλίδα', 'and a global\'s title is not client-editable');
+// The src guard is the same one: media_bases, not "anything that looks like a path".
+ok($storedHeader['blocks'][0]['fields']['logo']['src'] === '/uploads/2026/08/nope.jpg',
+    'a src inside media_bases is stored');
+
+$offsite = admin_post([
+    'action'   => 'save',
+    'csrf'     => 'test-token',
+    'page'     => '_header',
+    'baseline' => (string) hash_file('sha256', $headerFile),
+    'blocks'   => ['header' => ['logo' => ['src' => 'https://evil.gr/logo.png', 'alt' => 'x']]],
+]);
+ok($offsite->getStatusCode() === 303, 'an off-site logo save is not an error');
+ok(Yaml::parseFile($headerFile)['blocks'][0]['fields']['logo']['src'] === '',
+    'but the src is refused — a global is not a hole in the open-proxy guard');
+
+rename($headerBackup, $headerFile);
+array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/_header.*.yml') ?: []);
+
 // restore
 rename($backup, $file);
 // Scoped to the fixture page: a suite run must never wipe real revision history.

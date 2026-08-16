@@ -9,7 +9,7 @@ $cms = cms();
 section('Components load from disk');
 $types = array_keys($cms->components->all());
 sort($types);
-ok($types === ['contact_cta', 'faq', 'hero', 'text_image'], 'four components discovered: ' . implode(', ', $types));
+ok($types === ['contact_cta', 'faq', 'hero', 'site_footer', 'site_header', 'text_image'], 'six components discovered: ' . implode(', ', $types));
 ok($cms->components->get('hero')['fields']['heading']['max'] === 70, 'hero.heading max parsed from schema.yml');
 ok($cms->components->get('hero')['fields']['align']['editable'] === false, 'hero.align is marked non-editable');
 ok(!array_key_exists('align', $cms->components->editableFields('hero')), 'non-editable field excluded from editable set');
@@ -169,7 +169,7 @@ ok(substr_count($sitemap, '<xhtml:link') === substr_count($sitemap, '<loc>'), 'o
 
 // A noindex page asking not to be indexed and then being submitted anyway is
 // asking twice and answering differently.
-$sitemapFile = $cms->content->pagesDir() . '/_seo.yml';
+$sitemapFile = $cms->content->pagesDir() . '/tmp-seo.yml';
 // Away even if an assertion below throws: a stray page file in the locale
 // directory fails every page-count check in the suite from then on.
 register_shutdown_function(static fn (): bool => @unlink($sitemapFile));
@@ -236,5 +236,40 @@ contains($on, '/cdn-cgi/image/width=1280,quality=82,format=auto,fit=cover/', 'cd
 contains($on, 'https://media.test.gr/uploads/x.jpg', 'absolute source preserved');
 ok((new \Dopamine\FlatCms\Cms($cfg))->imageUrl('https://media.test.gr/uploads/x.jpg', 1200) === '',
     'the width allowlist applies to the Cloudflare path too — one set of variants, both backends');
+
+section('The header and the footer are content, on every page');
+$withGlobals = cms()->renderPage(cms()->content->findBySlug('/'));
+contains($withGlobals, '<header>', 'the layout renders a header landmark');
+contains($withGlobals, 'aria-label="Κύρια πλοήγηση"', 'and the menu comes from the site_header component inside it');
+contains($withGlobals, '<footer>', 'a footer landmark too');
+contains($withGlobals, 'Θεσσαλονίκη, Ελλάδα', 'carrying what _footer.yml actually says');
+contains($withGlobals, '© ' . date('Y'), 'and a copyright year the client never has to retype');
+
+// The same blocks on a different page, unchanged — that is the whole feature.
+$second = cms()->renderPage(cms()->content->findBySlug('/epikoinonia'));
+contains($second, 'Θεσσαλονίκη, Ελλάδα', 'the footer is on the second page as well');
+// `page` reaches a global's blocks as the page being rendered, not as the file
+// the block was read from, which is what lets the menu mark where you are.
+contains($second, 'href="/epikoinonia" aria-current="page"', 'and the menu marks the current page, from `page` shared into the region');
+
+// A global's blocks are not the page's, so nothing in the header or the footer
+// can become a page's meta description or its share image.
+$footerSeo = cms()->seo(cms()->content->load('epikoinonia'));
+ok(!str_contains($footerSeo['description'], 'Θεσσαλονίκη, Ελλάδα'),
+    'a footer sentence never becomes a page description: ' . $footerSeo['description']);
+
+section('A missing global renders an empty region, never a fatal');
+// A site whose developer has not written a _footer.yml yet must still serve
+// every page. bin/doctor is where that omission is reported, not a 500.
+$moved = cms()->content->pagesDir() . '/_footer.yml';
+rename($moved, $moved . '.gone');
+try {
+    $without = cms()->renderPage(cms()->content->findBySlug('/'));
+    contains($without, '<header>', 'the header still renders');
+    missing($without, '<footer>', 'the footer landmark is absent rather than empty');
+    contains($without, 'Μικρά site, χωρίς βαρύ CMS', 'and the page itself is served as normal');
+} finally {
+    rename($moved . '.gone', $moved);
+}
 
 summary();

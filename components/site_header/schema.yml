@@ -1,0 +1,12 @@
+label: Κεφαλίδα
+description: Το λογότυπο και το μενού, σε κάθε σελίδα του site.
+
+# The menu itself is not a field. Its labels and its order come from each page's
+# `nav:` key, which is developer-owned like every other structural key — so a
+# client cannot rename or reorder the navigation from here. What they can change
+# is the logo, which is the part that is genuinely theirs.
+fields:
+  logo:
+    type: image
+    label: Λογότυπο
+    hint: Κενό = εμφανίζεται το όνομα του site ως κείμενο.

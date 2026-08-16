@@ -20,6 +20,7 @@
 declare(strict_types=1);
 
 use Dopamine\FlatCms\Cms;
+use Dopamine\FlatCms\Content;
 use Symfony\Component\Yaml\Yaml;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
@@ -269,6 +270,8 @@ if ($stray !== []) {
 
 $slugs = [];
 $ids = [];
+$routable = [];
+$globals = [];
 foreach (glob($pagesDir . '/*.yml') ?: [] as $file) {
     $id = basename($file, '.yml');
     $ids[] = $id;
@@ -286,17 +289,31 @@ foreach (glob($pagesDir . '/*.yml') ?: [] as $file) {
         continue;
     }
 
-    $slug = (string) ($data['slug'] ?? '');
-    if ($slug === '' || !str_starts_with($slug, '/')) {
-        $fail(sprintf('page "%s": slug must start with "/" (got "%s")', $id, $slug));
+    // A global — `_header`, `_footer` — renders inside every page rather than
+    // at an address of its own, so it carries no slug to check and cannot
+    // collide with one. Everything below this still applies to it: its blocks
+    // are validated exactly like a page's.
+    if (Content::isGlobal($id)) {
+        $globals[] = $id;
+
+        if (isset($data['slug'])) {
+            $fail(sprintf('global "%s": carries a slug, but a global is never routed', $id));
+        }
+    } else {
+        $routable[] = $id;
+
+        $slug = (string) ($data['slug'] ?? '');
+        if ($slug === '' || !str_starts_with($slug, '/')) {
+            $fail(sprintf('page "%s": slug must start with "/" (got "%s")', $id, $slug));
+        }
+        $key = rtrim($slug, '/') ?: '/';
+        if (isset($slugs[$key])) {
+            // findBySlug returns the first match, so the second page is simply
+            // unreachable — with no error anywhere to say why.
+            $fail(sprintf('pages "%s" and "%s" share the slug "%s"', $slugs[$key], $id, $slug));
+        }
+        $slugs[$key] = $id;
     }
-    $key = rtrim($slug, '/') ?: '/';
-    if (isset($slugs[$key])) {
-        // findBySlug returns the first match, so the second page is simply
-        // unreachable — with no error anywhere to say why.
-        $fail(sprintf('pages "%s" and "%s" share the slug "%s"', $slugs[$key], $id, $slug));
-    }
-    $slugs[$key] = $id;
 
     $seen = [];
     foreach ((array) ($data['blocks'] ?? []) as $i => $block) {
@@ -333,6 +350,15 @@ foreach (glob($pagesDir . '/*.yml') ?: [] as $file) {
     }
 }
 
+// A missing global is a site with no menu or no footer on every page at once —
+// and Cms::renderGlobal() renders an empty region rather than fatalling, which
+// is right at request time and silent everywhere else. This is where it is said.
+foreach (['_header', '_footer'] as $required) {
+    if (!in_array($required, $globals, true)) {
+        $warn(sprintf('no %s.yml: nothing renders in that region on any page', $required));
+    }
+}
+
 // Every `link` field on every page: an id that no longer resolves renders as
 // plain text, which is correct behaviour and invisible from the outside.
 foreach ($componentsLoad ? $ids : [] as $id) {
@@ -352,7 +378,10 @@ foreach ($componentsLoad ? $ids : [] as $id) {
                 continue;
             }
             $target = (string) ($block['fields'][$name] ?? '');
-            if ($target !== '' && !in_array($target, $ids, true)) {
+            // Against the routable ids, not every file: pageUrl() resolves
+            // through Content::list(), so a link pointing at `_footer` renders
+            // as plain text exactly like a link to a page that was deleted.
+            if ($target !== '' && !in_array($target, $routable, true)) {
                 $warn(sprintf(
                     'page "%s", block "%s", field "%s": links to page id "%s", which does not exist',
                     $id,
@@ -426,7 +455,13 @@ if (!$quiet) {
     fwrite(
         $problems === [] ? STDOUT : STDERR,
         $problems === []
-            ? sprintf("doctor: ok (%d pages, %d components, %d warnings)\n", count($ids), count($types), count($warnings))
+            ? sprintf(
+                "doctor: ok (%d pages, %d globals, %d components, %d warnings)\n",
+                count($routable),
+                count($globals),
+                count($types),
+                count($warnings)
+            )
             : sprintf("doctor: %d problem(s)\n", count($problems))
     );
 }

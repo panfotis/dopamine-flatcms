@@ -221,6 +221,11 @@ final class Cms
      * Render a page: for each block, render its component template with that
      * block's fields, then drop the result into the layout.
      *
+     * Three regions, one loop. The header and the footer are content too —
+     * `_header.yml` and `_footer.yml`, edited in the panel like any page —
+     * and their blocks go through exactly the same schema lookup, the same
+     * defaults and the same unknown-component skip as the page's own.
+     *
      * @param array<string, mixed> $page
      */
     public function renderPage(array $page): string
@@ -232,10 +237,30 @@ final class Cms
         // Not addGlobal(): a global is built when the environment is, which
         // would read every page file on every admin request too. Here it costs
         // exactly one list() and only on the path that renders a menu.
+        //
+        // Handed to the header and footer blocks unchanged, so a `site_header`
+        // reads the *current* page and can mark the active menu item without
+        // knowing it was rendered from a different file.
         $shared = ['page' => $page, 'nav' => $this->nav()];
 
+        return $this->twig->render('layout.twig', $shared + [
+            'header_blocks' => $this->renderGlobal('_header', $shared),
+            'blocks'        => $this->renderBlocks((array) $page['blocks'], $shared),
+            'footer_blocks' => $this->renderGlobal('_footer', $shared),
+        ]);
+    }
+
+    /**
+     * One region's blocks, as rendered HTML strings.
+     *
+     * @param  array<int, array<string, mixed>> $blocks
+     * @param  array<string, mixed>             $shared
+     * @return list<string>
+     */
+    private function renderBlocks(array $blocks, array $shared): array
+    {
         $html = [];
-        foreach ($page['blocks'] as $block) {
+        foreach ($blocks as $block) {
             $schema = $this->components->get((string) $block['type']);
             if ($schema === null) {
                 // Unknown component: skip in production rather than fatal on a
@@ -249,7 +274,25 @@ final class Cms
             ]);
         }
 
-        return $this->twig->render('layout.twig', $shared + ['blocks' => $html]);
+        return $html;
+    }
+
+    /**
+     * A global's blocks, or none at all when the file is not there.
+     *
+     * A site without a `_footer.yml` renders without a footer — the same
+     * policy as the unknown-component skip above, and for the same reason: a
+     * missing file is a developer's omission, and a fatal on every page of a
+     * live client site is not the way to report it. bin/doctor says so instead.
+     *
+     * @param  array<string, mixed> $shared
+     * @return list<string>
+     */
+    private function renderGlobal(string $id, array $shared): array
+    {
+        $global = $this->content->load($id);
+
+        return $global === null ? [] : $this->renderBlocks((array) $global['blocks'], $shared);
     }
 
     /**

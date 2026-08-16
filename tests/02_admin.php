@@ -360,4 +360,51 @@ section('The panel is never cacheable');
 ok($denied->headers->get('Cache-Control') === 'no-store, private', 'even a 403 carries no-store, private');
 ok(admin_get([])->headers->get('Cache-Control') === 'no-store, private', 'and so does the page list');
 
+section('Globals are edited in the panel, on the same screen as a page');
+$index = render([]);
+contains($index, 'Σε όλες τις σελίδες', 'the page list carries a second table for the globals');
+contains($index, '?action=edit&amp;page=_header', 'linking to the header');
+contains($index, '?action=edit&amp;page=_footer', 'and to the footer');
+missing($index, 'href="/_header"', 'with no "view" link, because a global has no address to visit');
+
+$headerForm = render(['action' => 'edit', 'page' => '_header']);
+contains($headerForm, 'name="blocks[header][logo][src]"', 'the header opens the ordinary edit form');
+contains($headerForm, 'name="blocks[header][logo][alt]"', 'with the alt input the save path demands');
+// It renders inside every page and has no head of its own, so there is nothing
+// for the five SEO fields to reach. Admin::save() skips the same walk.
+missing($headerForm, 'name="seo[title]"', 'and no SEO card at all');
+missing($headerForm, 'name="title"', 'nor a page title, which for a global is a panel label');
+missing($headerForm, 'Προβολή σελίδας', 'nor a link to a page that does not exist');
+
+// Structure is still structure: the rule does not relax because the file is
+// shared across every page.
+missing($headerForm, 'Προσθήκη ενότητας', 'no "add component" button on a global either');
+missing($headerForm, 'name="blocks[header][type]"', 'nor a way to retype its block');
+
+$footerFile = dirname(__DIR__) . '/content/pages/el/_footer.yml';
+$footerBackup = $footerFile . '.globals.bak';
+copy($footerFile, $footerBackup);
+
+$_SESSION['csrf'] = 'the-real-token';
+$savedFooter = admin_post([
+    'action' => 'save', 'csrf' => 'the-real-token', 'page' => '_footer',
+    'baseline' => (string) hash_file('sha256', $footerFile),
+    'blocks' => ['footer' => ['note' => 'Νέα διεύθυνση', 'links' => [
+        ['label' => 'Instagram', 'url' => 'https://instagram.com/example'],
+    ]]],
+    'seo' => ['title' => 'δεν πρέπει να γραφτεί'],
+]);
+ok($savedFooter->getStatusCode() === 303, 'a save to a global is accepted');
+$storedFooter = \Symfony\Component\Yaml\Yaml::parseFile($footerFile);
+ok($storedFooter['blocks'][0]['fields']['note'] === 'Νέα διεύθυνση', 'and writes through the same schema walk');
+ok($storedFooter['blocks'][0]['fields']['links'][0]['url'] === 'https://instagram.com/example',
+    'including a row the client added to the list');
+ok(!array_key_exists('seo', $storedFooter),
+    'a posted seo map is never written into a global — the card is skipped on save, not merely hidden');
+// The panel's label for it is developer-owned, like a page's slug.
+ok($storedFooter['title'] === 'Υποσέλιδο', 'and its title is not a client-editable field');
+
+rename($footerBackup, $footerFile);
+array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/_footer.*.yml') ?: []);
+
 summary();

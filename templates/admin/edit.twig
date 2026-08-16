@@ -5,7 +5,11 @@
   <h1>{{ page.title }}</h1>
   <p class="sub">
     <a href="?">← Όλες οι σελίδες</a> ·
-    <code>{{ page.slug }}</code>
+    {% if global %}
+      εμφανίζεται σε όλες τις σελίδες
+    {% else %}
+      <code>{{ page.slug }}</code>
+    {% endif %}
   </p>
 
   {% if notice %}<div class="flash ok">{{ notice }}</div>{% endif %}
@@ -57,32 +61,37 @@
        is optional, the inputs post whether or not the card was ever opened,
        and the save path writes the stored values straight back — so "never
        touched it" and "cannot save" must not be the same thing. #}
-    <details class="card">
-      <summary>
-        <h2>SEO και κοινοποίηση</h2>
-        <span class="pill">προαιρετικό</span>
-      </summary>
-      <div class="body">
-        {# The same renderer as every other field, so a locked one is locked
-           here too and the alt input appears exactly where the save path
-           demands one. #}
-        {% for name, def in seo_fields %}
-          {{ _self.field(def, 'seo-' ~ name, 'seo[' ~ name ~ ']', seo[name]|default(''),
-                         not may_edit(def.editable, user.role), pages, page_ids, errors|default({})) }}
-        {% endfor %}
-      </div>
-    </details>
+    {# A global renders inside every page and has no head of its own, so there
+       is nothing for these five fields to reach. Admin::save() skips the same
+       walk — the card is not merely hidden. #}
+    {% if not global %}
+      <details class="card">
+        <summary>
+          <h2>SEO και κοινοποίηση</h2>
+          <span class="pill">προαιρετικό</span>
+        </summary>
+        <div class="body">
+          {# The same renderer as every other field, so a locked one is locked
+             here too and the alt input appears exactly where the save path
+             demands one. #}
+          {% for name, def in seo_fields %}
+            {{ _self.field(def, 'seo-' ~ name, 'seo[' ~ name ~ ']', seo[name]|default(''),
+                           not may_edit(def.editable, user.role), pages, page_ids, errors|default({})) }}
+          {% endfor %}
+        </div>
+      </details>
 
-    <div class="card">
-      <header><h2>Σελίδα</h2></header>
-      <div class="body">
-        <div class="field">
-          <label for="page-title">Τίτλος σελίδας</label>
-          <input type="text" id="page-title" name="title" value="{{ page.title }}" maxlength="120">
-          <p class="hint">Εμφανίζεται στην καρτέλα του browser και στα αποτελέσματα αναζήτησης.</p>
+      <div class="card">
+        <header><h2>Σελίδα</h2></header>
+        <div class="body">
+          <div class="field">
+            <label for="page-title">Τίτλος σελίδας</label>
+            <input type="text" id="page-title" name="title" value="{{ page.title }}" maxlength="120">
+            <p class="hint">Εμφανίζεται στην καρτέλα του browser και στα αποτελέσματα αναζήτησης.</p>
+          </div>
         </div>
       </div>
-    </div>
+    {% endif %}
 
     {% for block in blocks %}
       <div class="card">
@@ -119,7 +128,10 @@
 
     <div class="savebar"><div class="inner">
       <button class="btn" type="submit">Αποθήκευση</button>
-      <a class="btn ghost" href="{{ page.slug }}" target="_blank" rel="noopener">Προβολή σελίδας</a>
+      {# A global has no address to open — it is already on every page. #}
+      {% if not global %}
+        <a class="btn ghost" href="{{ page.slug }}" target="_blank" rel="noopener">Προβολή σελίδας</a>
+      {% endif %}
       {% if user.role == 'admin' %}
         <a class="btn ghost" href="?action=revisions&amp;page={{ page.id }}">Προηγούμενες εκδόσεις</a>
       {% endif %}

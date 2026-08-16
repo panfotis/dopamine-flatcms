@@ -170,6 +170,10 @@ final class Admin
     {
         return $this->html($this->cms->twig->render('admin/list.twig', [
             'pages'  => $this->cms->content->list(),
+            // The header and the footer: the same edit screen, reached from a
+            // second short table rather than mixed in among pages that have a
+            // URL to visit.
+            'globals' => $this->cms->content->globals(),
             'user'   => $user,
             'notice' => $request->query->get('ok'),
             'warn'   => $request->query->get('warn'),
@@ -268,6 +272,11 @@ final class Admin
 
         return $this->html($this->cms->twig->render('admin/edit.twig', [
             'page'     => $page,
+            // A global — the header, the footer — has no URL to visit and no
+            // `seo:` to fill in, so the form drops both. Passed as a flag
+            // rather than inferred from an empty slug in the template: the rule
+            // has one implementation, in Content, and this is it being asked.
+            'global'   => Content::isGlobal($id),
             'blocks'   => $blocks,
             'seo'      => $seo,
             'seo_fields' => $seoFields,
@@ -371,7 +380,7 @@ final class Admin
             $this->cms->content->transaction(
                 $id,
                 (string) $request->request->get('baseline', ''),
-                function (array $page) use ($user, $posted, $postedSeo, $postedTitle, $context, &$errors): array {
+                function (array $page) use ($id, $user, $posted, $postedSeo, $postedTitle, $context, &$errors): array {
                     foreach ($page['blocks'] as $i => $block) {
                         $schema = $this->cms->components->get((string) $block['type']);
                         if ($schema === null) {
@@ -399,20 +408,30 @@ final class Admin
                     // editor never opened still posts every input, and every
                     // field in it is optional — so an ignored card writes the
                     // stored values straight back rather than refusing a save.
-                    try {
-                        $page['seo'] = $this->cleanValues(
-                            $this->seoSchema(),
-                            (array) ($page['seo'] ?? []),
-                            $postedSeo,
-                            $context,
-                            $user['role']
-                        );
-                    } catch (ValidationException $e) {
-                        $errors[$e->field('seo')] = $e->getMessage();
+                    //
+                    // A global has no head of its own: it renders inside every
+                    // page and its `seo:` would be read by nobody. Skipped so
+                    // the walk cannot write an inert five-key map into
+                    // _header.yml that a later reader would take for a setting.
+                    if (!Content::isGlobal($id)) {
+                        try {
+                            $page['seo'] = $this->cleanValues(
+                                $this->seoSchema(),
+                                (array) ($page['seo'] ?? []),
+                                $postedSeo,
+                                $context,
+                                $user['role']
+                            );
+                        } catch (ValidationException $e) {
+                            $errors[$e->field('seo')] = $e->getMessage();
+                        }
                     }
 
                     // Page title is the one non-block field a client may edit.
-                    if ($postedTitle !== null) {
+                    // A global's title is not one: it is the label the panel
+                    // lists it under, developer-owned like a slug, and the form
+                    // does not offer it — so a posted one was forged.
+                    if ($postedTitle !== null && !Content::isGlobal($id)) {
                         $page['title'] = $postedTitle;
                     }
 
@@ -518,7 +537,7 @@ final class Admin
         $this->cms->content->restore(
             $id,
             (string) $request->request->get('revision', ''),
-            function (array $revision, array $page) use ($user, $context): array {
+            function (array $revision, array $page) use ($id, $user, $context): array {
                 // Index the revision's blocks by id, which is the shape
                 // cleanValues() expects — exactly what a POST body would be.
                 $values = [];
@@ -548,13 +567,16 @@ final class Admin
                 // A revision's SEO is untrusted input like the rest of it: the
                 // canonical in a file written last month has never been through
                 // the current URL rule, and it goes into a <link> in the head.
-                $page['seo'] = $this->cleanValues(
-                    $this->seoSchema(),
-                    (array) ($page['seo'] ?? []),
-                    (array) ($revision['seo'] ?? []),
-                    $context,
-                    $user['role']
-                );
+                // Same exemption as save(): a global has no head to reach.
+                if (!Content::isGlobal($id)) {
+                    $page['seo'] = $this->cleanValues(
+                        $this->seoSchema(),
+                        (array) ($page['seo'] ?? []),
+                        (array) ($revision['seo'] ?? []),
+                        $context,
+                        $user['role']
+                    );
+                }
 
                 if (isset($revision['title'])) {
                     $page['title'] = Fields::sanitise(
