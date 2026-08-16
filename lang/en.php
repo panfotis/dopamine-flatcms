@@ -128,6 +128,7 @@ return [
     'sub.ambiguous' => 'The send failed ambiguously. It may already have been delivered — which is why it is not retried automatically. Check the mailbox before trying again.',
     'sub.sent_ok' => 'Sent.',
     'sub.not_sent' => 'Not sent — check the log.',
+    'sub.not_retryable' => 'This message is not safe to retry. Check its delivery status first.',
     'sub.deleted' => 'The message was deleted.',
 
     // ── Errors ──────────────────────────────────────────────────────────────
@@ -190,4 +191,15 @@ return [
     'form.body_page' => 'Page',
     'form.body_date' => 'Date',
     'form.body_reference' => 'Reference',
+    'form.name' => 'Name',
+    'form.email' => 'Email',
+    'form.phone' => 'Phone',
+    'form.message' => 'Message',
+    'contact.phone' => 'Phone',
+    'contact.email' => 'Email',
+    'contact.address' => 'Address',
+    'video.play' => 'Play video',
+    'site.home' => 'Home',
+    'error.not_found' => 'The page %s was not found.',
+    'error.server' => 'Something went wrong. Try again shortly.',
 ];

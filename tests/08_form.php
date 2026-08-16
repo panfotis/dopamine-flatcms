@@ -216,6 +216,16 @@ $two = $subs->store('epikoinonia', 'el', ['name' => 'Β'], 'hash');
 ok($one['id'] !== $two['id'], 'two submissions never share an id');
 ok($subs->get($one['month'], $one['id'])['values']['name'] === 'Α', 'a record reads back by id');
 
+$reviewed = $subs->store('epikoinonia', 'el', ['name' => 'Γ'], 'hash');
+$subs->update($reviewed['month'], $reviewed['id'], ['status' => Submissions::REVIEW, 'error' => 'timeout']);
+ok($form->deliver($reviewed, []) === false, 'a review record is refused even when a retry is forged server-side');
+ok($subs->get($reviewed['month'], $reviewed['id'])['status'] === Submissions::REVIEW,
+    'and remains awaiting review rather than being sent or downgraded to unsent');
+
+$alreadySent = $subs->store('epikoinonia', 'el', ['name' => 'Δ'], 'hash');
+$subs->update($alreadySent['month'], $alreadySent['id'], ['status' => Submissions::SENT]);
+ok($form->deliver($alreadySent, []) === false, 'an already-sent record cannot be delivered twice through a stale action');
+
 // Deleting one and updating another cannot race: they are different files.
 $subs->update($two['month'], $two['id'], ['status' => Submissions::SENT]);
 ok($subs->delete($one['month'], $one['id']) === true, 'one record is deleted');

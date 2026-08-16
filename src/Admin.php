@@ -709,6 +709,7 @@ final class Admin
 
         return $this->html($this->cms->twig->render('admin/submission.twig', [
             'record' => $record,
+            'max_attempts' => max(1, (int) $this->cms->config['form']['max_attempts']),
             'csrf'   => $this->csrf($request),
             'user'   => $user,
         ]));
@@ -754,6 +755,14 @@ final class Admin
         $record = $this->cms->submissions->get($month, $id);
         if ($record === null) {
             throw new RuntimeException($this->cms->lang->t('err.submission_missing'));
+        }
+
+        if (($record['status'] ?? '') !== Submissions::UNSENT
+            || (int) ($record['attempts'] ?? 0) >= max(1, (int) $this->cms->config['form']['max_attempts'])) {
+            return new RedirectResponse(
+                '?action=submissions&warn=' . urlencode($this->cms->lang->t('sub.not_retryable')),
+                303
+            );
         }
 
         $sent = (new Form($this->cms))->deliver($record, $this->recipientFor($record));

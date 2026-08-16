@@ -1,7 +1,7 @@
 {
     "name": "dopamine/flatcms",
     "description": "Flat-file CMS for small client sites. Locked components, text-only editing, Cloudflare Access auth, R2 media, edge cache purge.",
-    "type": "project",
+    "type": "library",
     "license": "proprietary",
     "require": {
         "php": ">=8.4",
@@ -21,9 +21,39 @@
         "twig/twig": "^3.21"
     },
     "autoload": {
+        "files": [
+            "src/bootstrap.php"
+        ],
         "psr-4": {
             "Dopamine\\FlatCms\\": "src/"
         }
+    },
+    "bin": [
+        "bin/doctor",
+        "bin/mail-retry",
+        "bin/prune-submissions"
+    ],
+    "archive": {
+        "exclude": [
+            "/.github",
+            "/.ddev",
+            "/CLAUDE.md",
+            "/bin/new-site",
+            "/composer.lock",
+            "/config",
+            "/config.php",
+            "/config.yaml.example",
+            "/content",
+            "/ddev",
+            "/dopamine-flatcms-admin-split-view.md",
+            "/dopamine-flatcms-plan-v2.md",
+            "/nginx.conf.example",
+            "/public",
+            "/skeleton",
+            "/tests",
+            "/vendor",
+            "/var"
+        ]
     },
     "config": {
         "sort-packages": true

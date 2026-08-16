@@ -60,7 +60,21 @@ final class Cms
 
         $this->lang = new Lang($paths['lang'] ?? __DIR__ . '/../lang', (string) ($config['admin_locale'] ?? Lang::SOURCE));
 
-        $this->components = new Components($paths['components']);
+        $componentDirs = array_values(array_unique((array) $paths['components']));
+        $templateRoots = array_values(array_unique((array) $paths['templates']));
+        $templateDirs = [];
+        // Keep each site's template and component roots ahead of the matching
+        // package roots. That makes a complete local override win regardless
+        // of whether it is placed under templates/ or components/.
+        for ($i = 0, $n = max(count($templateRoots), count($componentDirs)); $i < $n; $i++) {
+            foreach ([$templateRoots[$i] ?? null, $componentDirs[$i] ?? null] as $dir) {
+                if (is_string($dir) && !in_array($dir, $templateDirs, true)) {
+                    $templateDirs[] = $dir;
+                }
+            }
+        }
+
+        $this->components = new Components($componentDirs);
         // The default until the entry point says otherwise, which it does on
         // every request that carries a locale prefix.
         $this->locale     = $this->defaultLocale();
@@ -73,7 +87,10 @@ final class Cms
         $this->cf         = new Cloudflare($config['cloudflare']);
         $this->locks      = new Locks(dirname($paths['cache']) . '/locks');
 
-        $loader = new FilesystemLoader([$paths['templates'], $paths['components']]);
+        // Site roots come first and package roots follow. Twig and component
+        // discovery use the same precedence, so overriding a starter component
+        // means adding two files locally and never editing vendor/.
+        $loader = new FilesystemLoader($templateDirs);
         $this->twig = new Environment($loader, [
             'cache'      => $config['twig_cache'] ? $paths['cache'] . '/twig' : false,
             'autoescape' => 'html',
@@ -530,6 +547,7 @@ final class Cms
             'page'       => $page,
             'nav'        => $this->nav(),
             'locale'     => $this->locale,
+            'home_url'   => $this->localeUrl('/'),
             // One list, used by the head for hreflang and by the header
             // component for the switcher. Two lists would disagree.
             'alternates' => $this->alternates($page),
@@ -925,7 +943,10 @@ final class Cms
      */
     public function cacheHeaders(array $page): array
     {
-        if (($page['private'] ?? false) === true) {
+        // A form creates session-bound state whether or not the page author
+        // remembered the YAML flag. The runtime owns the security invariant;
+        // bin/doctor still reports the missing declaration so it can be fixed.
+        if (($page['private'] ?? false) === true || (new Form($this))->blockOn($page) !== null) {
             // No Cache-Tag: there is nothing at the edge to purge, and emitting
             // one would imply otherwise.
             return ['Cache-Control: no-store, private'];

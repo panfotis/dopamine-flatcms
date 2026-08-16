@@ -139,8 +139,12 @@ $config = [
         'uploads'    => env('UPLOADS_PATH', $contentPath . '/uploads'),
     ],
 
-    // Twig template cache. Set false while developing.
-    'twig_cache' => false,
+    // Twig template cache. Off in dev so an edited .twig takes effect on the
+    // next reload; on in prod, where it is the difference between compiling
+    // every template from source on each request and doing it once. The edge
+    // cache hides that cost on public pages but not on the panel, which is
+    // never edge-cached and so pays it on every single request.
+    'twig_cache' => env_bool('TWIG_CACHE', env('APP_ENV', 'dev') === 'prod'),
 
     'auth' => [
         // 'cf_access' = trust Cloudflare Access (recommended, zero auth code)

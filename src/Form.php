@@ -207,7 +207,10 @@ final class Form
             );
 
             if ($def['required'] && $value === '') {
-                $errors[$name] = $this->cms->siteLang()->t('field.required', $def['label']);
+                $errors[$name] = $this->cms->siteLang()->t(
+                    'field.required',
+                    $this->cms->siteLang()->t($def['label'])
+                );
                 continue;
             }
 
@@ -241,24 +244,42 @@ final class Form
         $limit = max(1, (int) $this->cms->config['form']['rate_limit']);
         $file = $dir . '/' . $ipHash . '.json';
 
-        $state = is_file($file) ? json_decode((string) @file_get_contents($file), true) : null;
-        $state = is_array($state) ? $state : [];
+        $handle = @fopen($file, 'c+');
+        if ($handle === false || !flock($handle, LOCK_EX)) {
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
 
-        $since = (int) ($state['since'] ?? 0);
-        $count = (int) ($state['count'] ?? 0);
-
-        if (time() - $since > $window) {
-            $since = time();
-            $count = 0;
+            return true; // disk trouble must not silently eat a real lead
         }
 
-        @file_put_contents(
-            $file,
-            json_encode(['since' => $since, 'count' => $count + 1], JSON_THROW_ON_ERROR),
-            LOCK_EX
-        );
+        try {
+            rewind($handle);
+            $state = json_decode((string) stream_get_contents($handle), true);
+            $state = is_array($state) ? $state : [];
 
-        return $count < $limit;
+            $now = time();
+            $since = (int) ($state['since'] ?? 0);
+            $count = (int) ($state['count'] ?? 0);
+
+            if ($now - $since >= $window) {
+                $since = $now;
+                $count = 0;
+            }
+
+            rewind($handle);
+            ftruncate($handle, 0);
+            fwrite($handle, json_encode(
+                ['since' => $since, 'count' => $count + 1],
+                JSON_THROW_ON_ERROR
+            ));
+            fflush($handle);
+
+            return $count < $limit;
+        } finally {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+        }
     }
 
     /**
@@ -349,44 +370,58 @@ final class Form
      */
     public function deliver(array $record, array $fields): bool
     {
-        $to = $this->recipient($fields);
-        $dsn = (string) $this->cms->config['form']['dsn'];
-        $from = (string) $this->cms->config['form']['from'];
-
-        if ($to === '' || $dsn === '' || $from === '') {
-            // A box that has not been configured yet stores everything unsent
-            // rather than pretending. bin/mail-retry picks them up the moment
-            // it is.
-            $this->mark($record, self::mailFailure('mail is not configured'));
-
-            return false;
-        }
-
         try {
-            $mailer = new Mailer(Transport::fromDsn($dsn));
-            $mailer->send(
-                (new Email())
-                    ->from($from)
-                    ->to($to)
-                    // The visitor's address goes here and never in From: a
-                    // From the domain has no SPF for is what puts the whole
-                    // site's mail in spam.
-                    ->replyTo(...$this->replyTo($record))
-                    ->subject($this->cms->siteLang()->t('form.subject', (string) $this->cms->config['site']['name']))
-                    ->text($this->body($record))
+            $result = $this->cms->submissions->transact(
+                (string) $record['month'],
+                (string) $record['id'],
+                function (array $current) use ($fields): array {
+                    $max = max(1, (int) $this->cms->config['form']['max_attempts']);
+                    if (($current['status'] ?? '') !== Submissions::UNSENT
+                        || (int) ($current['attempts'] ?? 0) >= $max) {
+                        return [null, false];
+                    }
+
+                    $to = $this->recipient($fields);
+                    $dsn = (string) $this->cms->config['form']['dsn'];
+                    $from = (string) $this->cms->config['form']['from'];
+
+                    if ($to === '' || $dsn === '' || $from === '') {
+                        return [$this->failure($current, 'mail is not configured'), false];
+                    }
+
+                    try {
+                        $mailer = new Mailer(Transport::fromDsn($dsn));
+                        $mailer->send(
+                            (new Email())
+                                ->from($from)
+                                ->to($to)
+                                // The visitor's address goes here and never in
+                                // From: a domain without SPF is what puts the
+                                // whole site's mail in spam.
+                                ->replyTo(...$this->replyTo($current))
+                                ->subject($this->cms->siteLang()->t(
+                                    'form.subject',
+                                    (string) $this->cms->config['site']['name']
+                                ))
+                                ->text($this->body($current))
+                        );
+                    } catch (Throwable $e) {
+                        return [$this->failure($current, $e->getMessage()), false];
+                    }
+
+                    return [['status' => Submissions::SENT, 'error' => ''], true];
+                }
             );
         } catch (Throwable $e) {
-            $this->mark($record, self::mailFailure($e->getMessage()));
+            // The durable copy already exists. A status-write failure is an
+            // operational error, not a reason to tell the visitor their words
+            // were lost and invite a duplicate submission.
+            error_log('[dopamine-flatcms] form: could not update delivery state — ' . $e->getMessage());
 
             return false;
         }
 
-        $this->cms->submissions->update((string) $record['month'], (string) $record['id'], [
-            'status' => Submissions::SENT,
-            'error'  => '',
-        ]);
-
-        return true;
+        return $result === true;
     }
 
     /**
@@ -408,17 +443,15 @@ final class Form
         ];
     }
 
-    /**
-     * @param array<string, mixed>                $record
-     * @param array{status: string, error: string} $change
-     */
-    private function mark(array $record, array $change): void
+    /** @param array<string, mixed> $record */
+    private function failure(array $record, string $message): array
     {
+        $change = self::mailFailure($message);
         error_log('[dopamine-flatcms] form: delivery failed (' . $change['status'] . ') — ' . $change['error']);
 
-        $this->cms->submissions->update((string) $record['month'], (string) $record['id'], $change + [
+        return $change + [
             'attempts' => (int) ($record['attempts'] ?? 0) + 1,
-        ]);
+        ];
     }
 
     /**

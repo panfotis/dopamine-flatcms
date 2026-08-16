@@ -1,0 +1,13 @@
+title: Header
+blocks:
+  -
+    id: header
+    type: site_header
+    fields:
+      logo:
+        src: ''
+        alt: ''
+        width: 0
+        height: 0
+      nav_label: Main navigation
+      lang_label: Language

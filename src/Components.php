@@ -43,8 +43,13 @@ final class Components
         return $editable === true || ($editable === 'admin' && $role === 'admin');
     }
 
-    public function __construct(private readonly string $dir)
+    /** @var list<string> */
+    private readonly array $dirs;
+
+    /** @param string|list<string> $dirs first directory wins */
+    public function __construct(string|array $dirs)
     {
+        $this->dirs = array_values(array_unique(array_filter((array) $dirs, 'is_string')));
     }
 
     /** @return array<string, array<string, mixed>> */
@@ -55,22 +60,30 @@ final class Components
         }
 
         $out = [];
-        foreach (glob($this->dir . '/*', GLOB_ONLYDIR) ?: [] as $path) {
-            $type = basename($path);
-            $schemaFile = $path . '/schema.yml';
-            if (!is_file($schemaFile)) {
-                continue;
+        foreach ($this->dirs as $dir) {
+            foreach (glob($dir . '/*', GLOB_ONLYDIR) ?: [] as $path) {
+                $type = basename($path);
+                // Site roots are first. Once a type exists, its schema and
+                // template are both the site's; package defaults cannot merge
+                // half a component underneath it.
+                if (isset($out[$type])) {
+                    continue;
+                }
+                $schemaFile = $path . '/schema.yml';
+                if (!is_file($schemaFile)) {
+                    continue;
+                }
+
+                $schema = Yaml::parseFile($schemaFile) ?? [];
+                $schema['type']     = $type;
+                $schema['label']  ??= ucfirst(str_replace('_', ' ', $type));
+                $schema['fields'] ??= [];
+                $schema['template'] = $type . '/' . $type . '.twig';
+
+                $schema['fields'] = self::normalise($schema['fields']);
+
+                $out[$type] = $schema;
             }
-
-            $schema = Yaml::parseFile($schemaFile) ?? [];
-            $schema['type']     = $type;
-            $schema['label']  ??= ucfirst(str_replace('_', ' ', $type));
-            $schema['fields'] ??= [];
-            $schema['template'] = $type . '/' . $type . '.twig';
-
-            $schema['fields'] = self::normalise($schema['fields']);
-
-            $out[$type] = $schema;
         }
 
         return $this->cache = $out;

@@ -4,8 +4,10 @@
 prototype, then amended with a production-readiness review. What changed and
 why is in §13.
 
-**Status:** Phases 0–3 done, **268 checks passing**. Next up is Phase 4 (media
-core). Security fixes from the review applied.
+**Status (2026-08-16):** Platform Phases 0–7 and 9–10 are implemented, the
+Composer engine/skeleton split is implemented, and **973 checks pass**. Phase 8
+remains the real pilot-site launch and operational cycle; that cannot be
+declared complete by platform code alone.
 **Audience:** Claude Code in VS Code, against DDEV. Read this and `CLAUDE.md`
 before changing anything.
 
@@ -40,15 +42,12 @@ not merely hidden in the UI (§10).
 | Revisions — snapshot, list and restore, admin-only | Done (Phase 3) |
 | Security hardening from the review | Done, 65 tests |
 
-### Not built, and needed before a client site ships
+### Remaining launch gate
 
-Deploy process · navigation/menus · redirects from old sites · 500 page ·
-new-site scaffold · staging noindex. *(The editable site header and footer that
-were on this list are Phase 6.5, done.)*
-
-**These block launch. Phase 0 closes their production contracts and Phases 3–7
-build them; they are not "later".** This includes SEO and a contact form, which
-is why the pilot site is Phase 8 — see §6.
+The platform work is built. What remains is Phase 8: use the skeleton for a
+real client site and complete its first edit, deploy, backup, restore drill,
+and rollback exercise. That evidence—not another platform feature—is the v1.0
+release gate.
 
 ---
 
@@ -124,8 +123,9 @@ edit-in-vendor / tag / bump cycle for a package whose product fit has not yet
 been tested. Keep development versions at `0.x`; there is no semver stability
 promise while Phases 2–8 still change contracts and storage.
 
-After Phase 8, split into **two packages**. Tag `v1.0.0` only after the split's
-cold-install test passes and the pilot has completed its first real edit,
+The source tree now stages **two packages**: this root is the engine package and
+`skeleton/` is the create-project package to publish from its own VCS repo. Tag
+`v1.0.0` only after the split's cold-install test passes and the pilot has completed its first real edit,
 deploy, backup and restore cycle. Phase 5 adopts the locale-directory page
 layout even for a single-language site, so Phase 9 adds locales without another
 page-storage migration:

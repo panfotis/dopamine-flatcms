@@ -5,6 +5,12 @@ files. The client edits text and images — nothing else.
 
 No database. No build step. No admin UI for structure.
 
+This repository is the Composer engine package (`dopamine/flatcms`). The
+[`skeleton/`](skeleton/) directory is the separate
+`dopamine/flatcms-skeleton` project template: publish it as its own VCS package,
+then create each site with `composer create-project`. Site code overrides
+package components and templates without editing `vendor/`.
+
 ```
 components/hero/schema.yml   →  the fields the client sees
 components/hero/hero.twig    →  how it renders
@@ -39,7 +45,7 @@ unaffected.
 - A web server pointing at `public/`
 - Optional: a Cloudflare zone, an R2 bucket
 
-## Quick start (DDEV)
+## Engine development (DDEV)
 
 Copy `ddev/config.yaml` to `.ddev/config.yaml`, then:
 
@@ -81,8 +87,22 @@ R2, image transformations and cache purge are all off locally, so uploads land
 in `content/uploads/` and saves are instant. The whole thing runs with zero
 Cloudflare setup.
 
-Once the core moves to a private Composer package, run `ddev auth ssh` so the
-container can reach the repo.
+For private VCS distribution, run `ddev auth ssh` so the container can reach
+the package repositories.
+
+## Create a site
+
+```bash
+composer create-project dopamine/flatcms-skeleton my-site
+cd my-site
+cp .env.example .env
+ddev start
+ddev launch /admin.php
+```
+
+The engine is installed at `vendor/dopamine/flatcms`; the site owns only its
+config, content, public entrypoints, layout, and optional overrides. See
+[`skeleton/README.md`](skeleton/README.md).
 
 ### Without DDEV
 
@@ -534,17 +554,18 @@ tests/04_hardening.php   regressions from the security review, decompression bom
 tests/05_concurrency.php stale saves, conflict re-render, presence markers
 tests/06_production.php  production contracts: paths, atomic release, derivative
                          route and encoder, cache policy, boot guard
-```
-
-```
 tests/07_shipkit.php     nav, redirects, 500.twig, SITE_NOINDEX, sitemap and
                          robots routes, bin/doctor, release switching and
                          rollback, backup and restore drill
+tests/08_form.php        contact validation, spam controls, durable delivery,
+                         retry state, permissions and retention
+tests/09_package.php     clean Composer install, archive boundary, package
+                         fallbacks, site overrides and installed CLI tools
 ```
 
-693 checks: `ddev exec bash tests/run.sh`. Run all of them after touching
+973 checks: `ddev exec bash tests/run.sh`. Run all of them after touching
 `Fields`, `Admin`, `Components`, `Media` or anything in `bin/`.
 
-CI (`.github/workflows/ci.yml`) runs the lint, `composer audit`, `bin/doctor`
-and tests 01–05 on PHP 8.4 for every push. 06 and 07 make real HTTPS requests to
-the local origin, so they are the deploy's job rather than CI's.
+CI (`.github/workflows/ci.yml`) runs lint, `composer audit`, `bin/doctor`, and
+the portable suite on PHP 8.4. Real HTTPS probes additionally run in DDEV and
+at deploy time.

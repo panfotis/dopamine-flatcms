@@ -335,6 +335,19 @@ foreach ([
         ]], 6, 2)],
         'which has no component',
     ],
+    'a form page missing its private declaration' => [
+        ['pages/el/home.yml' => Yaml::dump(['title' => 'T', 'slug' => '/', 'blocks' => [
+            ['id' => 'form', 'type' => 'contact_form', 'fields' => []],
+        ]], 6, 2)],
+        'must declare private: true',
+    ],
+    'two forms on one page' => [
+        ['pages/el/home.yml' => Yaml::dump(['title' => 'T', 'slug' => '/', 'private' => true, 'blocks' => [
+            ['id' => 'form-a', 'type' => 'contact_form', 'fields' => []],
+            ['id' => 'form-b', 'type' => 'contact_form', 'fields' => []],
+        ]], 6, 2)],
+        'only one form per page is supported',
+    ],
     'a page left outside the locale directory' => [
         ['pages/el/home.yml' => $goodPage('/'), 'pages/orphan.yml' => $goodPage('/orphan')],
         'outside a locale directory',

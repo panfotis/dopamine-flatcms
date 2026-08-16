@@ -23,7 +23,17 @@ use Dopamine\FlatCms\Cms;
 use Dopamine\FlatCms\Content;
 use Symfony\Component\Yaml\Yaml;
 
-require dirname(__DIR__) . '/vendor/autoload.php';
+$autoload = $GLOBALS['_composer_autoload_path'] ?? dirname(__DIR__) . '/vendor/autoload.php';
+require $autoload;
+
+// Composer's bin proxy runs this file from vendor/dopamine/flatcms/bin while
+// the site's config remains at the project root. Direct source checkouts keep
+// working because their current directory also contains config.php.
+$siteRoot = getenv('DOPAMINE_SITE_ROOT') ?: getcwd();
+$configFile = $siteRoot . '/config.php';
+if (!is_file($configFile)) {
+    $configFile = dirname(__DIR__) . '/config.php';
+}
 
 $quiet = in_array('--quiet', $argv, true);
 
@@ -41,7 +51,7 @@ $warn = static function (string $what) use (&$warnings): void {
 // ── Config and paths ────────────────────────────────────────────────────────
 
 try {
-    $config = require dirname(__DIR__) . '/config.php';
+    $config = require $configFile;
 } catch (Throwable $e) {
     // The production boot guard throws here, which is the point: a box that
     // refuses to serve must also fail its own health check rather than pass it.
@@ -52,8 +62,10 @@ try {
 $cms = new Cms($config);
 
 foreach (['content', 'components', 'templates'] as $key) {
-    if (!is_dir($config['paths'][$key])) {
-        $fail(sprintf('paths.%s does not exist: %s', $key, $config['paths'][$key]));
+    foreach ((array) $config['paths'][$key] as $dir) {
+        if (!is_dir((string) $dir)) {
+            $fail(sprintf('paths.%s does not exist: %s', $key, $dir));
+        }
     }
 }
 
@@ -161,8 +173,13 @@ if (!is_file((string) $config['auth']['roles_file'])) {
 // ── Components ──────────────────────────────────────────────────────────────
 
 $types = [];
-foreach (glob($config['paths']['components'] . '/*', GLOB_ONLYDIR) ?: [] as $dir) {
-    $type = basename($dir);
+$componentDirs = [];
+foreach ((array) $config['paths']['components'] as $root) {
+    foreach (glob((string) $root . '/*', GLOB_ONLYDIR) ?: [] as $dir) {
+        $componentDirs[basename($dir)] ??= $dir;
+    }
+}
+foreach ($componentDirs as $type => $dir) {
     $types[] = $type;
 
     if (!is_file($dir . '/schema.yml')) {
@@ -240,8 +257,35 @@ foreach ($loaded as $type => $schema) {
     }
 }
 
+// A form input is an HTML name and shares the request namespace with the
+// engine's controls. Letting a schema claim one of these makes the form either
+// permanently fail CSRF or trip its own honeypot.
+$formReserved = ['csrf', 'website', 'consent', 'action', 'cf_turnstile_response'];
+foreach ($loaded as $type => $schema) {
+    foreach ((array) ($schema['form'] ?? []) as $name => $def) {
+        $normal = str_replace('-', '_', strtolower((string) $name));
+        if (preg_match('/^[a-z0-9_]+$/i', (string) $name) !== 1) {
+            $fail(sprintf('component "%s", form input "%s": name must contain only letters, numbers and underscores', $type, $name));
+        } elseif (in_array($normal, $formReserved, true)) {
+            $fail(sprintf('component "%s", form input "%s": name is reserved by the form engine', $type, $name));
+        }
+
+        $def = is_array($def) ? $def : [];
+        if (!in_array((string) ($def['type'] ?? 'text'), ['text', 'email', 'tel', 'textarea'], true)) {
+            $fail(sprintf('component "%s", form input "%s": unknown visitor input type "%s"', $type, $name, $def['type'] ?? ''));
+        }
+    }
+}
+
 foreach (['layout.twig', '404.twig', '500.twig', 'picture.twig'] as $template) {
-    if (!is_file($config['paths']['templates'] . '/' . $template)) {
+    $exists = false;
+    foreach ((array) $config['paths']['templates'] as $root) {
+        if (is_file((string) $root . '/' . $template)) {
+            $exists = true;
+            break;
+        }
+    }
+    if (!$exists) {
         $fail('missing template: ' . $template);
         continue;
     }
@@ -360,6 +404,7 @@ foreach (glob($pagesDir . '/*.yml') ?: [] as $file) {
     }
 
     $seen = [];
+    $formBlocks = 0;
     foreach ((array) ($data['blocks'] ?? []) as $i => $block) {
         if (!is_array($block)) {
             $fail(sprintf('page "%s": block %d is not a mapping', $id, $i));
@@ -380,14 +425,30 @@ foreach (glob($pagesDir . '/*.yml') ?: [] as $file) {
 
         if (!in_array($type, $types, true)) {
             $fail(sprintf('page "%s": block "%s" is type "%s", which has no component', $id, $blockId, $type));
+        } elseif ((array) ($loaded[$type]['form'] ?? []) !== []) {
+            $formBlocks++;
         }
+    }
+
+    if ($formBlocks > 1) {
+        $fail(sprintf('page "%s": carries %d forms; only one form per page is supported', $id, $formBlocks));
+    }
+    if ($formBlocks === 1 && ($data['private'] ?? false) !== true) {
+        $fail(sprintf('page "%s": carries a form and must declare private: true', $id));
     }
 
     // A `layout:` that does not resolve renders in layout.twig instead —
     // correct at request time, and silent everywhere else. This is where it
     // gets said, before a landing page ships with a header nobody wanted.
     $layout = (string) ($data['layout'] ?? '');
-    if ($layout !== '' && !is_file($config['paths']['templates'] . '/' . $layout . '.twig')) {
+    $layoutExists = false;
+    foreach ((array) $config['paths']['templates'] as $root) {
+        if (is_file((string) $root . '/' . $layout . '.twig')) {
+            $layoutExists = true;
+            break;
+        }
+    }
+    if ($layout !== '' && !$layoutExists) {
         $warn(sprintf('page "%s": layout "%s" has no template — it will render in layout.twig', $id, $layout));
     }
 

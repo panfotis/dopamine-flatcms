@@ -29,10 +29,10 @@ blocks:
       heading: Επικοινωνία
       subheading: 'Απαντάμε συνήθως εντός μίας εργάσιμης.'
       image:
-        src: /uploads/2026/08/38ea9d5c-2b28-464c-a3c8-432fb06b9df8-f8befb.png
+        src: /uploads/2026/08/pexels-zetong-li-880728-13724339.jpg
         alt: ''
-        width: 1254
-        height: 1254
+        width: 1920
+        height: 1440
       cta_label: ''
       cta_url: ''
       align: start

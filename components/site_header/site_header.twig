@@ -4,7 +4,7 @@
    no idea it was rendered from a different file, and does not need one. #}
 <div class="site-head">
   <div class="wrap">
-    <a class="brand" href="/">
+    <a class="brand" href="{{ home_url }}">
       {% if fields.logo.src|default('') %}
         {% include 'picture.twig' with {
              image: fields.logo,

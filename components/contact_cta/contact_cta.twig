@@ -3,9 +3,9 @@
   <div class="wrap">
     <h2>{{ fields.heading }}</h2>
     <ul>
-      {% if fields.phone %}<li><span>Τηλέφωνο</span><a href="tel:{{ fields.phone|replace({' ': ''}) }}">{{ fields.phone }}</a></li>{% endif %}
-      {% if fields.email %}<li><span>Email</span><a href="mailto:{{ fields.email }}">{{ fields.email }}</a></li>{% endif %}
-      {% if fields.address %}<li><span>Διεύθυνση</span>{{ fields.address|nl2br }}</li>{% endif %}
+      {% if fields.phone %}<li><span>{{ ts('contact.phone') }}</span><a href="tel:{{ fields.phone|replace({' ': ''}) }}">{{ fields.phone }}</a></li>{% endif %}
+      {% if fields.email %}<li><span>{{ ts('contact.email') }}</span><a href="mailto:{{ fields.email }}">{{ fields.email }}</a></li>{% endif %}
+      {% if fields.address %}<li><span>{{ ts('contact.address') }}</span>{{ fields.address|nl2br }}</li>{% endif %}
     </ul>
   </div>
 </section>

@@ -403,9 +403,16 @@ final class Fields
         $rows = array_slice(array_values($raw), 0, $max);
 
         $stored = is_array($context['stored'] ?? null) ? array_values($context['stored']) : [];
+        $storedBySrc = [];
+        foreach ($stored as $prior) {
+            if (is_array($prior) && is_string($prior['src'] ?? null) && $prior['src'] !== '') {
+                $storedBySrc[$prior['src']] = $prior;
+            }
+        }
 
         $out = [];
         foreach ($rows as $i => $row) {
+            $rawSrc = is_array($row) && is_scalar($row['src'] ?? null) ? (string) $row['src'] : '';
             $image = self::image(
                 // `decorative` is kept, the alt *requirement* is not: one is a
                 // statement about what the pictures are, which only the
@@ -415,7 +422,11 @@ final class Fields
                 ['decorative' => ($def['decorative'] ?? false) === true],
                 is_array($row) ? $row : [],
                 [
-                    'stored'  => is_array($stored[$i] ?? null) ? $stored[$i] : [],
+                    // A gallery is explicitly reorderable. Match the prior
+                    // server-derived dimensions by immutable src, not by the
+                    // row position the editor just changed.
+                    'stored'  => $storedBySrc[$rawSrc]
+                        ?? (is_array($stored[$i] ?? null) ? $stored[$i] : []),
                     'require' => false,
                 ] + $context
             );

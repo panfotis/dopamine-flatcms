@@ -1,0 +1,21 @@
+# Structure is developer-owned; values are edited at /admin.php.
+title: Home
+slug: /
+nav:
+  label: Home
+  order: 10
+blocks:
+  -
+    id: hero
+    type: hero
+    fields:
+      heading: Your small site, ready to edit
+      subheading: Flat files, responsive images, revisions, and a locked component structure.
+      image:
+        src: ''
+        alt: ''
+        width: 0
+        height: 0
+      cta_label: ''
+      cta_url: ''
+      align: center

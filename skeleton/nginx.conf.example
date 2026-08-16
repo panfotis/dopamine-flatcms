@@ -1,0 +1,80 @@
+server {
+    listen 443 ssl http2;
+    server_name pelatis.gr;
+
+    # current is the atomic release symlink. content/, src/, vendor/ and
+    # config.php sit above its public/ docroot and are never reachable over HTTP.
+    root /var/www/pelatis/current/public;
+    index index.php;
+
+    ssl_certificate     /etc/letsencrypt/live/pelatis.gr/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/pelatis.gr/privkey.pem;
+
+    # The real visitor address, and the reason the contact form's rate limiter
+    # works at all. Behind Cloudflare every request arrives from Cloudflare, so
+    # a per-IP counter keyed on REMOTE_ADDR rate-limits the entire internet as
+    # one bucket — five submissions a day for everybody, worldwide.
+    #
+    # This is the right place for it rather than PHP reading the header: nginx
+    # checks *who it is talking to* before believing CF-Connecting-IP, so the
+    # header cannot be forged by anyone reaching the origin directly. PHP then
+    # sees a REMOTE_ADDR that is already correct and trusts nothing.
+    #
+    # Refresh the ranges from cloudflare.com/ips/ on a cron — they change, and
+    # a stale list silently reverts you to one bucket. Both families:
+    #   curl -s https://www.cloudflare.com/ips-v4 https://www.cloudflare.com/ips-v6 \
+    #     | sed 's/^/set_real_ip_from /; s/$/;/' > /etc/nginx/cloudflare-ips.conf
+    include /etc/nginx/cloudflare-ips.conf;
+    real_ip_header CF-Connecting-IP;
+    real_ip_recursive on;
+
+    # Pretty URLs: every path that is not a real file goes to index.php,
+    # which resolves it against content/pages/<locale>/*.yml by slug.
+    location / {
+        try_files $uri $uri/ /index.php$is_args$args;
+    }
+
+    # The admin panel. Cloudflare Access sits in front of this path; PHP
+    # verifies the Access JWT so the origin cannot be hit directly.
+    location = /admin.php {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php8.4-fpm-pelatis.sock;
+
+        # Never let the panel be cached anywhere.
+        add_header Cache-Control "no-store, private" always;
+    }
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php8.4-fpm-pelatis.sock;
+    }
+
+    # Uploads live in the content repository, not under the docroot, so that
+    # one `git clone` of shared/content/ restores the pages *and* the images on
+    # them. An alias rather than a symlink: nothing inside public/ then points
+    # outside it, and stored `src` values stay `/uploads/...` either way, so
+    # config.media_bases and /cdn-cgi/image are unaffected by the move.
+    #
+    # Only used when R2_ENABLED=0. With R2 on, these URLs are absolute and never
+    # reach this server at all.
+    location /uploads/ {
+        alias /var/www/pelatis/shared/content/uploads/;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+        # Uploaded files are never executed, whatever their extension. This is
+        # the reason the directory must not be reachable by any other path.
+        location ~ \.php$ { return 403; }
+    }
+
+    # Belt and braces: block dotfiles and any stray YAML under the docroot.
+    location ~ /\.        { deny all; }
+    location ~ \.ya?ml$   { deny all; }
+
+    client_max_body_size 16m;
+}
+
+server {
+    listen 80;
+    server_name pelatis.gr;
+    return 301 https://$host$request_uri;
+}

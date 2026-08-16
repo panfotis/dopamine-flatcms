@@ -110,6 +110,9 @@ $composer = json_decode((string) file_get_contents($root . '/composer.json'), tr
 ok(!array_key_exists('version', $composer),
     'composer.json leaves versioning to git tags, so Composer can publish it cleanly');
 ok(($composer['license'] ?? '') === 'proprietary', 'license is still proprietary; going public is a deliberate decision, not a slip');
+ok(($composer['type'] ?? '') === 'library', 'the root package is the reusable engine, not a runnable project pretending to be one');
+ok(in_array('src/bootstrap.php', (array) ($composer['autoload']['files'] ?? []), true),
+    'its process-level error handler is loaded through Composer rather than a site-relative require');
 
 // content/pages/<locale>/<id>.yml is the permanent shape. Phase 5 adopts it —
 // on a single-language site too — precisely so Phase 9 is a resolver change
@@ -391,6 +394,12 @@ contains($ph, 'no-store', 'a private page sends no-store');
 contains($ph, 'private', 'and marks the response private, so no shared cache may hold it');
 missing($ph, 's-maxage', 'no s-maxage: nothing is offered to the edge');
 missing($ph, 'Cache-Tag', 'and no Cache-Tag, since there is nothing at the edge to purge');
+
+$forgottenFlag = $private;
+unset($forgottenFlag['private']);
+$forced = implode("\n", $cms->cacheHeaders($forgottenFlag));
+contains($forced, 'no-store, private', 'the runtime detects a form and stays private even if its YAML flag was forgotten');
+missing($forced, 's-maxage', 'so a developer typo can never publish a session-bound CSRF token to the edge');
 
 $bh = implode("\n", $cms->cacheHeaders($public));
 contains($bh, 's-maxage=31536000', 'a public page still goes to the edge for a year');

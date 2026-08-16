@@ -19,7 +19,7 @@ retype a component. This is enforced on save, not merely hidden in the UI.
 ```bash
 ddev start
 ddev composer install
-ddev exec bash tests/run.sh      # full suite — must be green before any phase is done
+ddev exec bash tests/run.sh      # full suite, including cold Composer install
 php bin/doctor                   # health check; a deploy runs it before switching
 ddev launch                      # site
 ddev launch /admin.php           # panel
@@ -162,10 +162,14 @@ templates/    layout.twig, bare.twig (no header/footer; `layout: bare`),
               that writes its own <img> is caught by 01_render.php.
 public/       docroot: index.php, admin.php, img.php, router.php
 tests/        01_render 02_admin 03_lockdown 04_hardening 05_concurrency
-              06_production 07_shipkit, lib.php, fixtures/, run.sh
+              06_production 07_shipkit 08_form 09_package, lib.php, fixtures/,
+              run.sh. 09 proves a mirrored Composer install and clean archive.
               Requests run in-process: build a Request, assert on the Response.
               Only _boot.php (needs a real environment) and _img_route.php
               (measures peak memory) still fork.
+skeleton/     the dopamine/flatcms-skeleton create-project package. It owns
+              public/, config, starter content and site-facing bin wrappers;
+              engine code is installed under vendor/ and never copied here.
 ```
 
 Production runs an atomic-release layout: `CONTENT_PATH` and `VAR_PATH` point

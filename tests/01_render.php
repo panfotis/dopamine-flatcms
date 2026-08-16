@@ -333,7 +333,9 @@ $loopPage = $cms->renderPage(['id' => 'v', 'title' => 'V', 'slug' => '/v', 'bloc
 contains($loopPage, '<source src="/uploads/clip.mp4" type="video/mp4">', 'a self-hosted loop renders a <video>');
 contains($loopPage, 'autoplay loop muted playsinline', 'muted and playsinline, without which no browser will autoplay it');
 contains($loopPage, 'poster="/uploads/p.jpg"', 'with its poster');
-contains($loopPage, 'prefers-reduced-motion', 'and hidden for anyone who asked the OS for less motion');
+contains($loopPage, 'prefers-reduced-motion', 'and detects anyone who asked the OS for less motion');
+missing($loopPage, '.video-block .loop{display:none}', 'without hiding the poster together with the moving image');
+contains($loopPage, "video.removeAttribute('autoplay')", 'instead disabling playback while the poster remains visible');
 
 section('Two languages, resolved by URL prefix');
 $i18n = cms();
@@ -348,12 +350,27 @@ ok($i18n->content->findBySlug('/epikoinonia') === null, 'and the Greek slug does
 // The filename is the translation identity, and nothing inside the file says so.
 ok($en['id'] === 'epikoinonia', 'both languages share the page id, which is the filename: ' . $en['id']);
 
-$enHtml = $i18n->renderPage($en);
+$enForm = new \Dopamine\FlatCms\Form($i18n);
+$enFormBlock = $enForm->blockOn($en);
+$enFormSchema = $i18n->components->get((string) ($enFormBlock['type'] ?? '')) ?? [];
+$enHtml = $i18n->renderPage($en, ['form_inputs' => $enForm->inputs($enFormSchema)]);
 contains($enHtml, '<html lang="en">', 'the document declares the language being rendered');
 contains($enHtml, 'We usually answer within one working day', 'with the English copy');
 contains($enHtml, 'href="/en/"', 'the menu links to English URLs, prefix included');
 contains($enHtml, 'href="/en/contact" aria-current="page"', 'and marks the current page at its prefixed URL');
 contains($enHtml, '<meta property="og:url" content="' . $base . '/en/contact">', 'og:url carries the prefix too');
+contains($enHtml, '<a class="brand" href="/en/">', 'the logo keeps an English visitor in the English site');
+contains($enHtml, 'Name <span aria-hidden="true">*</span>', 'visitor form labels speak the page language');
+contains($enHtml, '<span>Phone</span>', 'and so do fixed labels in public components');
+missing($enHtml, '>Ονοματεπώνυμο', 'no Greek form label leaks into the English page');
+contains($enHtml, '<a href="/en/contact">Contact</a>', 'the English footer link resolves to the prefixed route');
+
+$notFound = $i18n->twig->render('404.twig', [
+    'slug' => '/en/missing', 'locale' => 'en', 'home_url' => '/en/',
+]);
+contains($notFound, '<html lang="en">', 'the English 404 declares the requested language');
+contains($notFound, 'The page /en/missing was not found.', 'and its message is translated');
+contains($notFound, 'href="/en/">Home</a>', 'with a locale-aware way home');
 
 section('hreflang and the language switcher are one list asked twice');
 contains($enHtml, '<link rel="alternate" hreflang="en" href="' . $base . '/en/contact">', 'the page links to itself');

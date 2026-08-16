@@ -41,7 +41,7 @@
           {% set err = form_errors[name]|default('') %}
           <div class="field{{ err ? ' has-error' : '' }}">
             <label for="{{ id }}">
-              {{ input.label }}{% if input.required %} <span aria-hidden="true">*</span>{% endif %}
+              {{ ts(input.label) }}{% if input.required %} <span aria-hidden="true">*</span>{% endif %}
             </label>
             {% if input.type == 'textarea' %}
               <textarea id="{{ id }}" name="{{ name }}" maxlength="{{ input.max }}"

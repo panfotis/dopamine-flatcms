@@ -506,6 +506,14 @@ ok(array_keys($photosOf()[0]) === ['src', 'alt', 'width', 'height'],
     'a row has exactly the image sub-keys: ' . implode(', ', array_keys($photosOf()[0])));
 ok($photosOf()[0]['width'] === $storedImage['width'], 'with server-derived dimensions, as anywhere else');
 
+// Reordering is a first-class gallery action. The same src is still the same
+// server-measured image even when it moves to another row.
+$beforeOrder = $photosOf();
+admin_post($saveGallery(array_reverse($beforeOrder)));
+$reordered = $photosOf();
+ok($reordered[0]['width'] === $storedImage['width'] && $reordered[1]['width'] === $storedImage['width'],
+    'reordering preserves dimensions by matching the stored src, not the old row number');
+
 $hostileGallery = admin_post($saveGallery([
     ['src' => 'https://evil.gr/x.jpg', 'alt' => 'έξω'],           // outside media_bases
     ['src' => $realSrc, 'alt' => 'ok', 'width' => 99999, 'evil' => 'x'],
@@ -515,13 +523,11 @@ ok($hostileGallery->getStatusCode() === 303, 'the save is accepted — the paylo
 $after = $photosOf();
 ok(count($after) === 1, 'a row whose src was rejected is dropped, not stored blank: ' . count($after) . ' left');
 ok($after[0]['src'] === $realSrc, 'leaving the one legitimate photo');
-// Rows have no identity beyond their position, so a stored row only informs the
-// row that lands in the same slot — and anything that cannot be confirmed is 0,
-// which picture.twig renders as no attribute at all. Never the posted 99999: a
-// wrong ratio reserves the wrong box, which is worse than reserving none.
+// Never the posted 99999: a wrong ratio reserves the wrong box, which is worse
+// than reserving none. A src already on disk keeps its measured pair.
 ok($after[0]['width'] !== 99999, 'a forged width is never stored');
-ok(in_array($after[0]['width'], [0, $storedImage['width']], true),
-    'it is either the pair on disk for that src or an honest zero: ' . $after[0]['width']);
+ok($after[0]['width'] === $storedImage['width'],
+    'the pair already on disk for that src survives a row change: ' . $after[0]['width']);
 ok(!array_key_exists('evil', $after[0]), 'and an undeclared sub-key is dropped, exactly as at the top level');
 
 // Bounded before the loop, so a huge post costs the cut and not 5 000 walks.

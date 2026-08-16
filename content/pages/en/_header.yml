@@ -1,16 +1,14 @@
 # Managed by Dopamine FlatCMS. Structure is edited here, content in /admin.
-# Globals are per language like every other page file: the English site gets
-# its own header, and the menu inside it is built from en/ pages.
 title: Header
 blocks:
   -
     id: header
     type: site_header
     fields:
-      nav_label: Main navigation
-      lang_label: Language
       logo:
         src: ''
         alt: ''
         width: 0
         height: 0
+      nav_label: 'Main navigation'
+      lang_label: Language

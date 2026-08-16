@@ -7,21 +7,21 @@ description: Φόρμα που στέλνει μήνυμα με email και κ�
 # client edits the words around the form; the form itself is yours.
 form:
   name:
-    label: Ονοματεπώνυμο
+    label: form.name
     type: text
     required: true
     max: 80
   email:
-    label: Email
+    label: form.email
     type: email
     required: true
     max: 120
   phone:
-    label: Τηλέφωνο
+    label: form.phone
     type: tel
     max: 30
   message:
-    label: Μήνυμα
+    label: form.message
     type: textarea
     required: true
     max: 2000

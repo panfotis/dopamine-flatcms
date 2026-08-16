@@ -1,0 +1,8 @@
+title: Footer
+blocks:
+  -
+    id: footer
+    type: site_footer
+    fields:
+      note: ''
+      links: []

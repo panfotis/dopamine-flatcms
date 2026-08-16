@@ -1,0 +1,14 @@
+{
+    "name": "dopamine/flatcms-skeleton",
+    "description": "Runnable project skeleton for Dopamine FlatCMS.",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.4",
+        "dopamine/flatcms": "^1.0"
+    },
+    "config": {
+        "allow-plugins": false,
+        "sort-packages": true
+    }
+}

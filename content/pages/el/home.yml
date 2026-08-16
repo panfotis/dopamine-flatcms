@@ -22,10 +22,10 @@ blocks:
       heading: 'Μικρά site, χωρίς βαρύ CMS leme!'
       subheading: 'Στατική ταχύτητα, flat αρχεία, και ένα panel που ο πελάτης δεν μπορεί να χαλάσει.'
       image:
-        src: /uploads/2026/08/chatgpt-image-aug-14-2026-05-53-32-pm-fca4e7.png
+        src: /uploads/2026/08/pexels-willianjusten-30929497.jpg
         alt: ''
-        width: 1672
-        height: 941
+        width: 3859
+        height: 2573
       cta_label: Επικοινωνία
       cta_url: epikoinonia
       align: center
@@ -83,15 +83,15 @@ blocks:
       heading: 'Δουλειές μας'
       photos:
         -
-          src: /uploads/2026/08/chatgpt-image-aug-14-2026-05-53-32-pm-fca4e7.png
-          alt: 'Η αρχική σελίδα ενός πελάτη'
-          width: 1672
-          height: 941
+          src: /uploads/2026/08/pexels-willianjusten-30929497.jpg
+          alt: 'Άνθρωπος μπροστά σε λίμνη κάτω από εντυπωσιακά σύννεφα'
+          width: 3859
+          height: 2573
         -
-          src: /uploads/2026/08/38ea9d5c-2b28-464c-a3c8-432fb06b9df8-f8befb.png
-          alt: ''
-          width: 1254
-          height: 1254
+          src: /uploads/2026/08/pexels-zetong-li-880728-13724339.jpg
+          alt: 'Αεροφωτογραφία χιονισμένου τοπίου με χρυσαφί βλάστηση'
+          width: 1920
+          height: 1440
   -
     id: video
     type: video
@@ -101,10 +101,10 @@ blocks:
         provider: youtube
         id: dQw4w9WgXcQ
       poster:
-        src: /uploads/2026/08/38ea9d5c-2b28-464c-a3c8-432fb06b9df8-f8befb.png
+        src: /uploads/2026/08/pexels-zetong-li-880728-13724339.jpg
         alt: 'Στιγμιότυπο από το βίντεο'
-        width: 1254
-        height: 1254
+        width: 1920
+        height: 1440
       loop:
         src: ''
         poster:

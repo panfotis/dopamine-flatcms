@@ -14,6 +14,17 @@
              {% endif %}>
         <source src="{{ fields.loop.src }}" type="video/mp4">
       </video>
+      <script>
+        {# CSS cannot stop media playback. Resetting the element before it starts
+           keeps the declared poster visible for reduced-motion visitors. #}
+        (function (video) {
+          if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            video.removeAttribute('autoplay');
+            video.pause();
+            video.load();
+          }
+        })(document.currentScript.previousElementSibling);
+      </script>
     {% endif %}
 
     {% include 'video_facade.twig' with {
@@ -27,9 +38,4 @@
 <style>
   .video-block{padding:72px 0}
   .video-block .loop{width:100%;height:auto;border-radius:10px;display:block;margin-bottom:24px}
-  /* A background loop is decoration; someone who asked the OS for less motion
-     asked for this too. The poster stays, so the section is not empty. */
-  @media (prefers-reduced-motion: reduce){
-    .video-block .loop{display:none}
-  }
 </style>

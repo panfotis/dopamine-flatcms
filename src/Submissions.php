@@ -42,48 +42,76 @@ final class Submissions
     }
 
     /**
+     * Serialize state changes across the tiny submissions store.
+     *
+     * One lock for the whole store is intentionally coarse. A brochure site
+     * sends one message at a time, while per-record lock files create a lifecycle
+     * problem of their own when deletion and retention remove the record.
+     */
+    private function locked(callable $callback): mixed
+    {
+        if (!is_dir($this->dir) && !@mkdir($this->dir, 0770, true) && !is_dir($this->dir)) {
+            throw new RuntimeException('Could not create the submissions directory.');
+        }
+
+        $handle = fopen($this->dir . '/.lock', 'c+');
+        if ($handle === false || !flock($handle, LOCK_EX)) {
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
+            throw new RuntimeException('Could not lock the submissions store.');
+        }
+
+        try {
+            return $callback();
+        } finally {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+        }
+    }
+
+    /**
      * Write one submission, atomically, and hand back its record.
      *
-     * `x` mode rather than a temp file and a rename: the id is the filename and
-     * the id is random, so the only thing that can already exist is a collision,
-     * and failing loudly on one beats overwriting a stranger's message.
+     * The whole create runs under the same lock as retention, then publishes a
+     * complete temp file with rename. A crash can leave an unreferenced temp,
+     * never a half-JSON submission that the visitor was told we had stored.
      *
      * @param  array<string, string> $values
      * @return array<string, mixed>
      */
     public function store(string $page, string $locale, array $values, string $ipHash): array
     {
-        $month = date('Y-m');
-        $dir = $this->dir . '/' . $month;
-        if (!is_dir($dir) && !@mkdir($dir, 0770, true) && !is_dir($dir)) {
-            throw new RuntimeException('Could not create the submissions directory.');
-        }
+        return $this->locked(function () use ($page, $locale, $values, $ipHash): array {
+            $month = date('Y-m');
+            $dir = $this->dir . '/' . $month;
+            if (!is_dir($dir) && !@mkdir($dir, 0770, true) && !is_dir($dir)) {
+                throw new RuntimeException('Could not create the submissions directory.');
+            }
 
-        $record = [
-            'id'      => bin2hex(random_bytes(8)),
-            'month'   => $month,
-            'at'      => date('c'),
-            'page'    => $page,
-            'locale'  => $locale,
-            'values'  => $values,
-            'status'  => self::UNSENT,
-            'attempts' => 0,
-            'error'   => '',
-            // The hash only. The raw address is what the rate limiter needs for
-            // ten minutes and what nobody needs for twelve months, and a
-            // submission file is the copy that gets backed up off-host.
-            'ip_hash' => $ipHash,
-        ];
+            do {
+                $id = bin2hex(random_bytes(8));
+            } while (is_file($dir . '/' . $id . '.json'));
 
-        $handle = @fopen($dir . '/' . $record['id'] . '.json', 'x');
-        if ($handle === false) {
-            throw new RuntimeException('Could not create the submission file.');
-        }
+            $record = [
+                'id'      => $id,
+                'month'   => $month,
+                'at'      => date('c'),
+                'page'    => $page,
+                'locale'  => $locale,
+                'values'  => $values,
+                'status'  => self::UNSENT,
+                'attempts' => 0,
+                'error'   => '',
+                // The hash only. The raw address is what the rate limiter needs
+                // briefly and what nobody needs for twelve months.
+                'ip_hash' => $ipHash,
+            ];
 
-        fwrite($handle, json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
-        fclose($handle);
+            $this->write($month, $id, $record);
 
-        return $record;
+            return $record;
+        });
     }
 
     /**
@@ -150,30 +178,55 @@ final class Submissions
      */
     public function update(string $month, string $id, array $changes): void
     {
-        $record = $this->get($month, $id);
-        if ($record === null) {
-            return;
-        }
+        $this->locked(function () use ($month, $id, $changes): void {
+            $record = $this->get($month, $id);
+            if ($record !== null) {
+                $this->write($month, $id, $changes + $record);
+            }
+        });
+    }
 
+    /**
+     * Read, decide and write one delivery state while holding the store lock.
+     * The callback returns `[changes-or-null, result]`; null means no write.
+     */
+    public function transact(string $month, string $id, callable $callback): mixed
+    {
+        return $this->locked(function () use ($month, $id, $callback): mixed {
+            $record = $this->get($month, $id);
+            if ($record === null) {
+                return null;
+            }
+
+            [$changes, $result] = $callback($record);
+            if (is_array($changes)) {
+                $this->write($month, $id, $changes + $record);
+            }
+
+            return $result;
+        });
+    }
+
+    /** @param array<string, mixed> $record */
+    private function write(string $month, string $id, array $record): void
+    {
         $file = $this->file($month, $id);
         $tmp = $file . '.' . bin2hex(random_bytes(4)) . '.tmp';
+        $bytes = json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
 
-        file_put_contents(
-            $tmp,
-            json_encode($changes + $record, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
-            LOCK_EX
-        );
-
-        if (!rename($tmp, $file)) {
+        if (file_put_contents($tmp, $bytes, LOCK_EX) === false || !rename($tmp, $file)) {
             @unlink($tmp);
+            throw new RuntimeException('Could not update the submission file.');
         }
     }
 
     public function delete(string $month, string $id): bool
     {
-        $file = $this->file($month, $id);
+        return $this->locked(function () use ($month, $id): bool {
+            $file = $this->file($month, $id);
 
-        return is_file($file) && unlink($file);
+            return is_file($file) && unlink($file);
+        });
     }
 
     /**
@@ -189,20 +242,22 @@ final class Submissions
      */
     public function prune(int $months): array
     {
-        $cutoff = date('Y-m', strtotime('-' . max(1, $months) . ' months'));
+        return $this->locked(function () use ($months): array {
+            $cutoff = date('Y-m', strtotime('-' . max(1, $months) . ' months'));
 
-        $gone = [];
-        foreach (glob($this->dir . '/*', GLOB_ONLYDIR) ?: [] as $path) {
-            $month = basename($path);
-            if (preg_match(self::MONTH, $month) !== 1 || $month >= $cutoff) {
-                continue;
+            $gone = [];
+            foreach (glob($this->dir . '/*', GLOB_ONLYDIR) ?: [] as $path) {
+                $month = basename($path);
+                if (preg_match(self::MONTH, $month) !== 1 || $month >= $cutoff) {
+                    continue;
+                }
+
+                array_map('unlink', glob($path . '/*.json') ?: []);
+                @rmdir($path);
+                $gone[] = $month;
             }
 
-            array_map('unlink', glob($path . '/*.json') ?: []);
-            @rmdir($path);
-            $gone[] = $month;
-        }
-
-        return $gone;
+            return $gone;
+        });
     }
 }

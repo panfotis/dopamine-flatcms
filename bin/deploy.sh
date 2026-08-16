@@ -75,7 +75,14 @@ step "Auditing dependencies"
 COMPOSER_HOME="$root/shared" "$composer" audit --working-dir="$release" --no-interaction
 
 step "Running the test suite"
-(cd "$release" && bash tests/run.sh --portable)
+if [ -x "$release/tests/run.sh" ]; then
+  (cd "$release" && bash tests/run.sh --portable)
+else
+  # create-project sites intentionally contain no copy of the engine suite.
+  # Their locked package version has already passed engine CI; still verify
+  # that this server satisfies the exact platform selected by Composer.
+  "$composer" check-platform-reqs --working-dir="$release" --no-dev
+fi
 
 # Only after tests have run in their isolated fixture environment. Loading this
 # earlier would let a test mutation follow CONTENT_PATH into live shared state.

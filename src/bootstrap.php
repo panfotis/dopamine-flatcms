@@ -48,7 +48,10 @@ function bootstrap_error_handler(Cms $cms): void
         }
 
         try {
-            echo $cms->twig->render('500.twig');
+            echo $cms->twig->render('500.twig', [
+                'locale' => $cms->locale(),
+                'home_url' => $cms->localeUrl('/'),
+            ]);
         } catch (Throwable) {
             // The error page itself is broken. Say so in plain text rather than
             // recursing into the handler that is already handling an error.
