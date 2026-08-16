@@ -424,7 +424,7 @@ Each phase ends with the full suite green.
 | 4 | Media core: image object, bounded GD transformations, `<picture>`, recursive sanitise, `list`, `link` picker | 5–7 d |
 | 5 | Ship kit: atomic deploy, content backup, doctor, nav, redirects, 500, site kit | 3–5 d |
 | 6 | SEO + sitemap | 1–1.5 d |
-| 7 | Contact form | 3–4 d |
+| 7 | Contact form | 3–4 d *(deferred — only when a client needs a form)* |
 | 8 | **Pilot client site — the launch gate** | site only |
 | — | Repo split, incl. panel i18n (§3.1), then `v1.0.0` | 1.5–2 d |
 | 9 | i18n | 3–4 d |
@@ -887,7 +887,19 @@ lists every page with a `lastmod` and excludes `noindex` ones; `/robots.txt`
 points at it; saving any page purges the `site` tag so the sitemap is not stale;
 `seo` renders as a collapsed card that an editor can ignore.
 
-### Phase 7 — Contact form
+### Phase 7 — Contact form *(deferred)*
+
+**Not built before the pilot.** `contact_cta` already renders phone, email and
+address, which is a working contact page for most Greek SMBs. Build this when a
+client actually needs a form — the cost of doing it against a live site is
+higher than doing it now, but not by enough to justify 3–4 days spent on spec.
+
+Two things stay in place while it is deferred, because both are cheap now and
+expensive to retrofit: `private: true` on any page that will carry a form (Phase
+0's caching decision — already set on `content/pages/el/epikoinonia.yml`), and
+`var/submissions/` staying gitignored. Do not remove either as dead code.
+
+The spec below is complete and stays as written.
 
 Client edits: heading, intro, success message, GDPR consent text. The **input
 fields are developer-defined** in the schema. The **recipient is
