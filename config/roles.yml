@@ -7,6 +7,22 @@
 # made by whoever administers the client's Google Workspace — silently hands
 # them the content of every page.
 #
+# ── Adding a person is therefore TWO steps, in two places ───────────────────
+#
+#   1. Cloudflare Zero Trust → Access → the /admin.php application → policy.
+#      Lets them past the login. Cloudflare never reads this file and has no
+#      idea these roles exist; nothing here is pushed or synced to it.
+#   2. This file, committed and deployed. Decides what they can do once in.
+#
+# Miss step 1 and they never reach PHP — Cloudflare refuses them at the edge.
+# Miss step 2 and they log in successfully and get our 403; the refusal is
+# written to the error log with the address to add, because the alternative is
+# the client telephoning to say the panel is broken.
+#
+# Removing access is the reverse, and step 1 is the one that matters: deleting
+# a row here stops them editing, but only the Access policy stops them holding
+# a valid session.
+#
 # Roles:
 #   admin  — edits every field including `editable: admin`, lists and restores
 #            revisions

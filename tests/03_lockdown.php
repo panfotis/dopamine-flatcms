@@ -105,6 +105,10 @@ $stranger = as_user($UNKNOWN, 'GET', ['action' => 'edit', 'page' => 'home']);
 ok($stranger->getStatusCode() === 403, 'an email absent from roles.yml is refused, not made an implicit editor');
 missing((string) $stranger->getContent(), 'name="blocks[hero][heading]"', 'and sees no edit form');
 missing((string) $stranger->getContent(), 'Cloudflare Access', 'the refusal does not tell them to log in again — they already did');
+// This is the one panel page a refused client ever sees, and the person seeing
+// it is usually a real editor nobody added to roles.yml, not an intruder.
+contains((string) $stranger->getContent(), '<!DOCTYPE html>', 'the 403 is a whole page, not a bare fragment');
+contains((string) $stranger->getContent(), 'Demo Πελάτη', 'rendered through the panel layout, so it looks refused rather than broken');
 
 $listed = as_user($EDITOR, 'GET', ['action' => 'edit', 'page' => 'home']);
 ok($listed->getStatusCode() === 200, 'a listed address gets in');

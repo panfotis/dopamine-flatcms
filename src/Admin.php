@@ -72,7 +72,10 @@ final class Admin
             // Both the unauthenticated case and a role refusal land here, so an
             // editor forging ?action=restore gets the same 403 as a stranger —
             // not a 400 that reads like the request was merely malformed.
-            return $this->html('<h1>403</h1><p>' . htmlspecialchars($e->getMessage()) . '</p>', 403);
+            return $this->html($this->cms->twig->render('admin/denied.twig', [
+                'message' => $e->getMessage(),
+                'user'    => $user,
+            ]), 403);
         } catch (Throwable $e) {
             error_log('[dopamine-flatcms] ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
 
@@ -91,6 +94,11 @@ final class Admin
     private function requireAdmin(array $user): void
     {
         if ($user['role'] !== 'admin') {
+            // An editor reaching here typed or forged the action; the panel
+            // never offers it to them. Worth a line in the log either way.
+            error_log('[dopamine-flatcms] admin-only action refused for '
+                . $user['email'] . ' (role: ' . $user['role'] . ')');
+
             throw new AccessDeniedException(
                 'Αυτή η ενέργεια απαιτεί ρόλο διαχειριστή.'
             );

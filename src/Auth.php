@@ -78,6 +78,14 @@ final class Auth
 
         $role = $this->roles()[strtolower($email)] ?? null;
         if ($role === null) {
+            // Somebody got through Cloudflare Access and was still refused, so
+            // the two lists disagree — almost always because a person was added
+            // to the Access application and not to roles.yml. Log it: otherwise
+            // the only signal is the client phoning to say the panel is broken,
+            // and there is nothing on the box to confirm it.
+            error_log('[dopamine-flatcms] authenticated but not in roles.yml: ' . $email
+                . ' (add them to ' . $this->config['roles_file'] . ')');
+
             // Deliberately not an implicit editor role. Whoever administers the
             // Access application can add a login; only this repository can add
             // a person to the panel. The message says so, because the reader
