@@ -19,8 +19,29 @@ use Symfony\Component\Yaml\Yaml;
  */
 final class Components
 {
+    /** Everything `editable:` may say. Anything else is a typo, not a value. */
+    public const EDITABLE = [true, 'admin', false];
+
     /** @var array<string, array<string, mixed>>|null */
     private ?array $cache = null;
+
+    /**
+     * May a $role edit a field declared `editable: $editable`?
+     *
+     *   editable   admin              editor
+     *   true       edits              edits
+     *   'admin'    edits              sees, locked
+     *   false      sees, locked       sees, locked
+     *
+     * The one place this table exists. The save path and the edit template both
+     * ask here, so the form can never offer an input the server would refuse —
+     * and, far more importantly, locking an input in the template can never be
+     * mistaken for enforcing it.
+     */
+    public static function mayEdit(mixed $editable, string $role): bool
+    {
+        return $editable === true || ($editable === 'admin' && $role === 'admin');
+    }
 
     public function __construct(private readonly string $dir)
     {
@@ -55,6 +76,13 @@ final class Components
                 $def['editable'] = $def['editable'] ?? true;
                 $def['required'] = $def['required'] ?? false;
 
+                // Fail closed on anything unrecognised. `editable: yes` or a
+                // misspelled `admni` must lock the field, not hand it to
+                // everyone — a schema typo is not a reason to widen access.
+                if (!in_array($def['editable'], self::EDITABLE, true)) {
+                    $def['editable'] = false;
+                }
+
                 if ($def['type'] === 'select') {
                     // Accept both `options: [a, b]` and `options: {a: Label}`
                     // and always hand templates a value => label map.
@@ -83,7 +111,9 @@ final class Components
     }
 
     /**
-     * The fields an editor is allowed to touch, in schema order.
+     * The fields any role is allowed to touch, in schema order — `editable:
+     * true` only. `editable: admin` is not in here on purpose: this answers
+     * "what is open to everyone", and mayEdit() answers the per-role question.
      *
      * @return array<string, array<string, mixed>>
      */

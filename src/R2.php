@@ -22,6 +22,16 @@ use RuntimeException;
  */
 final class R2
 {
+    /**
+     * The URL prefix the local fallback is served under.
+     *
+     * Fixed by convention, and the convention is asserted elsewhere: nginx
+     * publishes paths.uploads here (in production it aliases
+     * shared/content/uploads/), and config.media_bases must list it or every
+     * stored src is rejected on save.
+     */
+    private const LOCAL_BASE = '/uploads/';
+
     /** @param array<string, mixed> $config */
     public function __construct(
         private readonly array $config,
@@ -41,9 +51,15 @@ final class R2
      */
     public function put(string $key, string $bytes, string $contentType): string
     {
-        $key = (string) ($this->config['prefix'] ?? '') . ltrim($key, '/');
+        $key = ltrim($key, '/');
 
         if (!$this->enabled()) {
+            // No prefix here. `prefix` is an R2 *object key* concern; locally
+            // the same job is already done by the directory itself, which the
+            // web server publishes at LOCAL_BASE. Applying both nested every
+            // upload one directory deeper than the URL this returns, so a
+            // client uploaded an image, saw the preview, saved, and got a
+            // broken image on the live page.
             $dest = $this->localFallbackDir . '/' . $key;
             $dir = dirname($dest);
             if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
@@ -53,8 +69,10 @@ final class R2
                 throw new RuntimeException('Cannot write ' . $dest);
             }
 
-            return '/' . $key;
+            return self::LOCAL_BASE . $key;
         }
+
+        $key = (string) ($this->config['prefix'] ?? '') . $key;
 
         $host = $this->config['account_id'] . '.r2.cloudflarestorage.com';
         $path = '/' . $this->config['bucket'] . '/' . $key;

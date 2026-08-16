@@ -1,0 +1,22 @@
+# Who may use the panel, and as what.
+#
+# Cloudflare Access decides *who you are*. This file decides *what you may do*.
+# The two are deliberately separate: an address that authenticates but is not
+# listed here gets a 403, not an implicit editor role. Without that rule,
+# adding somebody to the Access application — which is a login decision, often
+# made by whoever administers the client's Google Workspace — silently hands
+# them the content of every page.
+#
+# Roles:
+#   admin  — edits every field including `editable: admin`, lists and restores
+#            revisions
+#   editor — edits `editable: true` fields, and nothing else
+#
+# A row whose role is neither of those is ignored rather than guessed at: a
+# typo here must cost somebody their access, never grant it.
+#
+# No secrets. Safe to commit. In production this file lives in shared/ and is
+# pointed at by ROLES_FILE, so it survives a deploy and APP_ENV=prod refuses to
+# boot without it — see tests/fixtures/production.env.
+- { email: fotis@wearedope.com, role: admin }
+- { email: pelatis@example.gr,  role: editor }

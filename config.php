@@ -93,10 +93,11 @@ $config = [
         // Set AUTH_DEV_BYPASS=1 in .ddev/config.yaml. Never in production.
         'dev_bypass' => env_bool('AUTH_DEV_BYPASS', false),
 
-        // Who may do what. Written in Phase 3; the production boot guard below
-        // already refuses to start without it, so a prod box can never come up
-        // with "everyone is an admin" as the implicit default.
-        'roles_file' => env('ROLES_FILE', __DIR__ . '/roles.yml'),
+        // Who may do what. The production boot guard below refuses to start
+        // without it, so a prod box can never come up with "everyone is an
+        // admin" as the implicit default — and Auth denies any authenticated
+        // address the file does not list.
+        'roles_file' => env('ROLES_FILE', __DIR__ . '/config/roles.yml'),
     ],
 
     'r2' => [

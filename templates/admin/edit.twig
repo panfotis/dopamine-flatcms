@@ -69,12 +69,15 @@
               {% set value = block.values[name]|default('') %}
               {% set id = block.id ~ '-' ~ name %}
               {% set fname = 'blocks[' ~ block.id ~ '][' ~ name ~ ']' %}
-              {% set locked = def.editable is same as(false) %}
+              {# The same function the save path calls. Locking here is a
+                 courtesy to the editor; cleanValues() is what enforces it. #}
+              {% set locked = not may_edit(def.editable, user.role) %}
 
               <div class="field">
                 <label for="{{ id }}">
                   {{ def.label }}
                   {% if locked %}<span class="pill" style="margin-inline-start:6px">κλειδωμένο</span>{% endif %}
+                  {% if def.editable is same as('admin') %}<span class="pill" style="margin-inline-start:6px">μόνο διαχειριστής</span>{% endif %}
                   {% if def.max is defined and not locked %}
                     <span class="counter" data-for="{{ id }}" data-max="{{ def.max }}"></span>
                   {% endif %}
@@ -139,6 +142,9 @@
     <div class="savebar"><div class="inner">
       <button class="btn" type="submit">Αποθήκευση</button>
       <a class="btn ghost" href="{{ page.slug }}" target="_blank" rel="noopener">Προβολή σελίδας</a>
+      {% if user.role == 'admin' %}
+        <a class="btn ghost" href="?action=revisions&amp;page={{ page.id }}">Προηγούμενες εκδόσεις</a>
+      {% endif %}
       <span class="status" id="status">Οι αλλαγές δημοσιεύονται αμέσως μετά την αποθήκευση.</span>
     </div></div>
   </form>

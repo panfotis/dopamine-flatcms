@@ -13,9 +13,13 @@ require __DIR__ . '/lib.php';
 use Dopamine\FlatCms\Cms;
 use Dopamine\FlatCms\Content;
 use Dopamine\FlatCms\Fields;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Yaml\Yaml;
 
 putenv('AUTH_DEV_BYPASS=1');
+
+$_SESSION['csrf'] = 'test-token';
+$hostile = require __DIR__ . '/fixtures/hostile_save.php';
 
 // config.php defines env()/env_bool(); loading it also gives us the live config.
 $cfgBoot = require dirname(__DIR__) . '/config.php';
@@ -49,8 +53,73 @@ ok($cfgDefault['auth']['dev_bypass'] === false, 'dev_bypass defaults to OFF when
 putenv('AUTH_DEV_BYPASS=1');
 $cfg = require dirname(__DIR__) . '/config.php';
 ok(!method_exists(\Dopamine\FlatCms\Auth::class, 'isLocal'), 'REMOTE_ADDR-based bypass is gone entirely');
-exec(sprintf('php %s 2>&1', escapeshellarg(__DIR__ . '/_loopback_no_bypass.php')), $out);
-contains(implode("\n", $out), 'Cloudflare Access', 'a loopback request is refused when the bypass is off (cloudflared case)');
+
+// The cloudflared / DDEV-router case: the request genuinely arrives from
+// loopback, but the bypass is off. dev_bypass is read from the environment
+// here rather than hand-set on the array, so this exercises the real path.
+putenv('AUTH_DEV_BYPASS=0');
+$cfgNoBypass = require dirname(__DIR__) . '/config.php';
+putenv('AUTH_DEV_BYPASS=1');
+
+ok($cfgNoBypass['auth']['dev_bypass'] === false, 'AUTH_DEV_BYPASS=0 really does turn the bypass off');
+
+$loopback = admin(
+    Request::create('/admin.php', 'GET', ['action' => 'edit', 'page' => 'home'], [], [], ['REMOTE_ADDR' => '127.0.0.1']),
+    $cfgNoBypass
+);
+contains((string) $loopback->getContent(), 'Cloudflare Access', 'a loopback request is refused when the bypass is off (cloudflared case)');
+ok($loopback->getStatusCode() === 403, 'and refused with a 403, not served');
+
+section('The roles file fails closed on every way it can be wrong');
+// Authorisation is a second gate, and a gate that opens when its config is
+// broken is not a gate. Every case here grants nothing.
+$rolesFile = dirname(__DIR__) . '/var/cache/roles-hardening.yml';
+file_put_contents($rolesFile, implode("\n", [
+    '- { email: good@example.gr, role: editor }',
+    '- { email: typo@example.gr, role: administrator }',   // not a role we have
+    '- { email: blank@example.gr }',                       // no role at all
+    '- { email: "", role: admin }',                        // no email at all
+    '- just-a-string',
+    '',
+]));
+
+$roleOf = static fn (string $email, ?string $file = null): int
+    => as_user($email, 'GET', [], ['roles_file' => $file ?? $rolesFile])->getStatusCode();
+
+ok($roleOf('good@example.gr') === 200, 'a well-formed row grants access');
+ok($roleOf('GOOD@example.GR') === 200, 'and the address is matched case-insensitively, as mail is');
+ok($roleOf('typo@example.gr') === 403, 'role: administrator grants nothing — an unknown role is not a role');
+ok($roleOf('blank@example.gr') === 403, 'a row with no role grants nothing');
+ok($roleOf('nobody@example.gr') === 403, 'an address that is simply absent is refused');
+ok($roleOf('good@example.gr', $rolesFile . '.missing') === 403, 'a missing roles file denies everyone rather than opening the panel');
+
+file_put_contents($rolesFile, "not: a list\n");
+ok($roleOf('good@example.gr') === 403, 'a roles file of the wrong shape denies everyone too');
+unlink($rolesFile);
+
+section('Auth::user() answers with an identity and a role, or with nothing');
+$who = new \Dopamine\FlatCms\Auth(
+    ['mode' => 'none', 'dev_bypass' => false, 'roles_file' => ''],
+    dirname(__DIR__) . '/var/cache'
+);
+$dev = $who->user(Request::create('/admin.php'));
+ok(($dev['email'] ?? '') === 'dev@localhost', 'the dev bypass reports an email');
+ok(($dev['role'] ?? '') === 'admin', 'and a role, so nothing downstream has to guess one');
+
+$closed = new \Dopamine\FlatCms\Auth(
+    ['mode' => 'cf_access', 'dev_bypass' => false, 'aud' => 'x', 'team_domain' => 't', 'roles_file' => ''],
+    dirname(__DIR__) . '/var/cache'
+);
+ok($closed->user(Request::create('/admin.php')) === null, 'and an unauthenticated request is null, not a partial user');
+
+section('An unrecognised `editable:` value locks the field, it does not open it');
+// A typo in schema.yml must cost the client a field, never hand them one.
+foreach (['yes', 'ADMIN', 1, null] as $bad) {
+    ok(\Dopamine\FlatCms\Components::mayEdit($bad, 'admin') === false,
+        var_export($bad, true) . ' is not "editable" for an admin either');
+}
+ok(\Dopamine\FlatCms\Components::mayEdit('admin', 'editor') === false, 'editable: admin is closed to an editor');
+ok(\Dopamine\FlatCms\Components::mayEdit(true, 'editor') === true, 'editable: true is open to an editor');
 
 section('Image src is restricted to media we host');
 ok(f('mediaPath', 'https://evil.tld/x.jpg', $BASES['media_bases']) === '', 'third-party URL rejected — no open image proxy via /cdn-cgi/image');
@@ -121,7 +190,7 @@ $raw['blocks'][0]['fields']['ghost_field'] = 'should not survive a save';
 file_put_contents($file, Yaml::dump($raw, 6, 2));
 
 $content = new Content(dirname(__DIR__) . '/content');
-exec(sprintf('php %s 2>&1', escapeshellarg(__DIR__ . '/_do_save.php')), $o2);
+admin_post($hostile('test-token', (string) hash_file('sha256', $file)));
 $after = Yaml::parseFile($file);
 ok(!array_key_exists('ghost_field', $after['blocks'][0]['fields']), 'undeclared key removed from the file on the next save');
 ok(array_key_exists('heading', $after['blocks'][0]['fields']), 'declared fields still present');
@@ -158,8 +227,15 @@ rename($backup, $file);
 array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/home.*.yml') ?: []);
 
 section('Admin errors do not leak filesystem paths');
-exec(sprintf('php %s 2>/dev/null', escapeshellarg(__DIR__ . '/_bad_page.php')), $o3);
-$body = implode("\n", $o3);
+$error = admin_post([
+    'action'   => 'save',
+    'csrf'     => 'test-token',
+    'page'     => 'no-such-page',
+    'baseline' => '',
+    'blocks'   => [],
+]);
+$body = (string) $error->getContent();
+ok($error->getStatusCode() === 400, 'an internal error is a 400, not a 200 with an error-shaped page');
 missing($body, '/home/', 'no absolute path in the error shown to the client');
 missing($body, '.yml', 'no filename in the error shown to the client');
 contains($body, 'Η σελίδα δεν βρέθηκε', 'a client-appropriate Greek message is shown instead');

@@ -4,8 +4,8 @@
 prototype, then amended with a production-readiness review. What changed and
 why is in §13.
 
-**Status:** working prototype, **111 tests passing**, security fixes from the
-review applied.
+**Status:** Phases 0–3 done, **268 checks passing**. Next up is Phase 4 (media
+core). Security fixes from the review applied.
 **Audience:** Claude Code in VS Code, against DDEV. Read this and `CLAUDE.md`
 before changing anything.
 
@@ -29,18 +29,21 @@ not merely hidden in the UI (§10).
 | Component discovery, page rendering, slug routing | Done |
 | Schema-driven admin forms | Done |
 | Fields: `text` `textarea` `richtext` `image` `link` `select` `boolean` | Done |
-| Save lockdown + sanitisation | Done, 26 tests |
+| Save lockdown + sanitisation | Done, 73 tests |
 | Cloudflare Access auth (JWT verified) | Done |
+| Roles: `admin`/`editor` from `config/roles.yml`, unlisted email denied | Done (Phase 3) |
+| `editable: admin`, enforced on save | Done (Phase 3) |
+| Request/Response via `symfony/http-foundation` | Done (Phase 2) |
 | R2 upload (hand-rolled SigV4) | Done |
 | Edge cache purge on save (`Cache-Tag`) | Done |
 | Cloudflare image transformations | Done — **replaced by GD in Phase 4**, see there |
-| Revisions — **snapshot only, no restore** | Partial |
-| Security hardening from the review | Done, 35 tests |
+| Revisions — snapshot, list and restore, admin-only | Done (Phase 3) |
+| Security hardening from the review | Done, 65 tests |
 
 ### Not built, and needed before a client site ships
 
 Deploy process · navigation/menus · redirects from old sites · 500 page ·
-revision restore · new-site scaffold · staging noindex.
+new-site scaffold · staging noindex.
 
 **These block launch. Phase 0 closes their production contracts and Phases 3–7
 build them; they are not "later".** This includes SEO and a contact form, which
@@ -414,10 +417,10 @@ Each phase ends with the full suite green.
 
 | Phase | Work | Estimate |
 |---|---|---|
-| 0 | Close production contracts: state/deploy boundary, versioning, media route/budgets, form caching, production auth guard | 1–2 d |
-| 1 | `symfony/html-sanitizer` | 0.5–1 d |
-| 2 | `symfony/http-foundation` | 1.5–2 d |
-| 3 | Roles + revision restore | 1 d |
+| 0 | ~~Close production contracts: state/deploy boundary, versioning, media route/budgets, form caching, production auth guard~~ **done** | 1–2 d |
+| 1 | ~~`symfony/html-sanitizer`~~ **done** | 0.5–1 d |
+| 2 | ~~`symfony/http-foundation`~~ **done** | 1.5–2 d |
+| 3 | ~~Roles + revision restore~~ **done** | 1 d |
 | 4 | Media core: image object, bounded GD transformations, `<picture>`, recursive sanitise, `list`, `link` picker | 5–7 d |
 | 5 | Ship kit: atomic deploy, content backup, doctor, nav, redirects, 500, site kit | 3–5 d |
 | 6 | SEO + sitemap | 1–1.5 d |
@@ -524,6 +527,15 @@ left an agent to invent the rest:
 `_loopback_no_bypass.php` and `_bad_page.php` are deleted and their assertions
 run in-process against a built `Request`. All prior assertions pass.
 
+**Settled while doing it.** `_stale_save.php` moved in-process too; `_boot.php`
+and `_img_route.php` stayed subprocesses on purpose (§11). `Cms::cacheHeaders()`
+already returned header lines from Phase 0, so the emitting wrapper was simply
+deleted. `symfony/mime` is deliberately **not** installed, so uploads sniff with
+`finfo` — `UploadedFile::getMimeType()` fatals without it. `Request::isSecure()`
+ignores `X-Forwarded-Proto` until trusted proxies are configured, so the session
+cookie reads that header explicitly; and the session cache limiter is disabled
+(`cache_limiter => ''`) or PHP emits a second, conflicting `Cache-Control`.
+
 ### Phase 3 — Roles + revision restore
 
 ```yaml
@@ -560,6 +572,17 @@ An editor cannot list revision contents, restore one, or forge the action.
 the request; an admin can; an unlisted authenticated email is denied; restore
 round-trips through sanitisation; only an admin can list and restore revisions;
 and `03_lockdown.php` covers all forged cases.
+
+**Settled while doing it.** `Components::mayEdit()` is the single copy of the
+`editable` table; the edit form calls it through a Twig function, so a template
+can never disagree with what the save path enforces. An `editable:` value
+outside `true|admin|false` normalises to `false` — a schema typo costs a field
+rather than opening one. `Content::restore()` walks the **current** file's
+blocks and feeds the revision through `cleanValues()`, so a revision supplies
+values and never structure, and it runs inside `transaction()` so the version it
+replaces is snapshotted first. Revision filenames are matched against the exact
+shape `snapshot()` writes *and* against the page id. The listing shows dates
+only, never revision contents, to anybody.
 
 ### Phase 4 — Media core
 
@@ -1179,19 +1202,28 @@ when adding a field type; never weaken them to make a feature pass.
 ## 11. Testing
 
 ```bash
-ddev exec bash tests/run.sh     # 111 checks
+ddev exec bash tests/run.sh     # 268 checks
 ```
 
 - `01_render.php` (18) — discovery, rendering, image URLs
-- `02_admin.php` (17) — form generation, CSRF, auth, absence of structural controls
-- `03_lockdown.php` (26) — hostile save: XSS, `javascript:`, locked fields, injected fields, retyping, Word paste
-- `04_hardening.php` (35) — every issue in §9
-- `05_concurrency.php` (15) — stale-save refusal, work preservation, presence markers
+- `02_admin.php` (31) — form generation, CSRF, auth, uploads, absence of structural controls
+- `03_lockdown.php` (73) — hostile save: XSS, `javascript:`, locked fields, injected fields, retyping, Word paste; roles, forged `editable: admin`, forged revision flows, restore sanitisation
+- `04_hardening.php` (65) — every issue in §9, plus roles-file and `editable` fail-closed cases
+- `05_concurrency.php` (16) — stale-save refusal, work preservation, presence markers
+- `06_production.php` (65) — §10.7 boot guard, production paths, atomic release, derivative contract, form caching
 
 Rules: every phase adds assertions; a new field type requires a hostile-input
 case; the suite is green before a phase is done. Assertions may be **rewritten**
 when an implementation legitimately changes output (Phase 1), but no **case** may
 be dropped.
+
+**Requests run in-process.** Phase 2 made `Admin::handle()` return a `Response`,
+so a test builds a `Request` and asserts on the status, headers and body. Only
+`_boot.php` (needs a real environment for the production guard) and
+`_img_route.php` (measures peak memory, which is process-global) still fork.
+`tests/lib.php` mints genuine Cloudflare Access JWTs against a throwaway keypair,
+so role tests exercise the real auth path rather than a config knob — a fake
+identity switch would be exactly the backdoor `roles.yml` exists to prevent.
 
 CI runs the suite on PHP 8.4, `composer validate`, `composer audit`, and
 `bin/doctor` against valid and intentionally invalid fixtures. Phase 4 adds real

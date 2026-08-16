@@ -24,10 +24,12 @@ drop, no component picker — those UIs do not exist.
 
 This is enforced on save, not just hidden in the UI. `Admin::save()` reads the
 blocks from disk and, for each one, walks the component's schema pulling only
-declared editable fields out of `$_POST`. A forged request that posts
-`blocks[hero][type]`, an undeclared field, or a field you marked
-`editable: false` changes nothing. See `tests/03_lockdown.php` — it fires
-exactly that request and asserts the file on disk is unaffected.
+the fields that role may edit out of the request. A forged request that posts
+`blocks[hero][type]`, an undeclared field, a field you marked
+`editable: false`, or — as an editor — one marked `editable: admin`, changes
+nothing. See `tests/03_lockdown.php`: it fires exactly those requests, with a
+real Cloudflare Access token for each role, and asserts the file on disk is
+unaffected.
 
 ---
 
@@ -163,8 +165,18 @@ fall back to `default` (or an empty string) rather than erroring.
 | `select` | dropdown | must match a declared option |
 
 Per-field options: `label`, `hint`, `max`, `required`, `default`,
-`placeholder`, `options`, and `editable: false` to show a field read-only and
-refuse to write it.
+`placeholder`, `options`, and `editable`, which takes three values:
+
+| `editable` | admin | editor |
+|---|---|---|
+| `true` (default) | edits | edits |
+| `admin` | edits | sees, locked |
+| `false` | sees, locked | sees, locked |
+
+Anything else is treated as `false` — a typo in a schema must cost a field, not
+hand one over. Who is an admin is `config/roles.yml`; Cloudflare Access decides
+who gets as far as the panel, that file decides what they may do once there, and
+an authenticated address it does not list is refused outright.
 
 Paste handling in `richtext` is forced to plain text, so a paste from Word
 cannot carry styling into the page.

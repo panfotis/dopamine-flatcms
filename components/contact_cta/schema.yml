@@ -13,10 +13,14 @@ fields:
     label: Τηλέφωνο
     max: 30
 
+  # The address the site publishes is a business decision, not copy: changing
+  # it silently redirects every enquiry the client gets. Editors see it and
+  # cannot change it; admins can. Enforced on save, not merely disabled here.
   email:
     type: text
     label: Email
     max: 60
+    editable: admin
 
   address:
     type: textarea

@@ -22,18 +22,33 @@ use Symfony\Component\Yaml\Yaml;
  */
 final class Content
 {
+    /**
+     * Exactly the filename snapshot() writes: <id>.<Ymd>-<His>-<6 hex>.yml.
+     *
+     * Revision names arrive from the request, so they are matched against this
+     * rather than merely screened for "..". A filename is not a path here and
+     * never gets the chance to become one.
+     */
+    private const REVISION = '/^[a-z0-9_-]+\.\d{8}-\d{6}-[0-9a-f]{6}\.yml$/i';
+
     public function __construct(private readonly string $dir)
     {
     }
 
-    private function file(string $id): string
+    /** A page id, or an exception. The only way an id becomes part of a path. */
+    private function id(string $id): string
     {
-        $id = preg_replace('/[^a-z0-9_-]/i', '', $id) ?? '';
-        if ($id === '') {
+        $clean = preg_replace('/[^a-z0-9_-]/i', '', $id) ?? '';
+        if ($clean === '') {
             throw new RuntimeException('Invalid page id.');
         }
 
-        return $this->dir . '/pages/' . $id . '.yml';
+        return $clean;
+    }
+
+    private function file(string $id): string
+    {
+        return $this->dir . '/pages/' . $this->id($id) . '.yml';
     }
 
     /** @return list<array{id:string, title:string, slug:string}> */
@@ -189,5 +204,83 @@ final class Content
         foreach (array_slice($existing, 0, max(0, count($existing) - $keep)) as $old) {
             @unlink($old);
         }
+    }
+
+    /**
+     * The revisions of a page, newest first.
+     *
+     * Names and timestamps only — never contents. Choosing a version to restore
+     * does not require reading what is in it, so nothing is exposed here.
+     *
+     * @return list<array{file: string, at: string}>
+     */
+    public function revisions(string $id): array
+    {
+        $id = $this->id($id);
+
+        $out = [];
+        foreach (glob($this->dir . '/.revisions/' . $id . '.*.yml') ?: [] as $path) {
+            $name = basename($path);
+            if (preg_match(self::REVISION, $name) !== 1) {
+                continue; // not written by snapshot(); not ours to offer
+            }
+
+            $out[] = ['file' => $name, 'at' => date('d/m/Y H:i:s', (int) filemtime($path))];
+        }
+
+        // The name carries the timestamp, so sorting it descending is newest
+        // first — and does not depend on mtime, which a deploy can rewrite.
+        usort($out, static fn (array $a, array $b): int => strcmp($b['file'], $a['file']));
+
+        return $out;
+    }
+
+    /**
+     * Read one revision of one page.
+     *
+     * $name is request input. It must match the exact shape snapshot() writes
+     * *and* belong to this page, so neither a traversal nor another page's
+     * history can be read through it.
+     *
+     * @return array<string, mixed>
+     */
+    public function revision(string $id, string $name): array
+    {
+        $id = $this->id($id);
+
+        if (preg_match(self::REVISION, $name) !== 1 || !str_starts_with($name, $id . '.')) {
+            throw new RuntimeException('Άγνωστη έκδοση.');
+        }
+
+        $path = $this->dir . '/.revisions/' . $name;
+        if (!is_file($path)) {
+            throw new RuntimeException('Η έκδοση δεν βρέθηκε.');
+        }
+
+        return (array) (Yaml::parseFile($path) ?? []);
+    }
+
+    /**
+     * Restore a revision by *rebuilding* the page from it. Never copy() the old
+     * file back into place.
+     *
+     * $rebuild is handed the parsed revision and the page as it stands right
+     * now, and returns what to write. The caller walks the current schema and
+     * re-runs the sanitiser inside it, because a revision is untrusted input
+     * like any other: one taken before the allowlist tightened would otherwise
+     * land on disk unsanitised and be rendered straight back out through |raw.
+     *
+     * Goes through transaction(), so the version being replaced is snapshotted
+     * first — restoring the wrong revision is itself undoable.
+     *
+     * @param callable(array<string, mixed>, array<string, mixed>): array<string, mixed> $rebuild
+     */
+    public function restore(string $id, string $name, callable $rebuild): void
+    {
+        $revision = $this->revision($id, $name);
+
+        // No baseline: a restore is a deliberate overwrite of whatever is
+        // there, which is the one case where "the file changed" is not news.
+        $this->transaction($id, '', static fn (array $page): array => $rebuild($revision, $page));
     }
 }

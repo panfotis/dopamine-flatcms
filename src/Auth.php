@@ -6,6 +6,8 @@ namespace Dopamine\FlatCms;
 
 use Firebase\JWT\JWK;
 use Firebase\JWT\JWT;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Yaml\Yaml;
 use Throwable;
 
 /**
@@ -25,6 +27,12 @@ use Throwable;
  */
 final class Auth
 {
+    /** The roles that exist. A `role:` outside this set is not a role. */
+    public const ROLES = ['admin', 'editor'];
+
+    /** @var array<string, string>|null email => role, lazily read from disk */
+    private ?array $rolesCache = null;
+
     /** @param array<string, mixed> $config */
     public function __construct(
         private readonly array $config,
@@ -32,20 +40,78 @@ final class Auth
     ) {
     }
 
-    public function user(): ?string
+    /**
+     * Who is making this request, and what may they do?
+     *
+     * Two separate questions, and null unless both answer. Cloudflare Access
+     * establishes the address; config/roles.yml decides whether that address
+     * has any business here. An authenticated stranger is still a stranger.
+     *
+     * @return array{email: string, role: string}|null
+     */
+    public function user(Request $request): ?array
     {
-        $mode = (string) ($this->config['mode'] ?? 'cf_access');
+        try {
+            return $this->requireUser($request);
+        } catch (AccessDeniedException) {
+            return null;
+        }
+    }
 
-        // The bypass is an explicit, deliberate configuration choice. It is
-        // never inferred from anything in the request — REMOTE_ADDR in
-        // particular is worthless here, because any local reverse proxy
-        // (DDEV's router, cloudflared, nginx -> php-fpm) makes every request
-        // look like it came from loopback.
-        if ($mode === 'none' || $this->config['dev_bypass'] === true) {
-            return 'dev@localhost';
+    /** @return array{email: string, role: string} */
+    public function requireUser(Request $request): array
+    {
+        if ($this->bypassed()) {
+            // Nothing was authenticated, so there is no address to look up in
+            // roles.yml. Admin is the only coherent answer: the bypass means
+            // "skip auth entirely", and APP_ENV=prod refuses to boot with it on.
+            return ['email' => 'dev@localhost', 'role' => 'admin'];
         }
 
-        $token = $this->token();
+        $email = $this->email($request);
+        if ($email === null) {
+            throw new AccessDeniedException(
+                'This page is protected by Cloudflare Access. '
+                . 'Open it through the site domain, not the origin server.'
+            );
+        }
+
+        $role = $this->roles()[strtolower($email)] ?? null;
+        if ($role === null) {
+            // Deliberately not an implicit editor role. Whoever administers the
+            // Access application can add a login; only this repository can add
+            // a person to the panel. The message says so, because the reader
+            // authenticated perfectly well and "try logging in again" is
+            // useless advice to them.
+            throw new AccessDeniedException(
+                'Ο λογαριασμός σας αναγνωρίστηκε αλλά δεν έχει πρόσβαση σε αυτό το site. '
+                . 'Ζητήστε από τον διαχειριστή να σας προσθέσει.'
+            );
+        }
+
+        return ['email' => $email, 'role' => $role];
+    }
+
+    /**
+     * The bypass is an explicit, deliberate configuration choice. It is never
+     * inferred from anything in the request — REMOTE_ADDR in particular is
+     * worthless here, because any local reverse proxy (DDEV's router,
+     * cloudflared, nginx -> php-fpm) makes every request look like it came
+     * from loopback.
+     */
+    private function bypassed(): bool
+    {
+        return (string) ($this->config['mode'] ?? 'cf_access') === 'none'
+            || $this->config['dev_bypass'] === true;
+    }
+
+    /**
+     * The address Cloudflare Access signed for, or null. Authentication only —
+     * this says nothing about whether the address may use the panel.
+     */
+    private function email(Request $request): ?string
+    {
+        $token = $this->token($request);
         if ($token === null) {
             return null;
         }
@@ -74,23 +140,45 @@ final class Auth
         return (string) ($claims['email'] ?? 'unknown');
     }
 
-    public function requireUser(): string
+    /**
+     * The authorisation allowlist, keyed by lowercased email.
+     *
+     * A row naming a role we do not have is dropped rather than interpreted:
+     * `role: administrator` must lock somebody out, never let them in.
+     *
+     * @return array<string, string>
+     */
+    private function roles(): array
     {
-        $user = $this->user();
-        if ($user !== null) {
-            return $user;
+        if ($this->rolesCache !== null) {
+            return $this->rolesCache;
         }
 
-        http_response_code(403);
-        header('Content-Type: text/html; charset=utf-8');
-        echo '<h1>403</h1><p>This page is protected by Cloudflare Access. '
-            . 'Open it through the site domain, not the origin server.</p>';
-        exit;
+        $file = (string) ($this->config['roles_file'] ?? '');
+        $rows = is_file($file) ? (Yaml::parseFile($file) ?? []) : [];
+
+        $out = [];
+        foreach ((array) $rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $email = strtolower(trim((string) ($row['email'] ?? '')));
+            $role  = (string) ($row['role'] ?? '');
+
+            if ($email !== '' && in_array($role, self::ROLES, true)) {
+                $out[$email] = $role;
+            }
+        }
+
+        return $this->rolesCache = $out;
     }
 
-    private function token(): ?string
+    private function token(Request $request): ?string
     {
-        $t = $_SERVER['HTTP_CF_ACCESS_JWT_ASSERTION'] ?? $_COOKIE['CF_Authorization'] ?? null;
+        $t = $request->headers->get('Cf-Access-Jwt-Assertion')
+            ?? $request->cookies->get('CF_Authorization');
+
         return is_string($t) && $t !== '' ? $t : null;
     }
 

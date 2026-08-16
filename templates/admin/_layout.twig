@@ -81,7 +81,7 @@
 <body>
 <div class="topbar"><div class="inner">
   <div class="brand"><a href="?" style="text-decoration:none;color:inherit">{{ site('name') }}</a> <span>· Διαχείριση</span></div>
-  <div class="who">{{ user }}</div>
+  <div class="who">{{ user.email }}{% if user.role %} <span class="pill">{{ user.role }}</span>{% endif %}</div>
 </div></div>
 
 <div class="wrap">{% block content %}{% endblock %}</div>

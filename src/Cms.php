@@ -42,6 +42,10 @@ final class Cms
 
         $this->twig->addFunction(new TwigFunction('img', $this->imageUrl(...)));
         $this->twig->addFunction(new TwigFunction('site', fn (string $k): mixed => $config['site'][$k] ?? null));
+        // The edit form asks the same question the save path asks, of the same
+        // function. A template that decided for itself which fields to lock
+        // would drift from the rule that is actually enforced.
+        $this->twig->addFunction(new TwigFunction('may_edit', Components::mayEdit(...)));
         // NOTE: there is deliberately no `|rich` filter. A filter that marks
         // arbitrary strings `is_safe: html` is an XSS primitive waiting for
         // someone to reach for it; richtext is already sanitised on save and
@@ -156,8 +160,9 @@ final class Cms
     /**
      * Cache headers for a page, as literal header lines.
      *
-     * Split out from sendCacheHeaders() so the policy is assertable — header()
-     * is a no-op under the CLI SAPI, which is where the suite runs.
+     * Returned, never emitted: header() is a no-op under the CLI SAPI, which is
+     * where the suite runs, so a policy that emitted itself could not be
+     * asserted at all. The entrypoint puts these on the Response.
      *
      * A page marked `private: true` in its YAML bypasses edge caching
      * altogether. That is the v1 contact-form policy: a form page carries a
@@ -189,13 +194,5 @@ final class Cms
             ),
             'Cache-Tag: ' . Cloudflare::tagFor((string) $page['id']) . ',site',
         ];
-    }
-
-    /** @param array<string, mixed> $page */
-    public function sendCacheHeaders(array $page): void
-    {
-        foreach ($this->cacheHeaders($page) as $line) {
-            header($line);
-        }
     }
 }

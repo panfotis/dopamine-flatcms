@@ -41,9 +41,21 @@ ok($caught instanceof StaleContentException, 'StaleContentException thrown, not 
 ok(Yaml::parseFile($file)['blocks'][0]['fields']['heading'] === 'Αλλαγή από τον συνάδελφο', "the other person's save survived intact");
 
 section("The refused editor's work is handed back, not discarded");
-exec(sprintf('php %s 2>/dev/null', escapeshellarg(__DIR__ . '/_stale_save.php')), $out);
-$body = implode("\n", $out);
+$_SESSION['csrf'] = 'test-token';
+$refused = admin_post([
+    'action'   => 'save',
+    'csrf'     => 'test-token',
+    'page'     => 'home',
+    'baseline' => str_repeat('0', 64),   // stale by construction
+    'blocks'   => [
+        'hero' => [
+            'subheading' => 'Κείμενο που δεν πρέπει να χαθεί<script>alert(1)</script>',
+        ],
+    ],
+]);
+$body = (string) $refused->getContent();
 
+ok($refused->getStatusCode() === 200, 'the conflict re-renders the form rather than erroring out');
 contains($body, 'Η σελίδα άλλαξε από αλλού', 'the conflict is explained');
 contains($body, 'είναι ακόμα στη', 'the editor is told their text was kept');
 contains($body, 'Κείμενο που δεν πρέπει να χαθεί', 'the rejected submission is re-rendered in the form');

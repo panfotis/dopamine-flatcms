@@ -1,29 +1,30 @@
 <?php
 /**
- * Runs one admin save in an isolated process, with a hostile $_POST.
- * Used by 03_lockdown.php — not a test itself.
+ * One admin save, with a hostile POST body.
+ *
+ * Was tests/_do_save.php, which had to be a separate process because
+ * Admin::handle() echoed and exited. It is now a plain request body, shared by
+ * 03_lockdown.php (which asserts what landed on disk) and 04_hardening.php
+ * (which asserts what did not).
+ *
+ * The CSRF token and the baseline are the caller's to supply: this save is
+ * legitimate in every way except its payload, which is the whole point — a
+ * request rejected at the door proves nothing about the schema walk.
  */
 
 declare(strict_types=1);
 
-session_start();
-$_SESSION['csrf'] = 'test-token';
-
-putenv('AUTH_DEV_BYPASS=1');
-$_SERVER['REQUEST_METHOD']  = 'POST';
-
-$_POST = [
-    'action' => 'save',
-    'csrf'   => 'test-token',
-    'page'   => 'home',
-    // Correct baseline: this save is legitimate in every way except its payload.
-    'baseline' => hash_file('sha256', dirname(__DIR__) . '/content/pages/home.yml'),
-    'title'  => '  Αρχική   σελίδα  <b>bold</b> ',
+return static fn (string $csrf, string $baseline): array => [
+    'action'   => 'save',
+    'csrf'     => $csrf,
+    'page'     => 'home',
+    'baseline' => $baseline,
+    'title'    => '  Αρχική   σελίδα  <b>bold</b> ',
 
     'blocks' => [
         'hero' => [
             // legitimate edit
-            'subheading' => "Νέος υπότιτλος από τον πελάτη.",
+            'subheading' => 'Νέος υπότιτλος από τον πελάτη.',
 
             // 1. XSS attempt in a plain text field
             'heading'    => 'Καλημέρα <script>alert(1)</script><img src=x onerror=alert(2)>',
@@ -58,8 +59,6 @@ $_POST = [
     ],
 
     // 8. structural fields that are not the client's to change
-    'slug'  => '/hacked',
-    'id'    => 'hacked',
+    'slug' => '/hacked',
+    'id'   => 'hacked',
 ];
-
-require dirname(__DIR__) . '/public/admin.php';

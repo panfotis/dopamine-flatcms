@@ -35,7 +35,9 @@ full in §10 of the build plan.
    for each block pull only fields declared in that component's `schema.yml`
    out of the request. Never iterate over `$request->request->all()` and write
    what you find.
-2. **`editable: false` is refused server-side**, not just disabled in the UI.
+2. **`editable` is refused server-side**, not just disabled in the UI. `false`
+   is closed to everyone, `admin` is closed to editors. `Components::mayEdit()`
+   is the only copy of that table, and the edit form asks it too.
 3. **Block `id`, `type`, order and count come from the file only.** Same for
    the page id (the filename) and `slug`. No request may change them.
 4. **Richtext is allowlist-based.** Never blocklist-based.
@@ -43,16 +45,21 @@ full in §10 of the build plan.
    request.** It is only ever `1` in `.ddev/config.yaml`. Do not reintroduce a
    `REMOTE_ADDR`/loopback check — it fails in DDEV and opens the panel to the
    internet behind Cloudflare Tunnel.
-6. **An image `src` may only point at `config.media_bases`.** Anything else
+6. **Access authenticates; `config/roles.yml` authorizes.** An authenticated
+   address the file does not list gets a 403, never an implicit editor role.
+   Anything malformed in that file — unknown role, missing file, wrong shape —
+   denies. Revision listing and restore are admin-only, and CSRF-protected.
+7. **An image `src` may only point at `config.media_bases`.** Anything else
    turns the client's `/cdn-cgi/image` endpoint into an open proxy.
-7. **Saves run inside `Content::transaction()`** — lock + baseline check. Never
+8. **Saves run inside `Content::transaction()`** — lock + baseline check. Never
    load-mutate-write directly. A `StaleContentException` must re-render the
    editor's values, never discard them.
-8. **Restoring a revision re-runs sanitisation.** Never `copy()` a file back.
-9. **Never weaken `tests/03_lockdown.php` or `tests/04_hardening.php` to make a
-   feature pass.** If a change breaks them, the change is wrong. Assertions may
-   be rewritten when an implementation legitimately changes output; a *case* may
-   never be dropped.
+9. **Restoring a revision re-runs sanitisation.** Never `copy()` a file back.
+10. **Never weaken `tests/03_lockdown.php`, `tests/04_hardening.php` or
+   `tests/06_production.php` to make a
+    feature pass.** If a change breaks them, the change is wrong. Assertions may
+    be rewritten when an implementation legitimately changes output; a *case* may
+    never be dropped.
 
 ## Conventions
 
@@ -79,13 +86,14 @@ full in §10 of the build plan.
 
 Current: `twig/twig`, `symfony/yaml`, `firebase/php-jwt` (v7 — v6 carries
 CVE-2025-45769), `symfony/html-sanitizer` (which pulls `league/uri` and two PSR
-HTTP interface packages transitively). Extensions: `ext-curl`, `ext-dom`,
-`ext-gd`, `ext-json`.
+HTTP interface packages transitively), `symfony/http-foundation` (no transitive
+dependencies; deliberately *not* `symfony/mime`, so sniff uploads with `finfo`
+rather than `UploadedFile::getMimeType()`). Extensions: `ext-curl`, `ext-dom`,
+`ext-gd`, `ext-json`, `ext-openssl` (tests mint Access tokens).
 
-Test suite: 187 checks across six files. Run all of them, not just the new ones.
+Test suite: 268 checks across six files. Run all of them, not just the new ones.
 
-Planned, per the build plan: `symfony/mailer`, `symfony/dotenv`,
-`symfony/http-foundation`.
+Planned, per the build plan: `symfony/mailer`, `symfony/dotenv`.
 
 **Do not add anything else without asking.** Explicitly rejected, with reasons:
 
@@ -99,14 +107,18 @@ Planned, per the build plan: `symfony/mailer`, `symfony/dotenv`,
 
 ```
 src/          Cms Admin Auth Components Content Fields Locks Media R2
-              Cloudflare StaleContentException
+              Cloudflare AccessDeniedException StaleContentException
+config/       roles.yml — email -> admin|editor, committed, no secrets
 components/   <name>/schema.yml + <name>.twig — one folder per component
 content/      pages/*.yml, .revisions/   (locale subdirs land in Phase 9;
               uploads move here in Phase 5; submissions live in var/)
 templates/    layout.twig, 404.twig, admin/*.twig
 public/       docroot: index.php, admin.php, img.php, router.php
 tests/        01_render 02_admin 03_lockdown 04_hardening 05_concurrency
-              06_production, fixtures/production.env, run.sh
+              06_production, lib.php, fixtures/, run.sh
+              Requests run in-process: build a Request, assert on the Response.
+              Only _boot.php (needs a real environment) and _img_route.php
+              (measures peak memory) still fork.
 ```
 
 Production runs an atomic-release layout: `CONTENT_PATH` and `VAR_PATH` point
