@@ -483,6 +483,44 @@ $noCsrf = as_user($ADMIN, 'POST', [
 contains((string) $noCsrf->getContent(), cms()->lang->t('err.session'), 'even an admin needs a CSRF token to restore');
 ok($noCsrf->getStatusCode() === 400, 'and the forged restore is refused');
 
+section('The settings screen is admin-only, and never prints a credential');
+$adminSettings = as_user($ADMIN, 'GET', ['action' => 'settings']);
+ok($adminSettings->getStatusCode() === 200, 'an admin can read the settings screen');
+
+$editorSettings = as_user($EDITOR, 'GET', ['action' => 'settings']);
+ok($editorSettings->getStatusCode() === 403, 'an editor forging ?action=settings gets 403');
+missing((string) $editorSettings->getContent(), 'base_url', 'and no configuration leaks in the refusal');
+
+// The screen renders whatever config.php holds, so the only honest test is to
+// put a recognisable value in every credential key and grep the whole page —
+// including the Access `aud`, which the harness sets to a distinctive string.
+[$secretConfig, $sign] = access();
+$SECRET = 'SECRET-VALUE-THAT-MUST-NEVER-RENDER';
+$secretConfig['r2']['secret_key']        = $SECRET;
+$secretConfig['r2']['access_key']        = $SECRET;
+$secretConfig['turnstile']['secret']     = $SECRET;
+$secretConfig['cloudflare']['api_token'] = $SECRET;
+$secretConfig['form']['dsn']             = 'smtp://someone:' . $SECRET . '@mail.example.gr';
+
+$leak = (string) admin(
+    \Symfony\Component\HttpFoundation\Request::create('/admin.php', 'GET', ['action' => 'settings'], [], [], [
+        'HTTP_CF_ACCESS_JWT_ASSERTION' => $sign($ADMIN),
+    ]),
+    $secretConfig
+)->getContent();
+
+missing($leak, $SECRET, 'no credential value reaches the page, in any section');
+missing($leak, 'smtp://someone', 'not even the half of a DSN that is not the password');
+missing($leak, $secretConfig['auth']['aud'], 'nor the Access aud, which identifies the application');
+contains($leak, cms()->lang->t('settings.set'), 'they are reported as set instead of shown');
+// auth.dev_bypass matches the credential pattern on its name and is a boolean.
+// Masking it would hide the one value on this screen someone urgently needs to
+// read — "is authentication switched off on this box" — behind "set".
+contains($leak, cms()->lang->t('settings.off'), 'a boolean is never masked, whatever its key is called');
+// The point of the screen: what is not a secret is legible.
+contains($leak, 'base_url', 'while ordinary settings are named');
+contains($leak, (string) $secretConfig['site']['name'], 'and their values shown');
+
 section('A revision name is a filename, never a path');
 foreach ([
     '../../pages/home.yml'                  => 'traversal',

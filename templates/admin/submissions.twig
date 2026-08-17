@@ -1,5 +1,6 @@
 {% extends 'admin/_layout.twig' %}
 {% block title %}{{ t('sub.title') }}{% endblock %}
+{% block aside %}{% include 'admin/_nav.twig' with {active: 'messages'} %}{% endblock %}
 
 {% block content %}
   <h1>{{ t('sub.title') }}</h1>

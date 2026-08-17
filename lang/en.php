@@ -23,12 +23,25 @@ return [
     'nav.pages' => 'Pages',
     'nav.back' => '← All pages',
     'nav.back_submissions' => '← All messages',
+    'nav.logout' => 'Log out',
+    'nav.editor' => 'Page editor',
+    'nav.editing' => 'Editing: %s',
+    'nav.settings' => 'Settings',
+
+    // ── Settings ────────────────────────────────────────────────────────────
+    'settings.title' => 'Site settings',
+    'settings.intro' => 'How this install is configured. These come from config.php and the server environment, and are changed by your developer.',
+    'settings.set' => 'set',
+    'settings.unset' => 'not set',
+    'settings.on' => 'on',
+    'settings.off' => 'off',
 
     // ── Page list ───────────────────────────────────────────────────────────
     'list.title' => 'Pages',
     'list.intro' => 'Pick a page to change its text and images.',
     'list.col_page' => 'Page',
     'list.col_address' => 'Address',
+    'list.col_actions' => 'Actions',
     'list.empty' => 'No pages found.',
     'list.view' => 'View',
     'list.edit' => 'Edit',

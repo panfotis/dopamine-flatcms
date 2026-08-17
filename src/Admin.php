@@ -39,6 +39,13 @@ final class Admin
      */
     private const MUTATIONS = ['save', 'upload', 'restore'];
 
+    /**
+     * Config keys whose value the settings screen must never print. See
+     * redact(): named rather than listed by path, so it stays right when
+     * config.php grows a credential nobody remembers to add here.
+     */
+    private const SECRET_KEY = '/secret|token|key|dsn|pass|aud/i';
+
     public function __construct(private readonly Cms $cms)
     {
     }
@@ -143,6 +150,7 @@ final class Admin
             'upload'    => $this->upload($request),
             'revisions' => $this->revisions($request, $user),
             'restore'   => $this->restore($request, $user),
+            'settings'  => $this->settings($user),
             'submissions' => $this->submissions($request, $user),
             'submission'  => $this->submission($request, $user),
             'submission_delete' => $this->submissionDelete($request, $user),
@@ -668,6 +676,64 @@ final class Admin
 
         return new RedirectResponse('?action=edit&page=' . urlencode($id) . $this->localeQuery()
             . '&ok=' . urlencode($this->cms->lang->t('flash.restored')), 303);
+    }
+
+    /**
+     * What this install is configured as. Admin only, and read-only.
+     *
+     * Read-only is the feature, not a shortcut: `config.php` is the developer's
+     * file and most of it resolves from the environment, so a value edited here
+     * would either be overwritten on the next boot or mean the panel writing
+     * PHP to disk. This screen answers "what is live" — bin/doctor's view
+     * without the shell — and deliberately nothing else. Not in MUTATIONS: it
+     * writes nothing, so it has no business taking the content lock.
+     *
+     * @param array{email: string, role: string} $user
+     */
+    private function settings(array $user): Response
+    {
+        $this->requireAdmin($user);
+
+        return $this->html($this->cms->twig->render('admin/settings.twig', [
+            // The absolute paths under `paths` are shown as-is, unlike anywhere
+            // else in the panel — safeMessage() hides them precisely because it
+            // cannot know who is reading. Here it can: which shared/ directory
+            // the running release is pointed at is the thing you open this
+            // screen to check, and only an admin can reach it.
+            'sections' => $this->redact($this->cms->config),
+            'user'     => $user,
+        ]));
+    }
+
+    /**
+     * Credentials are never rendered — not truncated, not fingerprinted, only
+     * "set" or "not set".
+     *
+     * Matching on the key *name* rather than an allowlist of known paths is the
+     * point: a secret added to config.php later is masked without anyone
+     * remembering to come back here. A false positive costs one dull row on an
+     * admin-only page; a false negative publishes an API token.
+     *
+     * @param  array<string, mixed> $config
+     * @return array<string, mixed>
+     */
+    private function redact(array $config): array
+    {
+        foreach ($config as $key => $value) {
+            if (is_array($value)) {
+                $config[$key] = $this->redact($value);
+                continue;
+            }
+
+            // Strings only. A credential is a string, and matching on the name
+            // alone would mask `auth.dev_bypass` — the one flag on this screen
+            // whose value someone urgently needs to read — as "set".
+            if (is_string($value) && preg_match(self::SECRET_KEY, (string) $key) === 1) {
+                $config[$key] = $this->cms->lang->t($value === '' ? 'settings.unset' : 'settings.set');
+            }
+        }
+
+        return $config;
     }
 
     /**

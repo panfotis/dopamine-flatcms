@@ -1,3 +1,5 @@
+{# The clip, its poster and the poster's description are one item. #}
+<div class="field-group">
 <div class="media">
   <div class="thumb" id="{{ id }}-thumb"
        style="{% if value.poster.src|default('') %}background-image:url('{{ value.poster.src }}'){% endif %}"></div>
@@ -25,3 +27,4 @@
       'fields': def.fields.poster.fields, 'hint': t('edit.poster_hint')},
      id ~ '-poster', fname ~ '[poster]', value.poster|default({}), locked, pages, page_ids, errors
    ) }}
+</div>

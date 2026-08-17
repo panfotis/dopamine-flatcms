@@ -82,10 +82,16 @@ array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/home.*.yml')
 section('SEO is a collapsed card an editor can ignore entirely');
 // Collapsed matters: it is the one card on the form that is optional from top
 // to bottom, and an open one pushes the client's actual copy below the fold.
-ok((bool) preg_match('/<details class="card">\s*<summary>/', $edit), 'the seo block renders as a <details> card');
+// The summary carries the rail's jump anchor, so it is matched with its
+// attributes rather than as a bare tag. What is pinned is unchanged: a
+// <details class="card"> whose first child is the summary.
+ok((bool) preg_match('/<details class="card">\s*<summary(?:\s[^>]*)?>/', $edit), 'the seo block renders as a <details> card');
 missing($edit, '<details class="card" open', 'which is collapsed — no `open` attribute anywhere on it');
-ok(strpos($edit, 'name="seo[title]"') < strpos($edit, 'name="blocks[hero][heading]"'),
-    'and it sits at the top of the form, above the content blocks');
+// Same reasoning as the collapsing, carried to its conclusion: the optional
+// card belongs after the copy the client came here to change, not in front of
+// it. The pairing still has to be asserted, only the direction has flipped.
+ok(strpos($edit, 'name="seo[title]"') > strpos($edit, 'name="blocks[hero][heading]"'),
+    'and it sits at the end of the form, below the content blocks');
 
 foreach ([
     'seo[title]', 'seo[description]', 'seo[og_image][src]', 'seo[noindex]', 'seo[canonical]',
@@ -484,6 +490,9 @@ $index = render([]);
 contains($index, cms()->lang->t('list.globals'), 'the page list carries a second table for the globals');
 contains($index, '?action=edit&amp;page=_header', 'linking to the header');
 contains($index, '?action=edit&amp;page=_footer', 'and to the footer');
+// The array order is pinned in 04_hardening; this is the screen it exists for.
+ok(strpos($index, 'page=_header') < strpos($index, 'page=_footer'),
+    'the header is listed first, as it sits on the page');
 missing($index, 'href="/_header"', 'with no "view" link, because a global has no address to visit');
 
 $headerForm = render(['action' => 'edit', 'page' => '_header']);
@@ -661,6 +670,16 @@ contains(render([]), cms()->lang->t('list.missing_in', 'English'), 'a page the o
 contains(render(['locale' => 'en']), 'tmp-untranslated', 'and the English list names what it is missing');
 
 unlink($orphanFile);
+
+section('The settings screen lists how the install is configured');
+$settings = (string) admin_get(['action' => 'settings'])->getContent();
+contains($settings, cms()->lang->t('settings.title'), 'the screen renders');
+contains($settings, 'base_url', 'a nested key is named');
+contains($settings, 'derivatives', 'and so is a key three levels down');
+contains($settings, '320, 640', 'a list of scalars is one line, not one row per value');
+// Nothing on this screen may offer to change anything: config.php is the
+// developer's file, and a form here would be a promise the engine cannot keep.
+missing($settings, '<form', 'and nothing on it is editable');
 
 section('An unknown locale is refused, not silently defaulted');
 $badLocale = admin_get(['locale' => '../../etc']);

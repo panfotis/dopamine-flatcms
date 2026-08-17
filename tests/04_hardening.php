@@ -364,8 +364,8 @@ $globalCms = cms();
 $ids = array_column($globalCms->content->list(), 'id');
 ok(!in_array('_header', $ids, true) && !in_array('_footer', $ids, true),
     'globals are absent from the page list: ' . implode(', ', $ids));
-ok(array_column($globalCms->content->globals(), 'id') === ['_footer', '_header'],
-    'and present in globals(), which is what the panel lists');
+ok(array_column($globalCms->content->globals(), 'id') === ['_header', '_footer'],
+    'and present in globals(), in reading order, which is what the panel lists');
 
 ok($globalCms->content->findBySlug('/_header') === null, 'no slug resolves to a global');
 ok($globalCms->content->findBySlug('/header') === null, 'nor does the name without its prefix');

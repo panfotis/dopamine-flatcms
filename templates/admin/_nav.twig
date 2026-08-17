@@ -1,0 +1,23 @@
+{# The panel's whole site map. Two destinations, because there are two: pages
+   and the messages a form collected. A screen that wants a different rail —
+   the editor's block list — overrides the layout's `aside` block instead.
+
+   No heading here on purpose: the top bar already says which site and that
+   this is the panel, and repeating it in the rail is the one duplication the
+   design carried over from a mockup with more sections than this CMS has. #}
+{% set active = active|default('pages') %}
+<nav>
+  <a href="?" class="{{ active == 'pages' ? 'on' : '' }}">{{ t('nav.pages') }}</a>
+  {# Admin only, matching the guard the list screen puts on the same link:
+     submissions are visitor PII and an editor has no reason to read them. #}
+  {% if user.role == 'admin' %}
+    <a href="?action=submissions" class="{{ active == 'messages' ? 'on' : '' }}">{{ t('list.submissions') }}</a>
+    {# Same guard, same reason: this one lists how the install is configured,
+       which is the developer's business and not the client's. #}
+    <a href="?action=settings" class="{{ active == 'settings' ? 'on' : '' }}">{{ t('nav.settings') }}</a>
+  {% endif %}
+</nav>
+<div class="side-foot">
+  {# Access owns the session, so signing out is its endpoint, not ours. #}
+  <a href="/cdn-cgi/access/logout">{{ t('nav.logout') }}</a>
+</div>

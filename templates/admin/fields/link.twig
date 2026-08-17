@@ -7,6 +7,9 @@
 {% set url = value.url|default('') %}
 {% set target = value.target|default('_self') %}
 
+{# Three controls, one decision — so they sit in one panel rather than reading
+   as three consecutive questions about unrelated things. #}
+<div class="field-group">
 <select id="{{ id }}" name="{{ fname }}[page]" {{ locked ? 'disabled' : '' }}>
   <option value="">{{ t('edit.no_page') }}</option>
   {% for p in pages|default([]) %}
@@ -41,3 +44,4 @@
     {{ t('edit.dead_link', page) }}
   </p>
 {% endif %}
+</div>

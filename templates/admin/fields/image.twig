@@ -1,4 +1,7 @@
 {% set src = value.src|default('') %}
+{# The picture and the sentence describing it are one item, not two: the save
+   path refuses one without the other, so the form draws them as one panel. #}
+<div class="field-group">
 <div class="media">
   <div class="thumb" id="{{ id }}-thumb"
        style="{% if src %}background-image:url('{{ src }}'){% endif %}"></div>
@@ -35,3 +38,4 @@
     <p class="hint">{{ t(def.fields.alt.hint) }}</p>
   </div>
 {% endif %}
+</div>

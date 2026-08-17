@@ -22,7 +22,7 @@
 
   <div class="card">
     <table>
-      <tr><th>{{ t('list.col_page') }}</th><th>{{ t('list.col_address') }}</th><th></th></tr>
+      <tr><th>{{ t('list.col_page') }}</th><th>{{ t('list.col_address') }}</th><th>{{ t('list.col_actions') }}</th></tr>
       {% for p in pages %}
         <tr>
           <td>
@@ -30,7 +30,7 @@
             {# The payoff of filename-as-identity: a missing translation is a
                missing file, so it can be said here instead of discovered. #}
             {% for code in p.missing|default([]) %}
-              <span class="pill">{{ t('list.missing_in', locales[code].label) }}</span>
+              <span class="pill warn">{{ t('list.missing_in', locales[code].label) }}</span>
             {% endfor %}
           </td>
           <td><code>{{ p.slug }}</code></td>

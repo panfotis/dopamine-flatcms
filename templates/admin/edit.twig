@@ -1,18 +1,55 @@
 {% extends 'admin/_layout.twig' %}
 {% block title %}{{ page.title }}{% endblock %}
 
-{% block content %}
-  <h1>{{ page.title }}</h1>
-  <p class="sub">
-    <a href="?locale={{ locale }}">{{ t('nav.back') }}</a> ·
-    {% if locales|length > 1 %}{{ locales[locale].label }} · {% endif %}
-    {% if global %}
-      {{ t('edit.everywhere') }}
-    {% else %}
-      <code>{{ page.slug }}</code>
-    {% endif %}
-  </p>
+{# The rail becomes a table of contents for this page's blocks. The section
+   cards are already one per block and already carry a label, so this is the
+   same list read twice — no new data, and nothing to keep in step. #}
+{% block aside %}
+  <div class="side-head">
+    <strong>{{ t('nav.editor') }}</strong>
+    <span>{{ t('nav.editing', page.title) }}</span>
+  </div>
+  <nav>
+    {# No "all pages" link here: the action bar's breadcrumb already carries it,
+       and the rail reads better as nothing but the index of this page. #}
+    {% if not global %}<a href="#page-settings">{{ t('edit.page') }}</a>{% endif %}
+    {% for block in blocks %}
+      <a href="#{{ block.id }}">{{ block.label }}</a>
+    {% endfor %}
+    {% if not global %}<a href="#seo">{{ t('edit.seo') }}</a>{% endif %}
+  </nav>
+{% endblock %}
 
+{# Title, address and the save controls are one piece of chrome: everything
+   that says "which page is this and what happens when I press the button".
+   The buttons reach the form by id, since the bar renders outside it. #}
+{% block actionbar %}
+  <div class="savebar"><div class="inner">
+    <div class="titles">
+      <h1>{{ page.title }}</h1>
+      <p class="sub">
+        <a href="?locale={{ locale }}">{{ t('nav.back') }}</a> ·
+        {% if locales|length > 1 %}{{ locales[locale].label }} · {% endif %}
+        {% if global %}
+          {{ t('edit.everywhere') }}
+        {% else %}
+          <code>{{ page.slug }}</code>
+        {% endif %}
+      </p>
+    </div>
+    <span class="status" id="status">{{ t('edit.published') }}</span>
+    {% if user.role == 'admin' %}
+      <a class="btn ghost" href="?action=revisions&amp;page={{ page.id }}&amp;locale={{ locale }}">{{ t('edit.revisions') }}</a>
+    {% endif %}
+    {# A global has no address to open — it is already on every page. #}
+    {% if not global %}
+      <a class="btn ghost" href="{{ locales[locale].prefix }}{{ page.slug }}" target="_blank" rel="noopener">{{ t('edit.view_page') }}</a>
+    {% endif %}
+    <button class="btn" type="submit" form="editor">{{ t('edit.save') }}</button>
+  </div></div>
+{% endblock %}
+
+{% block content %}
   {% if notice %}<div class="flash ok">{{ notice }}</div>{% endif %}
   {% if warn %}<div class="flash warn">{{ warn }}</div>{% endif %}
 
@@ -58,32 +95,8 @@
        overwrite what the first one saved. #}
     <input type="hidden" name="baseline" value="{{ baseline }}">
 
-    {# Collapsed, and <details> rather than a script: SEO is the one part of
-       this form an editor is entitled to ignore completely. Every field in it
-       is optional, the inputs post whether or not the card was ever opened,
-       and the save path writes the stored values straight back — so "never
-       touched it" and "cannot save" must not be the same thing. #}
-    {# A global renders inside every page and has no head of its own, so there
-       is nothing for these five fields to reach. Admin::save() skips the same
-       walk — the card is not merely hidden. #}
     {% if not global %}
-      <details class="card">
-        <summary>
-          <h2>{{ t('edit.seo') }}</h2>
-          <span class="pill">{{ t('edit.optional') }}</span>
-        </summary>
-        <div class="body">
-          {# The same renderer as every other field, so a locked one is locked
-             here too and the alt input appears exactly where the save path
-             demands one. #}
-          {% for name, def in seo_fields %}
-            {{ _self.field(def, 'seo-' ~ name, 'seo[' ~ name ~ ']', seo[name]|default(''),
-                           not may_edit(def.editable, user.role), pages, page_ids, errors|default({})) }}
-          {% endfor %}
-        </div>
-      </details>
-
-      <div class="card">
+      <div class="card" id="page-settings">
         <header><h2>{{ t('edit.page') }}</h2></header>
         <div class="body">
           <div class="field">
@@ -96,7 +109,7 @@
     {% endif %}
 
     {% for block in blocks %}
-      <div class="card">
+      <div class="card" id="{{ block.id }}">
         <header>
           <h2>{{ block.label }}</h2>
           <span class="pill">{{ block.type }}</span>
@@ -128,17 +141,35 @@
       </div>
     {% endfor %}
 
-    <div class="savebar"><div class="inner">
-      <button class="btn" type="submit">{{ t('edit.save') }}</button>
-      {# A global has no address to open — it is already on every page. #}
-      {% if not global %}
-        <a class="btn ghost" href="{{ locales[locale].prefix }}{{ page.slug }}" target="_blank" rel="noopener">{{ t('edit.view_page') }}</a>
-      {% endif %}
-      {% if user.role == 'admin' %}
-        <a class="btn ghost" href="?action=revisions&amp;page={{ page.id }}&amp;locale={{ locale }}">{{ t('edit.revisions') }}</a>
-      {% endif %}
-      <span class="status" id="status">{{ t('edit.published') }}</span>
-    </div></div>
+    {# Last on the form and collapsed: SEO is the one card an editor is
+       entitled to ignore completely, so it sits after the copy they came here
+       to change rather than in front of it. Every field is optional, the
+       inputs post whether or not the card was ever opened, and the save path
+       writes the stored values straight back — "never touched it" and "cannot
+       save" must not be the same thing. #}
+    {# A global renders inside every page and has no head of its own, so there
+       is nothing for these five fields to reach. Admin::save() skips the same
+       walk — the card is not merely hidden. #}
+    {% if not global %}
+      {# The anchor sits on the summary, not the <details>: 02_admin.php pins
+         the opening tag exactly, and the summary is what a jump should land on
+         anyway when the card is shut. #}
+      <details class="card">
+        <summary id="seo">
+          <h2>{{ t('edit.seo') }}</h2>
+          <span class="pill">{{ t('edit.optional') }}</span>
+        </summary>
+        <div class="body">
+          {# The same renderer as every other field, so a locked one is locked
+             here too and the alt input appears exactly where the save path
+             demands one. #}
+          {% for name, def in seo_fields %}
+            {{ _self.field(def, 'seo-' ~ name, 'seo[' ~ name ~ ']', seo[name]|default(''),
+                           not may_edit(def.editable, user.role), pages, page_ids, errors|default({})) }}
+          {% endfor %}
+        </div>
+      </details>
+    {% endif %}
   </form>
 {% endblock %}
 

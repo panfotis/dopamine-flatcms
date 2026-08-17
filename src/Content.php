@@ -41,6 +41,13 @@ final class Content
      */
     private const REVISION = '/^[a-z0-9_-]+\.\d{8}-\d{6}-[0-9a-f]{6}\.yml$/i';
 
+    /**
+     * The globals, in the order a person reads a page rather than the order the
+     * filesystem hands them over. Two regions is the whole list, deliberately —
+     * a third is out of scope, not merely unbuilt.
+     */
+    private const REGIONS = ['_header', '_footer'];
+
     public function __construct(
         private readonly string $dir,
         private readonly string $locale,
@@ -158,7 +165,19 @@ final class Content
      */
     public function globals(): array
     {
-        return $this->scan(true);
+        $out = $this->scan(true);
+
+        // scan() sorts by slug, which is right for pages and meaningless here:
+        // a global has no address, so it falls back to /_footer and /_header and
+        // sorts backwards from how the two regions sit on the page. A region
+        // this list does not name sorts last rather than first, which is what
+        // array_search()'s `false` would otherwise do.
+        $rank = static fn (string $id): int
+            => ($i = array_search($id, self::REGIONS, true)) === false ? PHP_INT_MAX : $i;
+
+        usort($out, static fn (array $a, array $b): int => $rank($a['id']) <=> $rank($b['id']));
+
+        return $out;
     }
 
     /**
