@@ -90,6 +90,46 @@ final class Fields
     ];
 
     /**
+     * The sub-schema of every `link` field, built in for the same reason IMAGE
+     * is: a component declares `type: link` and gets the whole control.
+     *
+     * A link is a map rather than a string because a destination is three
+     * decisions, not one: *which* page, or failing that which address, and
+     * whether it opens where the visitor already is. Storing only the page id
+     * — which is what this shipped as — meant a client who wanted to point a
+     * button at an Instagram profile had to ask a developer for a second field
+     * beside it, and `target` had nowhere to live at all.
+     *
+     * `page` wins over `url` and clears it on save. Two destinations in one
+     * field is a value nobody can read back, and picking a page is the
+     * deliberate act: the id survives a slug rename, a typed URL does not.
+     *
+     * `page` is an internal type — `pageId()` under a name a component cannot
+     * declare — exactly as `media` is inside IMAGE.
+     */
+    public const LINK = [
+        'page' => ['type' => 'page', 'label' => 'field.link_page'],
+        'url'  => [
+            'type'  => 'url',
+            'label' => 'field.link_url',
+            'hint'  => 'field.link_url_hint',
+        ],
+        'target' => [
+            'type'    => 'select',
+            'label'   => 'field.link_target',
+            'default' => '_self',
+            // An allowlist, and the reason `target` is a select rather than a
+            // text field: the value is written straight into an attribute.
+            'options' => [
+                '_self'   => 'field.target_self',
+                '_blank'  => 'field.target_blank',
+                '_parent' => 'field.target_parent',
+                '_top'    => 'field.target_top',
+            ],
+        ],
+    ];
+
+    /**
      * The page-level `seo` map, built in for the same reason IMAGE is: every
      * page on every site carries the same five keys, and the panel builds the
      * inputs the save path validates against rather than a parallel set.
@@ -259,6 +299,7 @@ final class Fields
             // page nobody has filled in yet.
             'video_embed' => ['provider' => '', 'id' => ''],
             'video_loop'  => ['src' => '', 'poster' => []],
+            'link'        => ['page' => '', 'url' => '', 'target' => '_self'],
             default       => '',
         };
     }
@@ -280,7 +321,11 @@ final class Fields
             'richtext' => self::rich($value),
             'image'    => self::image($def, $raw, $context),
             'media'    => self::mediaPath($value, (array) ($context['media_bases'] ?? [])),
-            'link'     => self::pageId($value),
+            'link'     => self::linkMap($def, $raw, $context),
+            // Internal, like `media`: the page half of a link field. Kept out
+            // of TYPES so a component cannot declare a bare page id and lose
+            // the target with it.
+            'page'     => self::pageId($value),
             // The same href rule richtext uses, exposed as a type for the one
             // field that really is a URL the client types. A second URL rule
             // beside link() is how the two would come to disagree.
@@ -695,7 +740,48 @@ final class Fields
     }
 
     /**
-     * A `link` field stores a **page id** — the filename — and nothing else.
+     * A `link` field: a page picker, a custom address beside it, and where the
+     * link opens. See LINK for why it is a map rather than a string.
+     *
+     * @param  array<string, mixed> $def
+     * @param  array<string, mixed> $context
+     * @return array{page: string, url: string, target: string}
+     */
+    private static function linkMap(array $def, mixed $raw, array $context): array
+    {
+        $stored = $context['stored'] ?? null;
+
+        // This field used to store a bare page id, so that is what is sitting
+        // in every content file written before now. Migrating on read means no
+        // migration script and no flag day: the next save writes the map.
+        // Only what is *stored* is coerced — a scalar arriving in a request is
+        // dropped like any other wrong shape, so the strictness of the save
+        // path is unchanged.
+        $stored = match (true) {
+            is_array($stored)                        => $stored,
+            is_string($stored) && $stored !== ''     => ['page' => $stored],
+            default                                  => [],
+        };
+
+        $out = self::map(self::LINK, is_array($raw) ? $raw : [], $stored, $context);
+
+        // One destination, never two. A picked page is the deliberate choice —
+        // it survives a slug rename, and a URL typed beside it does not.
+        if ($out['page'] !== '') {
+            $out['url'] = '';
+        }
+
+        // map() calls demand() on what this returns, and a map is never '', so
+        // `required: true` on a link would otherwise pass silently. The
+        // condition — either half counts — is the whole rule, and it is the
+        // same shape as image()'s conditional alt.
+        self::demand($def, $out['page'] !== '' || $out['url'] !== '' ? 'x' : '', $context, 'page');
+
+        return $out;
+    }
+
+    /**
+     * The `page` half of a link stores a **page id** — the filename.
      *
      * The id is deliberately the same in every locale while the slugs are not:
      * `contact.yml` exists in both `el/` and `en/` as `/epikoinonia` and

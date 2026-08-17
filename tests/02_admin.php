@@ -201,10 +201,16 @@ ok((bool) preg_match('/name="seo\[description\]"[^>]*placeholder="[^"]+"/', $edi
 ok((bool) preg_match('/<option value="center"\s+selected>/', $edit), 'a select marks the stored option selected');
 ok((bool) preg_match('/<option value="start"\s*>/', $edit), 'and leaves the others alone');
 
-// link: a page picker storing an id, so renaming a slug cannot leave a dead href.
-contains($edit, '<option value="epikoinonia" selected>', 'a link field preselects the stored page');
+// link: a page picker storing an id, so renaming a slug cannot leave a dead
+// href — with a custom address beside it for somewhere this site does not own,
+// and a target, because the picker alone left both with nowhere to live.
+contains($edit, 'name="blocks[hero][cta_url][page]"', 'a link field renders a page picker');
+contains($edit, '<option value="epikoinonia" selected>', 'preselecting the stored page');
 contains($edit, cms()->lang->t('edit.no_page'), 'and offers an empty option, because a link is optional');
-missing($edit, 'name="blocks[hero][cta_url]" type="url"', 'it is never a URL box the client types into');
+contains($edit, 'name="blocks[hero][cta_url][url]"', 'a custom address box sits beside the picker');
+contains($edit, 'name="blocks[hero][cta_url][target]"', 'and a target select beside that');
+contains($edit, '<option value="_blank"', 'whose options are the allowlist the save path enforces');
+contains($edit, cms()->lang->t('field.target_blank'), 'shown by their catalogue labels, not their attribute values');
 
 // list: the blank row the add button clones lives in a <template>, so it is not
 // in the form until it is wanted — an empty row that posts is one to refuse.

@@ -29,8 +29,13 @@ return static fn (string $csrf, string $baseline, string $heroSrc = ''): array =
             // 1. XSS attempt in a plain text field
             'heading'    => 'Καλημέρα <script>alert(1)</script><img src=x onerror=alert(2)>',
 
-            // 2. hostile URL in a link field
-            'cta_url'    => 'javascript:alert(document.cookie)',
+            // 2. hostile URL in a link field, in both halves of it — and a
+            //    target that would break out of the attribute it is written to
+            'cta_url'    => [
+                'page'   => 'javascript:alert(document.cookie)',
+                'url'    => 'javascript:alert(document.cookie)',
+                'target' => '_blank" onclick=alert(1)',
+            ],
 
             // 3. locked field — must be ignored even though it is posted
             'align'      => 'start',

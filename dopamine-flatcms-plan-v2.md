@@ -791,6 +791,27 @@ enforcement and silent failure on a typo. Deleted.
 An id that no longer resolves renders as plain text and is flagged in the panel,
 never as a dead `href`.
 
+**The field is a map, not the bare id** — §7 always said so, and the picker-only
+version was half of it. `Fields::LINK` is the built-in sub-schema, beside `IMAGE`
+and for the same reason: `page`, `url` and `target`, so `type: link` gives a
+component the whole control and the panel builds its inputs from what the save
+path validates against.
+
+`page` wins over `url` and clears it on save — two destinations in one field is a
+value nobody can read back, and picking a page is the deliberate act, because the
+id survives a slug rename and a typed URL does not. `url` is the escape hatch for
+somewhere this site does not own, and it is `Fields::link()`, the same href rule
+richtext uses. `target` is a `select` over the four standard values defaulting to
+`_self`, so the value written into the attribute can only come from an allowlist;
+anything but `_self` renders `rel="noopener noreferrer"` beside it, never
+separately.
+
+`page` is an internal field type, `pageId()` under a name kept out of
+`Fields::TYPES` — exactly as `media` is internal to `IMAGE` — so a component
+cannot declare a bare page id and lose the target with it. A content file written
+before the change holds a scalar; `Cms::withDefaults()` migrates it on read and
+the next save writes the map, so there is no migration script and no flag day.
+
 **`list`** — repeater over a fixed sub-schema for FAQ, team, features. One level
 only. `item_label` names each row in the panel.
 

@@ -392,18 +392,38 @@ final class Cms
     }
 
     /**
-     * Resolve a `link` field's stored page id to an href.
+     * Resolve a `link` field to an href.
      *
      *   {{ page_url(fields.cta_url) }}  ->  /epikoinonia
      *
-     * The empty string means "no such page", and a template must render that
+     * The empty string means "nowhere to go", and a template must render that
      * as plain text rather than as an href — a link to nothing is worse than
-     * no link, because it looks like it works. Phase 9 makes this per-locale:
-     * the id is the same in every language, the slug beside it is not.
+     * no link, because it looks like it works. The id is the same in every
+     * language, the slug beside it is not, which is what this resolves.
+     *
+     * A bare string is still accepted: that is what every content file written
+     * before `link` became a map holds, and rendering one must not wait for
+     * its next save.
+     *
+     * @param array<string, mixed>|string|null $link
      */
-    public function pageUrl(?string $id): string
+    public function pageUrl(array|string|null $link): string
     {
-        $id = (string) $id;
+        if (is_array($link)) {
+            $id = (string) ($link['page'] ?? '');
+
+            // The custom address is the fallback, never an override: a picked
+            // page wins, and the save path has already cleared the URL beside
+            // it. Checked here too, because a file hand-edited to hold both
+            // must resolve the same way the panel says it will.
+            if ($id === '') {
+                return (string) ($link['url'] ?? '');
+            }
+
+            $link = $id;
+        }
+
+        $id = (string) $link;
         if ($id === '') {
             return '';
         }
@@ -644,10 +664,23 @@ final class Cms
     {
         $out = [];
         foreach ($schema['fields'] as $name => $def) {
+            $type = (string) ($def['type'] ?? 'text');
+
             // blank() rather than '': an image or a list that nobody has filled
             // in yet must still be the right *shape*, or every template has to
             // branch on "is it a map or is it an empty string".
-            $out[$name] = $values[$name] ?? $def['default'] ?? Fields::blank((string) ($def['type'] ?? 'text'));
+            $value = $values[$name] ?? $def['default'] ?? Fields::blank($type);
+
+            // A `link` used to be a bare page id, and that is what every file
+            // written before it became a map still holds. Migrating on read —
+            // here, the one place both the panel and the renderer get their
+            // values from — means no migration script and no flag day: the
+            // picker shows the stored page, and the next save writes the map.
+            if ($type === 'link' && is_string($value)) {
+                $value = ['page' => $value] + (array) Fields::blank('link');
+            }
+
+            $out[$name] = $value;
         }
 
         // Deliberately NOT `+ $values`. Keys still sitting in the content file

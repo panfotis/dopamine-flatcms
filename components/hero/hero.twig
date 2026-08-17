@@ -21,7 +21,11 @@
       {# An id that no longer resolves renders as plain text, never as a dead
          href. The panel flags it separately so it can actually be fixed. #}
       {% set href = page_url(fields.cta_url) %}
-      <p>{% if href %}<a class="btn" href="{{ href }}">{{ fields.cta_label }}</a>
+      {# rel travels with target and never without it — opening a new tab
+         without noopener hands the opener over to the other page. #}
+      {% set target = fields.cta_url.target|default('_self') %}
+      <p>{% if href %}<a class="btn" href="{{ href }}"
+           {%- if target != '_self' %} target="{{ target }}" rel="noopener noreferrer"{% endif %}>{{ fields.cta_label }}</a>
          {%- else %}<span class="btn is-dead">{{ fields.cta_label }}</span>{% endif %}</p>
     {% endif %}
   </div>

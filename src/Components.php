@@ -159,6 +159,14 @@ final class Components
                 $def['fields'] = Fields::IMAGE;
             }
 
+            // Same reason as IMAGE: the panel builds the picker, the URL box
+            // and the target select from the sub-schema the save path
+            // validates against, so a component gets the whole control from
+            // `type: link` and the two cannot drift.
+            if ($def['type'] === 'link') {
+                $def['fields'] = Fields::LINK;
+            }
+
             if ($def['type'] === 'video_loop') {
                 $def['decorative'] = ($def['decorative'] ?? false) === true;
                 $def['fields'] = ['poster' => ['type' => 'image', 'fields' => Fields::IMAGE]];

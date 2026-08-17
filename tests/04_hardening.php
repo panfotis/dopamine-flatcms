@@ -13,6 +13,7 @@ require __DIR__ . '/lib.php';
 use Dopamine\FlatCms\Cms;
 use Dopamine\FlatCms\Content;
 use Dopamine\FlatCms\Fields;
+use Dopamine\FlatCms\ValidationException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Yaml\Yaml;
 
@@ -135,6 +136,22 @@ ok(f('link', '/epikoinonia') === '/epikoinonia', 'genuine internal path still wo
 ok(f('link', 'https://example.gr') === 'https://example.gr', 'external URL still works');
 ok(f('link', 'example.gr') === 'https://example.gr', 'bare domain still upgraded');
 ok(f('link', 'javascript:alert(1)') === '', 'javascript: still rejected');
+
+// demand() treats '' as empty and a link is a map, which is never '' — so
+// `required: true` on one would pass silently without a check of its own.
+// Either half satisfies it: a custom address is a destination too.
+$req = ['type' => 'link', 'label' => 'CTA', 'required' => true];
+$refused = static function (array $in) use ($req): bool {
+    try {
+        Fields::sanitise($req, $in, ['section' => 'Hero']);
+        return false;
+    } catch (ValidationException) {
+        return true;
+    }
+};
+ok($refused(['page' => '', 'url' => '']), 'a required link with neither half filled in is refused');
+ok(!$refused(['page' => 'epikoinonia', 'url' => '']), 'a picked page satisfies it');
+ok(!$refused(['page' => '', 'url' => 'https://example.gr']), 'and so does a custom address on its own');
 
 section('Richtext: href harvesting and external detection');
 $h = f('rich', '<a data-x="href=\'//evil.gr\'" href="/epikoinonia">κείμενο</a>');

@@ -66,7 +66,8 @@ ok($hero['heading'] === 'Καλημέρα alert(1)', 'heading reduced to plain t
 ok(mb_strlen($hero['heading']) <= 70, 'max length respected');
 
 section('Link fields reject hostile URLs');
-ok($hero['cta_url'] === '', 'javascript: URL rejected outright');
+ok($hero['cta_url'] === ['page' => '', 'url' => '', 'target' => '_self'],
+    'javascript: URL rejected outright in both halves, and a forged target falls back to the same tab');
 
 section('An image is an object, and the server owns half of it');
 // The client owns src and alt. width, height and `decorative` are the
@@ -259,16 +260,23 @@ ok(Yaml::parseFile($file)['blocks'][$blockNo(Yaml::parseFile($file), 'faq')]['fi
     'as a real true, so a template can branch on it without parsing strings');
 
 section('A link stores a page id, and a slug rename cannot break it');
-$linkTo = static fn (string $v): array => [
+/** @param array<string, string> $link */
+$linkTo = static fn (array $link): array => [
     'action' => 'save', 'csrf' => 'test-token', 'page' => 'home',
     'baseline' => (string) hash_file('sha256', $file),
-    'blocks' => ['hero' => ['cta_url' => $v, 'cta_label' => 'Επικοινωνία']],
+    'blocks' => ['hero' => ['cta_url' => $link, 'cta_label' => 'Επικοινωνία']],
 ];
+$toPage = static fn (string $v): array => $linkTo(['page' => $v]);
 $heroOf = static fn (): array => Yaml::parseFile($file)['blocks'][0]['fields'];
+$linkOf = static fn (): array => $heroOf()['cta_url'];
 
-admin_post($linkTo('epikoinonia'));
-ok($heroOf()['cta_url'] === 'epikoinonia', 'a real page id is stored as the id, not as a URL');
+admin_post($toPage('epikoinonia'));
+ok($linkOf()['page'] === 'epikoinonia', 'a real page id is stored as the id, not as a URL');
+ok(array_keys($linkOf()) === ['page', 'url', 'target'],
+    'a link is a map with exactly the declared sub-keys: ' . implode(', ', array_keys($linkOf())));
 
+// The page half takes an id and nothing that merely looks like one. Every case
+// here was refused when a link was a bare string, and still is.
 foreach ([
     'javascript:alert(1)'  => 'a javascript: URL',
     '//evil.gr'            => 'a protocol-relative host',
@@ -277,9 +285,52 @@ foreach ([
     '../../config'         => 'a traversal',
     'home.yml'             => 'a filename',
 ] as $bad => $why) {
-    admin_post($linkTo($bad));
-    ok($heroOf()['cta_url'] === '', 'refused: ' . $why . ' (stored: "' . $heroOf()['cta_url'] . '")');
+    admin_post($toPage($bad));
+    ok($linkOf()['page'] === '', 'refused as a page id: ' . $why . ' (stored: "' . $linkOf()['page'] . '")');
 }
+
+// The custom-address half is the href rule richtext uses, so the schemes that
+// are dangerous in an <a> are dangerous here for the same reason.
+foreach ([
+    'javascript:alert(1)' => 'a javascript: URL',
+    'data:text/html,x'    => 'a data: URL',
+    '//evil.gr'           => 'a protocol-relative host',
+    '/\\evil.gr'          => 'a backslash variant browsers normalise to //',
+] as $bad => $why) {
+    admin_post($linkTo(['url' => $bad]));
+    ok($linkOf()['url'] === '', 'refused as a custom address: ' . $why . ' (stored: "' . $linkOf()['url'] . '")');
+}
+
+admin_post($linkTo(['url' => 'https://example.gr/profil']));
+ok($linkOf()['url'] === 'https://example.gr/profil', 'an external address a client really typed is kept');
+ok($linkOf()['page'] === '', 'and no page is invented beside it');
+
+admin_post($linkTo(['url' => '/epikoinonia']));
+ok($linkOf()['url'] === '/epikoinonia',
+    'a site-relative path is legitimate here — it is the escape hatch, not the picker');
+
+// Two destinations in one field is a value nobody can read back.
+admin_post($linkTo(['page' => 'epikoinonia', 'url' => 'https://example.gr']));
+ok($linkOf()['page'] === 'epikoinonia' && $linkOf()['url'] === '',
+    'a picked page wins and clears the custom address beside it');
+
+// target is written straight into an attribute, so it is an allowlist.
+admin_post($linkTo(['page' => 'epikoinonia', 'target' => '_blank']));
+ok($linkOf()['target'] === '_blank', 'a declared target is stored');
+foreach ([
+    '_blank" onclick=alert(1)' => 'an attribute-breaking target',
+    'javascript:alert(1)'      => 'a javascript: target',
+    '_BLANK'                   => 'a target that differs only in case',
+] as $bad => $why) {
+    admin_post($linkTo(['page' => 'epikoinonia', 'target' => $bad]));
+    ok($linkOf()['target'] === '_self',
+        'refused, falling back to the same tab: ' . $why . ' (stored: "' . $linkOf()['target'] . '")');
+}
+
+// map() is the only schema walk, so a link's sub-keys are filtered by the same
+// rule as an image's — there is no second implementation to forget.
+admin_post($linkTo(['page' => 'epikoinonia', 'evil' => 'x']));
+ok(!array_key_exists('evil', $linkOf()), 'an undeclared sub-key is dropped, exactly as inside an image');
 
 // The whole point of storing the id: the href follows the slug wherever it goes.
 $other = dirname(__DIR__) . '/content/pages/el/epikoinonia.yml';
@@ -290,9 +341,31 @@ $page = $renamed->content->load('epikoinonia');
 $page['slug'] = '/nea-epikoinonia';
 $renamed->content->save('epikoinonia', $page);
 
-admin_post($linkTo('epikoinonia'));
+admin_post($toPage('epikoinonia'));
 $rendered = cms()->renderPage(cms()->content->load('home'));
 contains($rendered, 'href="/nea-epikoinonia"', 'renaming a slug leaves the internal link intact, pointing at the new slug');
+// Scoped to the button, not the page: richtext puts target="_blank" on its own
+// external links, so a page-wide search proves nothing about this field.
+contains($rendered, '<a class="btn" href="/nea-epikoinonia">Επικοινωνία</a>',
+    'and the default target adds no attribute at all');
+
+// A new tab and its rel travel together or the opener is handed over.
+admin_post($linkTo(['page' => 'epikoinonia', 'target' => '_blank']));
+contains(
+    cms()->renderPage(cms()->content->load('home')),
+    'target="_blank" rel="noopener noreferrer"',
+    'a link set to open in a new tab renders rel="noopener noreferrer" with it'
+);
+
+// The custom address is what a client uses for somewhere this site does not
+// own. The picker is cleared in the same post — a field the form does not send
+// keeps what is stored, which is what makes a forged partial POST a no-op.
+admin_post($linkTo(['page' => '', 'url' => 'https://example.gr/profil', 'target' => '_blank']));
+contains(
+    cms()->renderPage(cms()->content->load('home')),
+    'href="https://example.gr/profil" target="_blank" rel="noopener noreferrer"',
+    'a custom address renders as the href, with its target beside it'
+);
 
 // Byte-for-byte, comments included: save() rewrites the file, and a suite run
 // must not quietly edit the developer's own content.
@@ -300,7 +373,7 @@ rename($other . '.bak', $other);
 array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/epikoinonia.*.yml') ?: []);
 
 // An id that no longer resolves must not become a dead href.
-admin_post($linkTo('deleted-page'));
+admin_post($toPage('deleted-page'));
 $dead = cms()->renderPage(cms()->content->load('home'));
 missing($dead, 'href="deleted-page"', 'an id that no longer resolves is never rendered as an href');
 contains($dead, '<span class="btn is-dead">Επικοινωνία</span>', 'it renders as plain text instead');
