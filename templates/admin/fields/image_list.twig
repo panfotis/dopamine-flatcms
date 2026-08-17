@@ -1,0 +1,36 @@
+{# A grid, not thirty stacked cards. Reorder is up/down
+   buttons rather than drag: ten lines, keyboard-accessible
+   for free, and no library in a project with no front-end
+   build. Add dragging if someone actually complains. #}
+<div class="gallery" id="{{ id }}-grid" data-gallery="{{ id }}"
+     data-name="{{ fname }}" data-max="{{ def.max|default(60) }}"
+     data-decorative="{{ def.decorative|default(false) ? '1' : '' }}"
+     data-alt-label="{{ t(def.fields.alt.label) }}">
+  {% for i, photo in value|default([]) %}
+    <figure class="tile" data-tile>
+      <div class="thumb" style="background-image:url('{{ photo.src }}')"></div>
+      <input type="hidden" name="{{ fname }}[{{ i }}][src]" value="{{ photo.src }}">
+      {% if not def.decorative %}
+        {# Optional here and required on a standalone image:
+           thirty forced descriptions produce thirty junk
+           strings, which a screen reader reads out instead
+           of skipping. #}
+        <input type="text" class="alt" name="{{ fname }}[{{ i }}][alt]"
+               value="{{ photo.alt|default('') }}" maxlength="120"
+               placeholder="{{ t(def.fields.alt.label) }}" {{ locked ? 'readonly' : '' }}>
+      {% endif %}
+      {% if not locked %}
+        <div class="tools">
+          <button type="button" data-move="-1" title="{{ t('edit.move_earlier') }}">↑</button>
+          <button type="button" data-move="1" title="{{ t('edit.move_later') }}">↓</button>
+          <button type="button" data-drop title="{{ t('edit.remove') }}">✕</button>
+        </div>
+      {% endif %}
+    </figure>
+  {% endfor %}
+</div>
+{% if not locked %}
+  <input type="file" id="{{ id }}-files" accept="image/jpeg,image/png,image/webp" multiple hidden>
+  <button type="button" class="btn ghost" data-gallery-add="{{ id }}">{{ t('edit.add_photos') }}</button>
+  <span class="hint" data-gallery-status="{{ id }}"></span>
+{% endif %}

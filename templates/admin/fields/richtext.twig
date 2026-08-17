@@ -1,0 +1,12 @@
+{% if not locked %}
+  <div class="rt-toolbar" data-rt-toolbar="{{ id }}">
+    <button type="button" data-cmd="bold" title="{{ t('rt.bold') }}"><b>B</b></button>
+    <button type="button" data-cmd="italic" title="{{ t('rt.italic') }}"><i>I</i></button>
+    <button type="button" data-cmd="insertUnorderedList" title="{{ t('rt.list') }}">•</button>
+    <button type="button" data-cmd="createLink" title="{{ t('rt.link') }}">🔗</button>
+    <button type="button" data-cmd="removeFormat" title="{{ t('rt.clear') }}">✕</button>
+  </div>
+{% endif %}
+<div class="rt" id="{{ id }}-rt" {{ locked ? '' : 'contenteditable="true"' }}
+     data-target="{{ id }}">{{ value|raw }}</div>
+<textarea id="{{ id }}" name="{{ fname }}" hidden>{{ value }}</textarea>

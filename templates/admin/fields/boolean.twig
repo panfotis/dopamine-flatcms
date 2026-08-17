@@ -1,0 +1,6 @@
+{# The hidden field first, so an unchecked box still posts —
+   otherwise "off" is indistinguishable from "not sent", and
+   the save path would keep the stored value forever. #}
+<input type="hidden" name="{{ fname }}" value="0">
+<input type="checkbox" id="{{ id }}" name="{{ fname }}" value="1"
+       {{ value ? 'checked' : '' }} {{ locked ? 'disabled' : '' }}>

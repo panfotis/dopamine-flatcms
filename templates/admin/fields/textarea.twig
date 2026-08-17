@@ -1,0 +1,8 @@
+{# A placeholder here is not decoration: seo.description
+   carries the line the head will publish if this is left
+   empty, so the client can read it and decide whether they
+   can do better. #}
+<textarea id="{{ id }}" name="{{ fname }}" {{ locked ? 'readonly' : '' }}
+          {{ demand ? 'required' : '' }} {{ error ? 'aria-invalid="true"' : '' }}
+          {% if def.placeholder is defined and def.placeholder %}placeholder="{{ def.placeholder }}"{% endif %}
+          {% if def.max is defined %}data-max="{{ def.max }}"{% endif %}>{{ value }}</textarea>

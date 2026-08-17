@@ -1,0 +1,9 @@
+{# `text` and `url`, and also the fallback: edit.twig names this file as the
+   second candidate of its include, so a type with no template of its own
+   lands here. That mirrors Fields::sanitise(), whose `default` arm is
+   plain() — an unrecognised type is a text field on both sides. #}
+<input type="text" id="{{ id }}" name="{{ fname }}" value="{{ value }}"
+       {{ locked ? 'readonly' : '' }}
+       {{ demand ? 'required' : '' }} {{ error ? 'aria-invalid="true"' : '' }}
+       {% if def.max is defined %}maxlength="{{ def.max }}" data-max="{{ def.max }}"{% endif %}
+       {% if def.placeholder is defined %}placeholder="{{ def.placeholder }}"{% endif %}>

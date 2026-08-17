@@ -1,0 +1,6 @@
+<select id="{{ id }}" name="{{ fname }}" {{ locked ? 'disabled' : '' }}>
+  {% for optValue, optLabel in def.options|default({}) %}
+    <option value="{{ optValue }}" {{ value == optValue ? 'selected' : '' }}>{{ optLabel }}</option>
+  {% endfor %}
+</select>
+{% if locked %}<input type="hidden" name="{{ fname }}" value="{{ value }}">{% endif %}

@@ -1,0 +1,11 @@
+{# The client pastes what is in their address bar. What is
+   stored is a provider and an id, and the template builds the
+   iframe — pasted HTML is never stored, so it can never be
+   rendered. #}
+<input type="url" id="{{ id }}" name="{{ fname }}"
+       value="{{ value.provider|default('') == 'youtube' ? 'https://www.youtube.com/watch?v=' ~ value.id
+               : (value.provider|default('') == 'vimeo' ? 'https://vimeo.com/' ~ value.id : '') }}"
+       {{ locked ? 'readonly' : '' }} placeholder="https://www.youtube.com/watch?v=…">
+{% if value.provider|default('') %}
+  <p class="hint">{{ t('edit.stored_as', value.provider, value.id) }}</p>
+{% endif %}

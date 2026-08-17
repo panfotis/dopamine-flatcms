@@ -1,0 +1,15 @@
+{# A page picker, not a URL box: it stores the page id, and
+   the slug is resolved at render time — so renaming a slug
+   cannot leave a dead href behind. #}
+<select id="{{ id }}" name="{{ fname }}" {{ locked ? 'disabled' : '' }}>
+  <option value="">{{ t('edit.no_page') }}</option>
+  {% for p in pages|default([]) %}
+    <option value="{{ p.id }}" {{ value == p.id ? 'selected' : '' }}>{{ p.title }} ({{ p.slug }})</option>
+  {% endfor %}
+</select>
+{% if locked %}<input type="hidden" name="{{ fname }}" value="{{ value }}">{% endif %}
+{% if value and value not in page_ids|default([]) %}
+  <p class="hint" style="color:#b4232a">
+    {{ t('edit.dead_link', value) }}
+  </p>
+{% endif %}
