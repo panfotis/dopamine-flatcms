@@ -176,11 +176,35 @@ contains($sitemap, '<xhtml:link rel="alternate" hreflang="en" href="' . $base . 
     'and one for the second, at its prefixed URL');
 contains($sitemap, '<xhtml:link rel="alternate" hreflang="x-default" href="' . $base . '/"/>',
     'with x-default pointing at the default language');
-ok(substr_count($sitemap, '<xhtml:link') === substr_count($sitemap, '<loc>') * (count($cms->locales()) + 1),
-    'one alternate per language per URL, plus x-default');
+// Derived from the content rather than `<loc> × languages`, because that
+// product is only right when every page exists in every language. A page one
+// language lacks carries one alternate fewer — advertising an hreflang for a
+// URL that does not exist is exactly the bug this counts against. `bin/doctor`
+// warns about a missing translation instead of refusing it, so a partly
+// translated site is a state the sitemap has to get right, not an invalid one.
+$langsWith = [];
+foreach (array_keys($cms->locales()) as $code) {
+    foreach ($cms->contentIn($code)->list() as $p) {
+        $langsWith[$p['id']] = ($langsWith[$p['id']] ?? 0) + 1;
+    }
+}
+$expectedAlts = 0;
+foreach (array_keys($cms->locales()) as $code) {
+    foreach ($cms->contentIn($code)->list() as $p) {
+        // Plus one for x-default, emitted only when the default language has
+        // this page — it is the entry x-default would have to point at.
+        $expectedAlts += $langsWith[$p['id']]
+            + ($cms->contentIn($cms->defaultLocale())->load($p['id']) !== null ? 1 : 0);
+    }
+}
+ok(substr_count($sitemap, '<xhtml:link') === $expectedAlts,
+    'one alternate per language that actually has the page, plus x-default');
 
 // A noindex page asking not to be indexed and then being submitted anyway is
 // asking twice and answering differently.
+// Counted before the file is written, not hardcoded: the suite runs against the
+// real content directory, so a page added to the site must not fail a test.
+$pagesBefore = count($cms->content->list());
 $sitemapFile = $cms->content->pagesDir() . '/tmp-seo.yml';
 // Away even if an assertion below throws: a stray page file in the locale
 // directory fails every page-count check in the suite from then on.
@@ -189,7 +213,7 @@ file_put_contents($sitemapFile, \Symfony\Component\Yaml\Yaml::dump([
     'title' => 'Κρυφή', 'slug' => '/kryfi', 'seo' => ['noindex' => true], 'blocks' => [],
 ], 6, 2));
 $withHidden = cms()->sitemap();
-ok(count(cms()->content->list()) === 3, 'a third page is on disk');
+ok(count(cms()->content->list()) === $pagesBefore + 1, 'the extra page is on disk');
 missing($withHidden, '/kryfi', 'but a noindex page is excluded from the sitemap');
 ok(substr_count($withHidden, '<loc>') === $everyPage, 'leaving exactly the indexable ones');
 unlink($sitemapFile);
@@ -223,7 +247,9 @@ contains(implode("\n", $cms->cacheHeaders($cms->content->load('home'))), 'Cache-
 section('Slug resolution');
 ok($cms->content->findBySlug('/epikoinonia') !== null, 'second page resolves');
 ok($cms->content->findBySlug('/does-not-exist') === null, 'unknown slug returns null');
-ok(count($cms->content->list()) === 2, 'page list finds both pages');
+$listedIds = array_column($cms->content->list(), 'id');
+ok(in_array('home', $listedIds, true) && in_array('epikoinonia', $listedIds, true),
+    'the page list finds the pages on disk');
 
 section('Unknown component does not fatal a live page');
 $before = substr_count($cms->renderPage($page), '<section');
