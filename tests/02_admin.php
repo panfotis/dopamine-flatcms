@@ -161,6 +161,118 @@ missing($edit, 'name="slug"', 'slug is never an input');
 section('Locked field is read-only in the UI as well as on save');
 ok((bool) preg_match('/id="hero-align"[^>]*disabled/', $edit), 'locked select rendered disabled');
 contains($edit, cms()->lang->t('edit.locked'), 'locked badge shown to the editor');
+// A disabled control posts nothing, so "not sent" would be indistinguishable
+// from "cleared" if the value did not come back some other way. The hidden
+// partner is what keeps the stored value across a save the client never touched.
+contains($edit, 'type="hidden" name="blocks[hero][align]" value="center"',
+    'with a hidden partner, because a disabled select posts nothing at all');
+
+section('Every field type renders its own control');
+// One assertion per branch of the field() macro. The save path is covered in
+// 03_lockdown; this is the other half — that the panel actually builds the
+// input the save path expects, for every type a component can declare.
+
+// richtext: a contenteditable div the client types into, mirrored into a hidden
+// textarea that is what actually posts. Both halves, or the value never arrives.
+contains($edit, 'data-rt-toolbar="intro-body"', 'richtext gets a formatting toolbar');
+contains($edit, 'id="intro-body-rt"', 'and a contenteditable surface');
+contains($edit, 'data-target="intro-body"', 'pointed at the input it mirrors into');
+ok((bool) preg_match('/<textarea id="intro-body" name="blocks\[intro\]\[body\]" hidden>/', $edit),
+    'which is a hidden textarea — the contenteditable div itself never posts');
+
+// image: upload/clear controls, a hidden src the JS writes, and the alt input
+// the save path demands whenever src is set.
+contains($edit, 'data-upload="intro-image"', 'an image field has an upload button');
+contains($edit, 'data-clear="intro-image"', 'and a way to remove what is there');
+contains($edit, 'name="blocks[intro][image][src]"', 'the src is a hidden input, never typed');
+contains($edit, 'maxlength="120"', 'and the alt input carries the schema max the save path also cuts to');
+// hero's image is decorative: true, so alt="" is the correct markup and asking
+// for one buys "εικόνα" typed to clear a field.
+contains($edit, 'data-upload="hero-image"', 'a decorative image still uploads like any other');
+missing($edit, 'name="blocks[hero][image][alt]"', 'but asks for no description at all');
+
+// textarea
+ok((bool) preg_match('/<textarea id="hero-subheading" name="blocks\[hero\]\[subheading\]"/', $edit),
+    'a textarea field renders a textarea');
+ok((bool) preg_match('/name="seo\[description\]"[^>]*placeholder="[^"]+"/', $edit),
+    'and seo.description shows the line the head will publish if it is left empty');
+
+// select: the stored value comes back chosen, or the client silently loses it.
+ok((bool) preg_match('/<option value="center"\s+selected>/', $edit), 'a select marks the stored option selected');
+ok((bool) preg_match('/<option value="start"\s*>/', $edit), 'and leaves the others alone');
+
+// link: a page picker storing an id, so renaming a slug cannot leave a dead href.
+contains($edit, '<option value="epikoinonia" selected>', 'a link field preselects the stored page');
+contains($edit, cms()->lang->t('edit.no_page'), 'and offers an empty option, because a link is optional');
+missing($edit, 'name="blocks[hero][cta_url]" type="url"', 'it is never a URL box the client types into');
+
+// list: the blank row the add button clones lives in a <template>, so it is not
+// in the form until it is wanted — an empty row that posts is one to refuse.
+contains($edit, '<template id="faq-questions-template">', 'a repeater carries a template for new rows');
+contains($edit, 'name="blocks[faq][questions][__INDEX__][question]"',
+    'whose inputs are numbered by a placeholder the script replaces on insert');
+contains($edit, 'data-repeater="faq-questions" data-max="20"', 'and the row container states the schema ceiling');
+
+// image_list
+contains($edit, 'data-name="blocks[gallery][photos]" data-max="30"',
+    'a gallery states its own max, not the built-in ceiling');
+contains($edit, 'data-decorative=""', 'and whether its photos are decorative, which this one is not');
+
+// url falls through to the plain text input — the {% else %} arm, which is also
+// what an unrecognised type gets, matching Fields::sanitise()'s default.
+$footerForm = render(['action' => 'edit', 'page' => '_footer']);
+ok((bool) preg_match('/<input type="text" id="footer-links-0-url" name="blocks\[footer\]\[links\]\[0\]\[url\]"/', $footerForm),
+    'a url field is a plain text input, inside a repeater row');
+contains($footerForm, 'placeholder="https://instagram.com/…"', 'carrying the schema placeholder');
+
+section('A locked field stays locked inside a repeater row');
+// The one case no real component covers, and the one the field() macro's
+// docblock names: a second copy of the widget chain would drift, and a row is
+// exactly where a locked field would quietly stop being locked. repeater()
+// passes `locked or not may_edit(subDef.editable, role)` per sub-field; this
+// asserts that reaches the input, in both the stored rows and the blank one.
+//
+// `editable: false` rather than `admin` on purpose — false is closed to
+// everyone, so the dev bypass's admin role cannot hide the lock.
+$fixtureDir = dirname(__DIR__) . '/var/cache/test-components-' . bin2hex(random_bytes(4));
+mkdir($fixtureDir . '/locked_rows', 0775, true);
+file_put_contents($fixtureDir . '/locked_rows/schema.yml', \Symfony\Component\Yaml\Yaml::dump([
+    'label'  => 'Κλειδωμένες γραμμές',
+    'fields' => ['rows' => [
+        'type' => 'list', 'label' => 'Γραμμές', 'max' => 5, 'item_label' => 'label',
+        'fields' => [
+            'label' => ['type' => 'text', 'label' => 'Κείμενο', 'max' => 40],
+            'code'  => ['type' => 'text', 'label' => 'Κωδικός', 'editable' => false],
+        ],
+    ]],
+], 6, 2));
+
+$lockedPage = dirname(__DIR__) . '/content/pages/el/tmp-locked-rows.yml';
+file_put_contents($lockedPage, \Symfony\Component\Yaml\Yaml::dump([
+    'title'  => 'Κλειδωμένες γραμμές',
+    'slug'   => '/tmp-locked-rows',
+    'blocks' => [[
+        'id' => 'lr', 'type' => 'locked_rows',
+        'fields' => ['rows' => [['label' => 'Πρώτη', 'code' => 'ABC']]],
+    ]],
+], 6, 2));
+
+$lockedCfg = require dirname(__DIR__) . '/config.php';
+// First match wins, exactly as a site overrides a starter component.
+$lockedCfg['paths']['components'] = [$fixtureDir, $lockedCfg['paths']['components']];
+$lockedForm = (string) admin_get(['action' => 'edit', 'page' => 'tmp-locked-rows'], $lockedCfg)->getContent();
+
+contains($lockedForm, 'name="blocks[lr][rows][0][label]"', 'the editable field in the row renders');
+ok(!preg_match('/id="lr-rows-0-label"[^>]*readonly/', $lockedForm), 'and is genuinely editable');
+ok((bool) preg_match('/id="lr-rows-0-code"[^>]*readonly/', $lockedForm),
+    'while the locked field beside it is read-only — inside the row, not merely at the top level');
+ok((bool) preg_match('/id="lr-rows-__INDEX__-code"[^>]*readonly/', $lockedForm),
+    'including in the blank row the add button clones, which is where a forged POST would be built from');
+
+unlink($lockedPage);
+array_map('unlink', glob($fixtureDir . '/locked_rows/*') ?: []);
+@rmdir($fixtureDir . '/locked_rows');
+@rmdir($fixtureDir);
 
 section('CSRF is enforced');
 $_SESSION['csrf'] = 'the-real-token';
