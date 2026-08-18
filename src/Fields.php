@@ -822,7 +822,7 @@ final class Fields
         // Protocol-relative ("//evil.gr") and backslash variants ("/\evil.gr",
         // which browsers normalise to "//") look like internal paths but are
         // not. Reject before anything else.
-        if (preg_match('#^[/\\\\]{2}#', $v) || preg_match('#^/[\\\\]#', $v)) {
+        if (preg_match('#^[/\\\\]{2}#', $v) === 1 || preg_match('#^/[\\\\]#', $v) === 1) {
             return '';
         }
 

@@ -132,9 +132,10 @@ final class Auth
             return null; // bad signature, expired, unknown kid
         }
 
-        // JWT::decode already checked exp/nbf/iss signature. Audience is on us:
-        // without this check a token minted for a *different* Access app in the
-        // same Cloudflare account would be accepted here.
+        // JWT::decode already checked signature, exp and nbf — and nothing
+        // else. Audience and issuer are on us: without these checks a token
+        // minted for a *different* Access app in the same Cloudflare account,
+        // or by a different team entirely, would be accepted here.
         $aud = (array) ($claims['aud'] ?? []);
         $expected = (string) ($this->config['aud'] ?? '');
         if ($expected === '' || !in_array($expected, $aud, true)) {

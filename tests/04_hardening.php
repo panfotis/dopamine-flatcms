@@ -98,6 +98,28 @@ file_put_contents($rolesFile, "not: a list\n");
 ok($roleOf('good@example.gr') === 403, 'a roles file of the wrong shape denies everyone too');
 unlink($rolesFile);
 
+section('A validly signed token with the wrong claims is refused');
+// Signature, exp and nbf are firebase/php-jwt's checks; audience and issuer
+// are ours (Auth::email()). These two are the only lines in the codebase that
+// fail *open* on regression, so they get the negative cases the library's
+// checks do not need. as_user() merges the override after access() captured
+// the signing config, so the token keeps the original aud/iss while Auth
+// expects the overridden one — a real signature, wrong claims.
+//
+// The control first: this address passes with the claims left alone, so the
+// 403s below are the claim check refusing, not roles.yml.
+ok(as_user('fotis@wearedope.com')->getStatusCode() === 200, 'the same address is accepted when the claims match');
+
+$wrongAud = as_user('fotis@wearedope.com', 'GET', [], ['aud' => str_repeat('b', 64)]);
+ok($wrongAud->getStatusCode() === 403, 'a token minted for a different Access application is refused');
+// "Cloudflare Access" is the not-authenticated message, which proves the token
+// died at verification — not merely at the roles lookup, whose message differs.
+contains((string) $wrongAud->getContent(), 'Cloudflare Access', 'and refused as unauthenticated, not as unlisted');
+
+$wrongIss = as_user('fotis@wearedope.com', 'GET', [], ['team_domain' => 'evil.cloudflareaccess.com']);
+ok($wrongIss->getStatusCode() === 403, 'a token from a different team domain is refused');
+contains((string) $wrongIss->getContent(), 'Cloudflare Access', 'also as unauthenticated');
+
 section('Auth::user() answers with an identity and a role, or with nothing');
 $who = new \Dopamine\FlatCms\Auth(
     ['mode' => 'none', 'dev_bypass' => false, 'roles_file' => ''],
