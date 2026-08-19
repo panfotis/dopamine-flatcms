@@ -72,7 +72,7 @@ $manifest['repositories'] = [[
     'url' => $root,
     'options' => [
         'symlink' => false,
-        'versions' => ['dopamine/flatcms' => '1.0.0'],
+        'versions' => ['dopamine/flatcms' => '0.1.0'],
     ],
 ]];
 file_put_contents(
@@ -97,7 +97,7 @@ $archiveDir = $target . '/artifact';
 mkdir($archiveDir, 0775, true);
 [$archiveStatus, $archiveOutput] = packageRun(
     $root,
-    $composerEnv . 'COMPOSER_ROOT_VERSION=1.0.0 composer archive --format=zip --dir=' . escapeshellarg($archiveDir)
+    $composerEnv . 'COMPOSER_ROOT_VERSION=0.1.0 composer archive --format=zip --dir=' . escapeshellarg($archiveDir)
 );
 ok($archiveStatus === 0, 'Composer can build the distributable archive: ' . $archiveOutput);
 
