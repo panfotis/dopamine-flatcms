@@ -5,5 +5,5 @@
 @media (min-width:820px){
   .text-image .grid{grid-template-columns:1fr 1fr}
   .text-image .media{order:var(--order,2)}
-  .text-image .grid[style*="--side:start"] .media{order:0}
+  .text-image .grid[style*="--side:start"] .media{order:-1}
 }

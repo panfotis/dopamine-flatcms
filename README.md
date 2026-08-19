@@ -108,6 +108,26 @@ The engine is installed at `vendor/dopamine/flatcms`; the site owns only its
 config, content, public entrypoints, layout, and optional overrides. See
 [`skeleton/README.md`](skeleton/README.md).
 
+### Start from the demo theme (optional)
+
+The skeleton ships a minimal theme. For a full starting point — twelve styled
+components, layouts and bilingual demo content — clone the
+[demo theme](https://github.com/panfotis/flatcms-theme-demo) over it:
+
+```bash
+rm -rf theme
+git clone https://github.com/panfotis/flatcms-theme-demo theme
+rm -rf theme/.git
+
+# optional: the demo pages and images (English works out of the box)
+cp -R theme/_demo-content/pages theme/_demo-content/uploads content/
+rm -rf theme/_demo-content
+```
+
+A theme is a starting point, not a dependency: once cloned it is yours, and
+there is nothing to update from upstream. The theme's own README covers the
+bilingual config and the styling ladder.
+
 ### Without DDEV
 
 ```bash
