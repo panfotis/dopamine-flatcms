@@ -246,9 +246,9 @@ section('A locked field stays locked inside a repeater row');
 //
 // `editable: false` rather than `admin` on purpose — false is closed to
 // everyone, so the dev bypass's admin role cannot hide the lock.
-$fixtureDir = dirname(__DIR__) . '/var/cache/test-components-' . bin2hex(random_bytes(4));
-mkdir($fixtureDir . '/locked_rows', 0775, true);
-file_put_contents($fixtureDir . '/locked_rows/schema.yml', \Symfony\Component\Yaml\Yaml::dump([
+$fixtureDir = dirname(__DIR__) . '/var/cache/test-theme-' . bin2hex(random_bytes(4));
+mkdir($fixtureDir . '/components/locked_rows', 0775, true);
+file_put_contents($fixtureDir . '/components/locked_rows/schema.yml', \Symfony\Component\Yaml\Yaml::dump([
     'label'  => 'Κλειδωμένες γραμμές',
     'fields' => ['rows' => [
         'type' => 'list', 'label' => 'Γραμμές', 'max' => 5, 'item_label' => 'label',
@@ -270,8 +270,8 @@ file_put_contents($lockedPage, \Symfony\Component\Yaml\Yaml::dump([
 ], 6, 2));
 
 $lockedCfg = require dirname(__DIR__) . '/config.php';
-// First match wins, exactly as a site overrides a starter component.
-$lockedCfg['paths']['components'] = [$fixtureDir, $lockedCfg['paths']['components']];
+// First theme layer wins, exactly as a site overrides a starter component.
+$lockedCfg['paths']['theme'] = [$fixtureDir, $lockedCfg['paths']['theme']];
 $lockedForm = (string) admin_get(['action' => 'edit', 'page' => 'tmp-locked-rows'], $lockedCfg)->getContent();
 
 contains($lockedForm, 'name="blocks[lr][rows][0][label]"', 'the editable field in the row renders');
@@ -282,7 +282,7 @@ ok((bool) preg_match('/id="lr-rows-__INDEX__-code"[^>]*readonly/', $lockedForm),
     'including in the blank row the add button clones, which is where a forged POST would be built from');
 
 unlink($lockedPage);
-array_map('unlink', glob($fixtureDir . '/locked_rows/*') ?: []);
+array_map('unlink', glob($fixtureDir . '/components/locked_rows/*') ?: []);
 @rmdir($fixtureDir . '/locked_rows');
 @rmdir($fixtureDir);
 

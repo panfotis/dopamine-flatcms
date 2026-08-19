@@ -1,0 +1,7 @@
+.faq{padding:72px 0}
+.faq details{border-bottom:1px solid var(--line)}
+.faq summary{cursor:pointer;padding:18px 0;font-weight:600;list-style:none}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:'+';float:inline-end;color:var(--muted)}
+.faq details[open] summary::after{content:'−'}
+.faq .answer{padding:0 0 18px;color:var(--muted)}

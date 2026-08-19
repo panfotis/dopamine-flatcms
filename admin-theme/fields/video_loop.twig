@@ -1,0 +1,30 @@
+{# The clip, its poster and the poster's description are one item. #}
+<div class="field-group">
+<div class="media">
+  <div class="thumb" id="{{ id }}-thumb"
+       style="{% if value.poster.src|default('') %}background-image:url('{{ value.poster.src }}'){% endif %}"></div>
+  <div class="controls">
+    {% if not locked %}
+      <input type="file" id="{{ id }}-file" accept="video/mp4" hidden>
+      <button type="button" class="btn ghost" data-upload="{{ id }}">{{ t('edit.change_video') }}</button>
+      <button type="button" class="btn ghost" data-clear="{{ id }}">{{ t('edit.remove') }}</button>
+    {% endif %}
+    <input type="hidden" id="{{ id }}" name="{{ fname }}[src]" value="{{ value.src|default('') }}">
+    <p class="path" id="{{ id }}-path">{{ value.src|default('') ?: t('edit.no_video') }}</p>
+  </div>
+</div>
+{# The poster is what a visitor with autoplay off actually
+   sees, so it is an ordinary image field with everything that
+   comes with one — including a required description.
+
+   Imported rather than `_self`: inside an include, `_self` is *this* file,
+   which has no macros. The import reaches back to the one renderer every
+   other field goes through, so the poster keeps its label, its locked pill
+   and its inline error instead of growing a second copy of them here. #}
+{% import '@admin/edit.twig' as w %}
+{{ w.field(
+     {'type': 'image', 'label': t('edit.poster'), 'decorative': def.decorative|default(false),
+      'fields': def.fields.poster.fields, 'hint': t('edit.poster_hint')},
+     id ~ '-poster', fname ~ '[poster]', value.poster|default({}), locked, pages, page_ids, errors
+   ) }}
+</div>

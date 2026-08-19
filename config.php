@@ -129,8 +129,10 @@ $config = [
     'paths' => [
         'content'    => $contentPath,
         'lang'       => __DIR__ . '/lang',
-        'components' => __DIR__ . '/components',
-        'templates'  => __DIR__ . '/templates',
+        // One folder per layer: the site's theme over the engine's. This repo
+        // is the engine plus its own demo site, so a single root each.
+        'theme'       => __DIR__ . '/theme',
+        'admin_theme' => __DIR__ . '/admin-theme',
         'cache'      => $varPath . '/cache',
         // Inside content/, not under the docroot: uploads are client-owned
         // state and belong in the content repository with everything else the

@@ -32,7 +32,7 @@ section('Every image renders through picture.twig');
 // component that hand-rolls an <img> is one that will ship without a
 // width/height pair, without a WebP source, or with alt on the wrong element.
 $bare = array_filter(
-    glob(dirname(__DIR__) . '/components/*/*.twig') ?: [],
+    glob(dirname(__DIR__) . '/theme/components/*/*.twig') ?: [],
     static fn (string $f): bool => str_contains((string) file_get_contents($f), '<img')
 );
 ok($bare === [], 'no component template writes its own <img>: ' . implode(', ', array_map('basename', $bare)));
@@ -321,7 +321,7 @@ foreach (['nope', '../../etc/passwd', 'admin/edit', ''] as $bad) {
 // reaches one layout and not the other is invisible until a client shares a
 // link and gets the wrong card.
 $headOf = static function (string $file): array {
-    preg_match('#<head>(.*?)</head>#s', (string) file_get_contents(dirname(__DIR__) . '/templates/' . $file), $m);
+    preg_match('#<head>(.*?)</head>#s', (string) file_get_contents(dirname(__DIR__) . '/theme/' . $file), $m);
     preg_match_all('#page\.seo\.[a-z_.]+#', $m[1] ?? '', $keys);
 
     return array_unique($keys[0]);
@@ -344,8 +344,8 @@ contains($galleryPage, 'loading="lazy"', 'and lazily — a gallery is below the 
 
 section('A video is a facade: nothing third-party loads until the visitor clicks');
 ok(str_contains($galleryPage, 'class="video-facade"')
-    && str_contains($galleryPage, "while (box && !box.classList.contains('video-facade'))"),
-    'the facade renders and its script finds this instance past adjacent styles');
+    && str_contains($galleryPage, "querySelectorAll('.video-facade')"),
+    'the facade renders and video.js initialises every instance in one pass');
 contains($galleryPage, 'data-video-src="https://www.youtube-nocookie.com/embed/', 'pointing at the no-cookie host');
 missing($galleryPage, '<iframe', 'with no iframe on the page at all');
 missing($galleryPage, 'youtube.com/embed', 'and no request to youtube.com either — that is the whole point');

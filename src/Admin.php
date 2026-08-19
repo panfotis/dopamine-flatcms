@@ -98,14 +98,14 @@ final class Admin
             // Both the unauthenticated case and a role refusal land here, so an
             // editor forging ?action=restore gets the same 403 as a stranger —
             // not a 400 that reads like the request was merely malformed.
-            return $this->html($this->cms->twig->render('admin/denied.twig', [
+            return $this->html($this->cms->renderAdmin('@admin/denied.twig', [
                 'message' => $e->getMessage(),
                 'user'    => $user,
             ]), 403);
         } catch (Throwable $e) {
             error_log('[dopamine-flatcms] ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
 
-            return $this->html($this->cms->twig->render('admin/error.twig', [
+            return $this->html($this->cms->renderAdmin('@admin/error.twig', [
                 'message' => $this->safeMessage($e),
                 'user'    => $user,
             ]), 400);
@@ -241,7 +241,7 @@ final class Admin
             array_column($pages, 'id')
         ));
 
-        return $this->html($this->cms->twig->render('admin/list.twig', [
+        return $this->html($this->cms->renderAdmin('@admin/list.twig', [
             'pages'  => $pages,
             // The header and the footer: the same edit screen, reached from a
             // second short table rather than mixed in among pages that have a
@@ -349,7 +349,7 @@ final class Admin
         // resolves instead of offering a dead option.
         $pages = $this->cms->content->list();
 
-        return $this->html($this->cms->twig->render('admin/edit.twig', [
+        return $this->html($this->cms->renderAdmin('@admin/edit.twig', [
             'page'     => $page,
             // A global — the header, the footer — has no URL to visit and no
             // `seo:` to fill in, so the form drops both. Passed as a flag
@@ -589,7 +589,7 @@ final class Admin
             throw new RuntimeException($this->cms->lang->t('err.page_missing'));
         }
 
-        return $this->html($this->cms->twig->render('admin/revisions.twig', [
+        return $this->html($this->cms->renderAdmin('@admin/revisions.twig', [
             'page'      => $page,
             'revisions' => $this->cms->content->revisions($id),
             'csrf'      => $this->csrf($request),
@@ -694,7 +694,7 @@ final class Admin
     {
         $this->requireAdmin($user);
 
-        return $this->html($this->cms->twig->render('admin/settings.twig', [
+        return $this->html($this->cms->renderAdmin('@admin/settings.twig', [
             // The absolute paths under `paths` are shown as-is, unlike anywhere
             // else in the panel — safeMessage() hides them precisely because it
             // cannot know who is reading. Here it can: which shared/ directory
@@ -750,7 +750,7 @@ final class Admin
     {
         $this->requireAdmin($user);
 
-        return $this->html($this->cms->twig->render('admin/submissions.twig', [
+        return $this->html($this->cms->renderAdmin('@admin/submissions.twig', [
             'submissions' => $this->cms->submissions->all(),
             'csrf'   => $this->csrf($request),
             'user'   => $user,
@@ -773,7 +773,7 @@ final class Admin
             throw new RuntimeException($this->cms->lang->t('err.submission_missing'));
         }
 
-        return $this->html($this->cms->twig->render('admin/submission.twig', [
+        return $this->html($this->cms->renderAdmin('@admin/submission.twig', [
             'record' => $record,
             'max_attempts' => max(1, (int) $this->cms->config['form']['max_attempts']),
             'csrf'   => $this->csrf($request),

@@ -1,0 +1,6 @@
+# Panel branding for this site — a logo, the client's colours. Emits after the
+# engine's admin.css. Assets are the supported surface; overriding the panel's
+# templates tracks engine internals and bin/doctor will say so.
+# No external entries here: the panel is authenticated and no-store.
+css:
+  - assets/css/admin.css

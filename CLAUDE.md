@@ -119,7 +119,7 @@ that happens, or every portrait on the site is sideways. `bin/doctor` checks the
 same list against the *running* interpreter, since Composer resolves under the
 CLI php and the site runs under php-fpm.
 
-Test suite: 1,029 checks across nine files. Run all of them, not just the new ones.
+Test suite: 1,090 checks across ten files. Run all of them, not just the new ones.
 
 **Do not add anything else without asking.** Explicitly rejected, with reasons:
 
@@ -137,7 +137,13 @@ src/          Cms Admin Auth Components Content Fields Form Lang Locks Media
               Cloudflare AccessDeniedException StaleContentException
               bootstrap.php — process-level error handlers, not a class
 config/       roles.yml — email -> admin|editor, committed, no secrets
-components/   <name>/schema.yml + <name>.twig — one folder per component
+theme/        everything site-facing: layout.twig, bare.twig (no header/
+              footer; `layout: bare`), 404.twig, 500.twig, picture.twig,
+              video_facade.twig, components/<name>/ (schema.yml + <name>.twig
+              + optional <name>.css / <name>.js — the file beside the template
+              is the whole declaration), theme.yml (global CSS/JS, local paths
+              inlined and https:// entries emitted as tags) and assets/.
+              Site theme layers over the engine's, first root wins per file.
 content/      pages/<locale>/*.yml, uploads/, .revisions/, redirects.yml
               A page id starting with `_` — `_header`, `_footer` — is a
               **global**: an ordinary page file that renders on every page
@@ -156,13 +162,15 @@ content/      pages/<locale>/*.yml, uploads/, .revisions/, redirects.yml
 bin/          doctor deploy.sh rollback.sh release.sh backup restore-drill
               new-site mail-retry prune-submissions
 lang/         en.php (source) + el.php — panel and engine strings
-templates/    layout.twig, bare.twig (no header/footer; `layout: bare`),
-              picture.twig, video_facade.twig, 404.twig, 500.twig, admin/*.twig
-              Every image on the site renders through picture.twig. A component
-              that writes its own <img> is caught by 01_render.php.
+admin-theme/  the panel: _layout.twig, edit.twig, fields/*.twig, theme.yml,
+              assets/ (admin.css, editor.js). Its own @admin Twig namespace,
+              so a site theme can never shadow a panel template. Branding via
+              assets is supported; overriding its templates is not.
+              Every image on the site renders through theme/picture.twig. A
+              component that writes its own <img> is caught by 01_render.php.
 public/       docroot: index.php, admin.php, img.php, router.php
 tests/        01_render 02_admin 03_lockdown 04_hardening 05_concurrency
-              06_production 07_shipkit 08_form 09_package, lib.php, fixtures/,
+              06_production 07_shipkit 08_form 09_package 10_assets, lib.php, fixtures/,
               run.sh. 09 proves a mirrored Composer install and clean archive.
               Requests run in-process: build a Request, assert on the Response.
               Only _boot.php (needs a real environment) and _img_route.php

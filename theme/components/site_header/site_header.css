@@ -1,0 +1,11 @@
+.site-head{border-bottom:1px solid var(--line)}
+.site-head .wrap{display:flex;align-items:center;justify-content:space-between;
+  gap:26px;flex-wrap:wrap;padding-block:18px}
+.site-head .brand{color:var(--ink);text-decoration:none;font-weight:700;font-size:18px}
+.site-head .brand img{max-height:44px;width:auto}
+.site-nav{display:flex;gap:26px;flex-wrap:wrap}
+.site-nav a{color:var(--ink);text-decoration:none;font-weight:500}
+.site-nav a[aria-current]{color:var(--accent)}
+.lang-switch{display:flex;gap:12px;font-size:14px}
+.lang-switch a{color:var(--muted);text-decoration:none}
+.lang-switch a[aria-current]{color:var(--ink);font-weight:600}

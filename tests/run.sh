@@ -19,7 +19,7 @@ if [ "${1:-}" = "--portable" ]; then
 fi
 
 fail=0
-for t in "$dir"/0*.php; do
+for t in "$dir"/[0-9]*.php; do
   echo "── $(basename "$t") ──────────────────────────────"
   php "$t" || fail=1
 done

@@ -110,7 +110,7 @@ if (isset($archives[0])) {
 ok($listStatus === 0, 'the generated package is a readable zip archive');
 if ($listStatus === 0) {
     $names = preg_split('/\R/', trim($listOutput)) ?: [];
-    ok(in_array('src/Cms.php', $names, true) && in_array('components/hero/schema.yml', $names, true),
+    ok(in_array('src/Cms.php', $names, true) && in_array('theme/components/hero/schema.yml', $names, true),
         'engine classes and starter components are included');
     ok(!in_array('config.php', $names, true)
         && !array_filter($names, static fn (string $name): bool => preg_match('#^(content|public|skeleton|vendor)/#', $name) === 1),
@@ -136,7 +136,7 @@ PHP;
 );
 ok($probeStatus === 0, 'the demo page and panel render through package templates: ' . $probeOutput);
 
-$localComponent = $target . '/components/hero';
+$localComponent = $target . '/theme/components/hero';
 mkdir($localComponent, 0775, true);
 file_put_contents($localComponent . '/schema.yml', "label: Local hero\nfields:\n  heading:\n    type: text\n");
 file_put_contents($localComponent . '/hero.twig', '<strong>LOCAL {{ fields.heading }}</strong>');

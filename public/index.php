@@ -61,7 +61,9 @@ if ($feed !== null) {
         $response = $to !== null
             ? new RedirectResponse($to, 301, ['Cache-Control' => 'public, max-age=3600'])
             : new Response(
-                $cms->twig->render('404.twig', [
+                // renderTemplate, not twig->render: the 404 is a branded page
+                // and carries the site's global CSS like any other.
+                $cms->renderTemplate('404.twig', [
                     'slug' => $slug,
                     'locale' => $cms->locale(),
                     'home_url' => $cms->localeUrl('/'),

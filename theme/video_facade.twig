@@ -1,0 +1,47 @@
+{#
+  Every embedded video on the site renders through here.
+
+    {% include 'video_facade.twig' with {
+         video: fields.video,
+         poster: fields.video_poster,
+         title: fields.heading
+       } only %}
+
+  A **facade**: the poster, a play button, and no third-party request at all
+  until the visitor clicks. That is not a performance trick — an iframe from
+  youtube.com on page load is a third-party cookie the client now has to
+  declare in a banner, on a brochure site that otherwise sets none.
+
+  The iframe is built here, from a stored `{provider, id}` that Fields::embed()
+  matched against a fixed pattern. Nothing the client typed reaches this markup:
+  the id charset *is* the allowlist, so there is no path from a paste to an
+  attribute. Pasted embed HTML is never stored, which is why it can never be
+  rendered.
+
+  youtube-nocookie.com rather than youtube.com, for the same reason the facade
+  exists at all.
+#}
+{% set provider = video.provider|default('') %}
+{% set id = video.id|default('') %}
+
+{% if provider and id %}
+  {% set src = provider == 'youtube'
+       ? 'https://www.youtube-nocookie.com/embed/' ~ id ~ '?autoplay=1&rel=0'
+       : 'https://player.vimeo.com/video/' ~ id ~ '?autoplay=1' %}
+
+  <div class="video-facade" data-video-src="{{ src }}">
+    {% if poster.src|default('') %}
+      {% include 'picture.twig' with {
+           image: poster,
+           widths: [640, 960, 1280],
+           sizes: '(min-width: 900px) 900px, 100vw'
+         } only %}
+    {% endif %}
+    {# A button, not a div with a click handler: it is focusable, it is in the
+       tab order and it announces itself, all without a line of code. #}
+    <button type="button" class="video-play">
+      <span class="sr-only">{{ title|default(ts('video.play')) }}</span>
+    </button>
+  </div>
+
+{% endif %}

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="{{ locale|default(site('locale')) }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{#
+  Everything here comes from the page's `seo:` map, resolved by Cms::seo() —
+  which is where the fallbacks live, so nothing below has to branch on an empty
+  value that has a perfectly good default sitting one key away.
+#}
+<title>{{ page.seo.title }} — {{ site('name') }}</title>
+{% if page.seo.description %}<meta name="description" content="{{ page.seo.description }}">{% endif %}
+{% if page.seo.noindex %}<meta name="robots" content="noindex, nofollow">{% endif %}
+{% if page.seo.canonical %}<link rel="canonical" href="{{ page.seo.canonical }}">{% endif %}
+<meta property="og:type" content="website">
+<meta property="og:title" content="{{ page.seo.title }}">
+<meta property="og:url" content="{{ page.seo.url }}">
+{% if page.seo.description %}<meta property="og:description" content="{{ page.seo.description }}">{% endif %}
+{# No og:image:alt — the share image is declared decorative, and the card
+   already carries the title and description as text beside it. #}
+{% if page.seo.og_image.src %}
+<meta property="og:image" content="{{ page.seo.og_image.src }}">
+<meta name="twitter:card" content="summary_large_image">
+{% endif %}
+{% if site('favicon') %}<link rel="icon" href="{{ site('favicon') }}">{% endif %}
+{# Absolute, because a hreflang a crawler cannot resolve is worse than none —
+   and only for languages that actually have this page, since pointing at a
+   home page as the "alternate" of a subpage is a claim that is not true.
+   A single-language site emits one self-referencing link, which is the valid
+   shape for a group of one rather than a placeholder. #}
+{% for alt in alternates|default([])|filter(a => not a.missing) %}
+<link rel="alternate" hreflang="{{ alt.locale }}" href="{{ alt.abs }}">
+{% if alt.default and alternates|length > 1 %}<link rel="alternate" hreflang="x-default" href="{{ alt.abs }}">{% endif %}
+{% endfor %}
+{{ theme_head() }}
+</head>
+<body>
+{# The header and the footer are content, not markup: `_header.yml` and
+   `_footer.yml`, edited in the panel like any page. This file owns the
+   landmarks and the site-wide CSS above; the components own what is inside
+   them, and ship their own styles the way every other component does.
+
+   Wrapped in a condition so a site with no `_header.yml` renders no empty
+   landmark — and renders at all, which is the point of the missing-file
+   policy in Cms::renderGlobal(). #}
+{% if header_blocks %}
+  <header>{% for block in header_blocks %}{{ block|raw }}{% endfor %}</header>
+{% endif %}
+<main>
+  {% for block in blocks %}{{ block|raw }}{% endfor %}
+</main>
+{% if footer_blocks %}
+  <footer>{% for block in footer_blocks %}{{ block|raw }}{% endfor %}</footer>
+{% endif %}
+{{ theme_foot() }}
+</body>
+</html>

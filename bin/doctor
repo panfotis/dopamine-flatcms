@@ -61,7 +61,7 @@ try {
 
 $cms = new Cms($config);
 
-foreach (['content', 'components', 'templates'] as $key) {
+foreach (['content', 'theme', 'admin_theme'] as $key) {
     foreach ((array) $config['paths'][$key] as $dir) {
         if (!is_dir((string) $dir)) {
             $fail(sprintf('paths.%s does not exist: %s', $key, $dir));
@@ -176,8 +176,8 @@ if (!is_file((string) $config['auth']['roles_file'])) {
 
 $types = [];
 $componentDirs = [];
-foreach ((array) $config['paths']['components'] as $root) {
-    foreach (glob((string) $root . '/*', GLOB_ONLYDIR) ?: [] as $dir) {
+foreach ((array) $config['paths']['theme'] as $root) {
+    foreach (glob((string) $root . '/components/*', GLOB_ONLYDIR) ?: [] as $dir) {
         $componentDirs[basename($dir)] ??= $dir;
     }
 }
@@ -281,7 +281,7 @@ foreach ($loaded as $type => $schema) {
 
 foreach (['layout.twig', '404.twig', '500.twig', 'picture.twig'] as $template) {
     $exists = false;
-    foreach ((array) $config['paths']['templates'] as $root) {
+    foreach ((array) $config['paths']['theme'] as $root) {
         if (is_file((string) $root . '/' . $template)) {
             $exists = true;
             break;
@@ -297,6 +297,184 @@ foreach (['layout.twig', '404.twig', '500.twig', 'picture.twig'] as $template) {
         $fail(sprintf('%s does not compile — %s', $template, $e->getMessage()));
     }
 }
+
+// ── Theme assets ────────────────────────────────────────────────────────────
+
+$themeDirs = array_values(array_filter((array) $config['paths']['theme'], 'is_string'));
+$adminDirs = array_values(array_filter((array) ($config['paths']['admin_theme'] ?? []), 'is_string'));
+
+// Every local CSS file the pipeline will inline, and every manifest entry.
+// Collected once so the reference checks below run over one list.
+$localCss  = [];
+$localJs   = [];
+$externals = [];   // url => [where, attrs]
+
+$collectManifest = static function (string $dir, string $who) use (&$localCss, &$localJs, &$externals, $fail, $warn): void {
+    $file = $dir . '/theme.yml';
+    if (!is_file($file)) {
+        return;
+    }
+    try {
+        $data = (array) (Yaml::parseFile($file) ?? []);
+    } catch (Throwable $e) {
+        $fail(sprintf('%s: theme.yml is not valid YAML (%s)', $who, $e->getMessage()));
+
+        return;
+    }
+
+    foreach (['css', 'js'] as $kind) {
+        foreach ((array) ($data[$kind] ?? []) as $entry) {
+            if (is_array($entry)) {
+                $url = (string) ($entry['url'] ?? '');
+                if ($url === '') {
+                    $fail(sprintf('%s: external %s entry has no url', $who, $kind));
+                } else {
+                    $externals[] = [$who, $kind, $url, $entry];
+                }
+                continue;
+            }
+            $entry = (string) $entry;
+            if (str_starts_with($entry, 'https://')) {
+                $externals[] = [$who, $kind, $entry, ['url' => $entry]];
+                continue;
+            }
+            if (preg_match('#^(https?:)?//#i', $entry) === 1) {
+                $fail(sprintf('%s: %s is not https — the pipeline refuses it', $who, $entry));
+                continue;
+            }
+            // A local path: it must exist, and it must resolve inside the
+            // theme layer that declared it — ../../.env inlined into a public
+            // page is the failure this check exists for.
+            $real = realpath($dir . '/' . $entry);
+            $root = realpath($dir);
+            if ($real === false) {
+                $fail(sprintf('%s: %s does not exist', $who, $entry));
+            } elseif ($root === false || str_starts_with($entry, '/') || !str_starts_with($real, $root . '/')) {
+                $fail(sprintf('%s: %s resolves outside its own theme root', $who, $entry));
+            } elseif ($kind === 'css') {
+                $localCss[] = [$who, $real];
+            } else {
+                $localJs[] = [$who, $real];
+            }
+        }
+    }
+};
+
+foreach ($themeDirs as $dir) {
+    $collectManifest($dir, 'theme ' . $dir);
+}
+foreach ($adminDirs as $dir) {
+    $collectManifest($dir, 'admin-theme ' . $dir);
+}
+
+foreach ($componentDirs as $type => $dir) {
+    // Convention files: <type>.css / <type>.js are picked up automatically —
+    // any other stray .css/.js in the folder never will be.
+    foreach (glob($dir . '/*.{css,js}', GLOB_BRACE) ?: [] as $file) {
+        $base = basename($file);
+        if (!in_array($base, [$type . '.css', $type . '.js'], true)) {
+            $warn(sprintf('component "%s": %s will never be picked up — the convention is %s.css / %s.js', $type, $base, $type, $type));
+        } elseif (str_ends_with($base, '.css')) {
+            $localCss[] = ['component ' . $type, (string) realpath($file)];
+        } else {
+            $localJs[] = ['component ' . $type, (string) realpath($file)];
+        }
+    }
+
+    // External deps from the schema. Local paths do not belong here — the
+    // convention file beside the template is the whole declaration.
+    try {
+        $schema = $cms->components->get($type) ?? [];
+    } catch (Throwable) {
+        continue; // an unparseable schema.yml is already reported above
+    }
+    foreach (['css', 'js'] as $kind) {
+        foreach ((array) ($schema['assets'][$kind] ?? []) as $entry) {
+            $entry = is_array($entry) ? $entry : ['url' => (string) $entry];
+            $url = (string) ($entry['url'] ?? '');
+            if ($url === '' || !str_starts_with($url, 'https://')) {
+                $fail(sprintf('component "%s": assets.%s entry must be an https url', $type, $kind));
+            } else {
+                $externals[] = ['component ' . $type, $kind, $url, $entry];
+            }
+        }
+    }
+}
+
+// The same URL declared twice must agree on everything — integrity, async,
+// crossorigin, even which of css:/js: it sits under. Picking one silently is
+// the failure mode; runtime keeps the first and this is where it gets loud.
+$seenUrl = [];
+$hasAsync = false;
+foreach ($externals as [$who, $kind, $url, $attrs]) {
+    unset($attrs['url']);
+    ksort($attrs);
+    $shape = $kind . '|' . json_encode($attrs);
+    if (isset($seenUrl[$url]) && $seenUrl[$url] !== $shape) {
+        $fail(sprintf('%s: %s is declared twice with different attributes', $who, $url));
+    }
+    $seenUrl[$url] ??= $shape;
+
+    if (($attrs['integrity'] ?? '') === '') {
+        $warn(sprintf('%s: %s has no integrity hash — pin to a tag and add one', $who, $url));
+    }
+    if (($attrs['async'] ?? false) === true) {
+        $hasAsync = true;
+    }
+}
+if ($hasAsync && $localJs !== []) {
+    $warn('an async external script coexists with local JS — async has no ordering guarantee against DOMContentLoaded, so local code must not depend on it');
+}
+
+// Inlined CSS has no file URL to resolve against: a relative url() or @import
+// silently requests the wrong path on every page. data:, https:, /… and #…
+// survive inlining; nothing else does.
+foreach ($localCss as [$who, $file]) {
+    $css = (string) @file_get_contents($file);
+    foreach ((array) (preg_match_all('#url\(\s*[\'"]?([^\'")\s]+)#i', $css, $m) ? $m[1] : []) as $ref) {
+        if (preg_match('~^(data:|https://|/|\#)~', $ref) !== 1) {
+            $fail(sprintf('%s: relative url(%s) cannot resolve once inlined', $who, $ref));
+        }
+    }
+    foreach ((array) (preg_match_all('#@import\s+(?:url\()?[\'"]?([^\'")\s;]+)#i', $css, $m) ? $m[1] : []) as $ref) {
+        if (str_starts_with($ref, 'https://')) {
+            $warn(sprintf('%s: @import %s is a serialized second round-trip — declare it in the manifest as a <link> instead', $who, $ref));
+        } else {
+            $fail(sprintf('%s: relative @import %s cannot resolve once inlined', $who, $ref));
+        }
+    }
+}
+
+// A site layer that overrides a panel template tracks engine internals it
+// cannot see change. Assets are the supported branding surface.
+$engineAdmin = $adminDirs !== [] ? $adminDirs[count($adminDirs) - 1] : null;
+foreach (array_slice($adminDirs, 0, -1) as $dir) {
+    foreach (glob($dir . '/{,fields/}*.twig', GLOB_BRACE) ?: [] as $file) {
+        $warn(sprintf('admin-theme override %s: panel templates change shape between engine versions — brand via assets/ instead', substr($file, strlen($dir) + 1)));
+    }
+}
+
+// The two calls that load every stylesheet and script live in templates the
+// site owns, so the engine cannot correct them later. Compiled source, not
+// strpos: a {# theme_head() #} comment is stripped at compile and stray
+// spacing inside the call does not matter.
+$pipelined = ['layout.twig', 'bare.twig', '404.twig'];
+$checkPipelined = static function () use (&$pipelined, $cms, $fail, $warn): void {
+    foreach ($pipelined as $template) {
+        try {
+            $source   = $cms->twig->getLoader()->getSourceContext($template);
+            $compiled = $cms->twig->compileSource($source);
+        } catch (Throwable) {
+            continue; // missing or broken templates are reported above
+        }
+        if (!str_contains($compiled, 'theme_head')) {
+            $fail(sprintf('%s never calls theme_head() — every page it renders ships without CSS', $template));
+        }
+        if (!str_contains($compiled, 'theme_foot')) {
+            $warn(sprintf('%s never calls theme_foot() — no JS will load on it', $template));
+        }
+    }
+};
 
 // ── Pages ───────────────────────────────────────────────────────────────────
 
@@ -444,14 +622,22 @@ foreach (glob($pagesDir . '/*.yml') ?: [] as $file) {
     // gets said, before a landing page ships with a header nobody wanted.
     $layout = (string) ($data['layout'] ?? '');
     $layoutExists = false;
-    foreach ((array) $config['paths']['templates'] as $root) {
+    foreach ((array) $config['paths']['theme'] as $root) {
         if (is_file((string) $root . '/' . $layout . '.twig')) {
             $layoutExists = true;
             break;
         }
     }
+    if (in_array($layout, ['picture', 'video_facade'], true)) {
+        $warn(sprintf('page "%s": layout "%s" names a partial, not a layout', $id, $layout));
+    }
     if ($layout !== '' && !$layoutExists) {
         $warn(sprintf('page "%s": layout "%s" has no template — it will render in layout.twig', $id, $layout));
+    }
+    if ($layout !== '' && $layoutExists && $layout !== '500'
+        && !in_array($layout, ['picture', 'video_facade'], true)
+        && !in_array($layout . '.twig', $pipelined, true)) {
+        $pipelined[] = $layout . '.twig';
     }
 
     if (isset($data['nav']) && !is_array($data['nav'])) {
@@ -534,6 +720,8 @@ foreach ($componentsLoad ? $set['ids'] : [] as $id) {
     }
 }
 }
+
+$checkPipelined();
 
 // ── Panel language ──────────────────────────────────────────────────────────
 

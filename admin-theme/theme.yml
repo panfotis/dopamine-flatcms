@@ -1,0 +1,6 @@
+# The panel's global assets. No external entries by policy: the panel is
+# authenticated and no-store — the last place to add a third-party request.
+# editor.js is not global on purpose; edit.twig attaches it, so the list and
+# settings screens never ship 11 KB of editor.
+css:
+  - assets/css/admin.css

@@ -60,7 +60,7 @@ final class Components
         }
 
         $out = [];
-        foreach ($this->dirs as $dir) {
+        foreach ($this->dirs as $i => $dir) {
             foreach (glob($dir . '/*', GLOB_ONLYDIR) ?: [] as $path) {
                 $type = basename($path);
                 // Site roots are first. Once a type exists, its schema and
@@ -78,7 +78,18 @@ final class Components
                 $schema['type']     = $type;
                 $schema['label']  ??= ucfirst(str_replace('_', ' ', $type));
                 $schema['fields'] ??= [];
-                $schema['template'] = $type . '/' . $type . '.twig';
+                // Bound to this layer's Twig namespace, not the layered lookup:
+                // the folder that won the schema is the folder whose template,
+                // CSS and JS render. Half a component from another layer is
+                // exactly what first-wins exists to forbid.
+                $schema['template'] = '@theme' . $i . '/components/' . $type . '/' . $type . '.twig';
+                $schema['dir']      = $path;
+                // External CDN deps only; the component's own .css/.js need no
+                // declaration — the file beside the template is the declaration.
+                $schema['assets'] = [
+                    'css' => array_values((array) ($schema['assets']['css'] ?? [])),
+                    'js'  => array_values((array) ($schema['assets']['js'] ?? [])),
+                ];
 
                 $schema['fields'] = self::normalise($schema['fields']);
 

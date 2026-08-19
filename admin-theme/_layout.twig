@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="{{ t('_locale') }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>{% block title %}{{ t('admin') }}{% endblock %} — {{ site('name') }}</title>
+{{ theme_head() }}
+</head>
+<body>
+<div class="topbar"><div class="inner">
+  <div class="brand"><a href="?" style="text-decoration:none;color:inherit">{{ site('name') }}</a> <span>· {{ t('admin') }}</span></div>
+  <div class="who">{{ user.email }}{% if user.role %} <span class="pill">{{ user.role }}</span>{% endif %}</div>
+</div></div>
+
+<div class="shell">
+  <aside class="side">{% block aside %}{% include '@admin/_nav.twig' %}{% endblock %}</aside>
+  <div class="main">
+    {% block actionbar %}{% endblock %}
+    <div class="wrap">{% block content %}{% endblock %}</div>
+  </div>
+</div>
+{% block foot %}{% endblock %}
+{{ theme_foot() }}
+</body>
+</html>

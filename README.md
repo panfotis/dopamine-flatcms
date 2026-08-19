@@ -12,8 +12,9 @@ then create each site with `composer create-project`. Site code overrides
 package components and templates without editing `vendor/`.
 
 ```
-components/hero/schema.yml   →  the fields the client sees
-components/hero/hero.twig    →  how it renders
+theme/components/hero/schema.yml   →  the fields the client sees
+theme/components/hero/hero.twig    →  how it renders
+theme/components/hero/hero.css     →  its styles, loaded only where a hero renders
 content/pages/el/home.yml    →  which components this page has, and their values
 ```
 
@@ -228,7 +229,7 @@ it and survives every deploy and every rollback.
 /var/www/pelatis/
 ├── current -> releases/20260816-143000/   ← flipping this is the deploy
 ├── releases/
-│   └── 20260816-143000/    public/ src/ components/ templates/ vendor/ bin/
+│   └── 20260816-143000/    public/ src/ theme/ admin-theme/ vendor/ bin/
 └── shared/
     ├── content/            ← its own private git repository
     │   ├── pages/el/       pages, one YAML file each
@@ -389,7 +390,7 @@ identically — handy for local work.
 **Optional, and off by default.** Derivatives are generated locally with GD:
 `/img.php?src=…&w=…` resizes on first request, writes to `var/cache/images/`
 keyed by source content hash + width + format, and serves it immutable for a
-year. Every image renders through `templates/picture.twig` as a `<picture>`
+year. Every image renders through `theme/picture.twig` as a `<picture>`
 with a WebP source and a JPEG (or PNG, where there is transparency) fallback.
 
 The width allowlist is finite — `320, 640, 960, 1280, 1600, 2048` — and a width

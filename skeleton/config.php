@@ -1,7 +1,7 @@
 <?php
 /**
  * Per-site configuration. One install per site, so this file is the only thing
- * that changes between clients (plus components/ and content/).
+ * that changes between clients (plus theme/ and content/).
  *
  * Secrets: keep them in environment variables in production. env() falls back
  * to the literal default so local dev works without a .env file.
@@ -132,8 +132,11 @@ $config = [
         'lang'       => $enginePath . '/lang',
         // First match wins: add a local component/template to override a
         // starter without ever editing vendor/.
-        'components' => [__DIR__ . '/components', $enginePath . '/components'],
-        'templates'  => [__DIR__ . '/templates', $enginePath . '/templates'],
+        // Site theme first, engine theme after: any file dropped here —
+        // a layout, a component folder, a stylesheet — overrides the
+        // engine's copy without touching vendor/.
+        'theme'       => [__DIR__ . '/theme', $enginePath . '/theme'],
+        'admin_theme' => [__DIR__ . '/admin-theme', $enginePath . '/admin-theme'],
         'cache'      => $varPath . '/cache',
         // Inside content/, not under the docroot: uploads are client-owned
         // state and belong in the content repository with everything else the

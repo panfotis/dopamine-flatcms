@@ -27,12 +27,12 @@ mkdir -p "$target"
 
 # Code, components and templates. Not content: a new site starts empty, and
 # inheriting another client's pages is how demo copy reaches production.
-for item in src public templates components lang bin composer.json composer.lock \
+for item in src public theme admin-theme lang bin composer.json composer.lock \
             nginx.conf.example config.php README.md CLAUDE.md tests .gitignore; do
   cp -R "$src/$item" "$target/$item"
 done
 
-rm -rf "$target/components/faq"          # demo component; keep hero/text_image/contact_cta
+rm -rf "$target/theme/components/faq"    # demo component; keep hero/text_image/contact_cta
 mkdir -p "$target/content/uploads" \
          "$target/var/cache" "$target/var/locks" "$target/config"
 

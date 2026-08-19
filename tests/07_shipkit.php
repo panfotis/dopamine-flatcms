@@ -105,7 +105,7 @@ section('A template error renders 500.twig, not a stack trace');
 
 // A component whose template cannot compile — the schema-rename case, which is
 // how this failed on a live site: a white page with a PHP fatal printed on it.
-$broken = $root . '/components/_broken';
+$broken = $root . '/theme/components/_broken';
 register_shutdown_function(static function () use ($broken): void {
     array_map('unlink', glob($broken . '/*') ?: []);
     @rmdir($broken);
@@ -414,7 +414,7 @@ section('bin/doctor refuses a broken component, and an unsafe production box');
 // The component cases need a real component directory, so build one and take
 // it away again whatever happens.
 $tmpType = '_doctor';
-$tmpDir = $root . '/components/' . $tmpType;
+$tmpDir = $root . '/theme/components/' . $tmpType;
 register_shutdown_function(static function () use ($tmpDir): void {
     array_map('unlink', glob($tmpDir . '/*') ?: []);
     @rmdir($tmpDir);
@@ -458,6 +458,18 @@ foreach ([
     ok($s === 1, 'refuses ' . $why);
     contains($o, $expected, '...and says why (' . $why . ')');
 }
+
+// Inlined CSS resolves url() against the page URL, not the stylesheet — a
+// relative reference or @import silently requests the wrong path everywhere.
+array_map('unlink', glob($tmpDir . '/*') ?: []);
+@mkdir($tmpDir, 0775, true);
+file_put_contents($tmpDir . '/schema.yml', "label: X\nfields: {}\n");
+file_put_contents($tmpDir . '/' . $tmpType . '.twig', '{# ok #}');
+file_put_contents($tmpDir . '/' . $tmpType . '.css', "@import \"shared.css\";\n.x{background:url(../img/a.png)}\n");
+[$s, $o] = $doctor(['pages/el/home.yml' => $goodPage('/')]);
+ok($s === 1, 'refuses a component CSS with relative references');
+contains($o, 'cannot resolve once inlined', '...and says why: they break the moment the file is inlined');
+array_map('unlink', glob($tmpDir . '/*') ?: []);
 
 array_map('unlink', glob($tmpDir . '/*') ?: []);
 @rmdir($tmpDir);

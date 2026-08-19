@@ -1,0 +1,25 @@
+.contact-form{padding:72px 0}
+.contact-form .intro{color:var(--muted);max-width:60ch}
+.contact-form form{max-width:560px;display:grid;gap:16px;margin-top:24px}
+.contact-form label{display:block;font-weight:600;font-size:14px;margin-bottom:5px}
+.contact-form input[type=text],.contact-form input[type=email],
+.contact-form input[type=tel],.contact-form textarea,.contact-form select{
+  width:100%;padding:11px 13px;border:1px solid #cfd4da;border-radius:8px;font:inherit;color:inherit}
+.contact-form textarea{min-height:140px;resize:vertical}
+.contact-form .consent label{font-weight:400;font-size:14px;display:flex;gap:9px;align-items:flex-start}
+.contact-form .consent input{margin-top:3px}
+.contact-form .radios{border:0;padding:0;margin:0}
+.contact-form .radios legend{font-weight:600;font-size:14px;margin-bottom:5px;padding:0}
+.contact-form .opt{font-weight:400;display:flex;gap:9px;align-items:flex-start;margin:0 0 6px}
+.contact-form .opt input{margin-top:3px}
+.contact-form .err{color:#b4232a;font-size:13px;font-weight:600;margin:5px 0 0}
+.contact-form select{background:#fff;appearance:auto}
+.contact-form .has-error input,.contact-form .has-error textarea,
+.contact-form .has-error select{border-color:#b4232a}
+.contact-form .form-err{background:#fdeaea;border:1px solid #f3c4c4;color:#b4232a;
+  padding:12px 16px;border-radius:8px}
+.contact-form .form-ok{background:#e7f6ee;border:1px solid #b7e2cb;padding:24px;border-radius:10px}
+.contact-form button{border:0;cursor:pointer;justify-self:start}
+/* Off-screen rather than display:none — a bot that skips hidden inputs is
+   exactly the bot this is for. */
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}

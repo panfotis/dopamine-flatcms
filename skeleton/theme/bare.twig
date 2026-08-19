@@ -1,0 +1,42 @@
+{#
+  A page with no header and no footer: a landing page, a page that has to open
+  inside someone else's iframe, a thank-you page nobody should navigate away
+  from. Chosen per page with `layout: bare` in the page file.
+
+  It is a copy of layout.twig's head rather than an extension of it because the
+  head is the part that must not diverge quietly — Twig inheritance here would
+  mean a change to the SEO block silently applying to one layout and not the
+  other. tests/01_render.php asserts the two heads stay in step.
+#}
+<!DOCTYPE html>
+<html lang="{{ locale|default(site('locale')) }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ page.seo.title }} — {{ site('name') }}</title>
+{% if page.seo.description %}<meta name="description" content="{{ page.seo.description }}">{% endif %}
+{% if page.seo.noindex %}<meta name="robots" content="noindex, nofollow">{% endif %}
+{% if page.seo.canonical %}<link rel="canonical" href="{{ page.seo.canonical }}">{% endif %}
+<meta property="og:type" content="website">
+<meta property="og:title" content="{{ page.seo.title }}">
+<meta property="og:url" content="{{ page.seo.url }}">
+{% if page.seo.description %}<meta property="og:description" content="{{ page.seo.description }}">{% endif %}
+{% if page.seo.og_image.src %}
+<meta property="og:image" content="{{ page.seo.og_image.src }}">
+<meta name="twitter:card" content="summary_large_image">
+{% endif %}
+{% if site('favicon') %}<link rel="icon" href="{{ site('favicon') }}">{% endif %}
+{% for alt in alternates|default([])|filter(a => not a.missing) %}
+<link rel="alternate" hreflang="{{ alt.locale }}" href="{{ alt.abs }}">
+{% if alt.default and alternates|length > 1 %}<link rel="alternate" hreflang="x-default" href="{{ alt.abs }}">{% endif %}
+{% endfor %}
+{{ theme_head() }}
+</head>
+<body>
+{# No header_blocks and no footer_blocks: that is the whole difference. #}
+<main>
+  {% for block in blocks %}{{ block|raw }}{% endfor %}
+</main>
+{{ theme_foot() }}
+</body>
+</html>

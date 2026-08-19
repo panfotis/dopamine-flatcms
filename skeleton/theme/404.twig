@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html lang="{{ locale|default(site('locale')) }}">
+<head><meta charset="utf-8"><title>404 — {{ site('name') }}</title>
+<style>body{font:400 17px/1.6 system-ui,sans-serif;display:grid;place-items:center;height:100vh;margin:0;color:#15171a}
+div{text-align:center}h1{font-size:4rem;margin:0}p{color:#5c6470}</style>
+{{ theme_head() }}
+</head>
+<body><div><h1>404</h1><p>{{ ts('error.not_found', slug) }}</p><p><a href="{{ home_url|default('/') }}">{{ ts('site.home') }}</a></p></div>
+{{ theme_foot() }}
+</body>
+</html>

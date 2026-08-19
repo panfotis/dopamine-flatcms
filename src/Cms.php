@@ -35,6 +35,13 @@ final class Cms
     public readonly Locks $locks;
     public readonly Environment $twig;
 
+    /** @var list<string> theme roots, site layer first */
+    private readonly array $themeDirs;
+    /** @var list<string> admin-theme roots, same ordering */
+    private readonly array $adminDirs;
+    /** The current render's asset collector; null outside a render. */
+    private ?Assets $assets = null;
+
     /** Panel strings, in the language the person editing the site reads. */
     public readonly Lang $lang;
 
@@ -60,21 +67,16 @@ final class Cms
 
         $this->lang = new Lang($paths['lang'] ?? __DIR__ . '/../lang', (string) ($config['admin_locale'] ?? Lang::SOURCE));
 
-        $componentDirs = array_values(array_unique((array) $paths['components']));
-        $templateRoots = array_values(array_unique((array) $paths['templates']));
-        $templateDirs = [];
-        // Keep each site's template and component roots ahead of the matching
-        // package roots. That makes a complete local override win regardless
-        // of whether it is placed under templates/ or components/.
-        for ($i = 0, $n = max(count($templateRoots), count($componentDirs)); $i < $n; $i++) {
-            foreach ([$templateRoots[$i] ?? null, $componentDirs[$i] ?? null] as $dir) {
-                if (is_string($dir) && !in_array($dir, $templateDirs, true)) {
-                    $templateDirs[] = $dir;
-                }
-            }
-        }
+        // One theme root per layer, site first and engine last. Templates,
+        // components and assets all resolve against the same list, so a local
+        // override is one rule: drop a same-named file in the site's theme/.
+        $this->themeDirs = array_values(array_unique(array_filter((array) $paths['theme'], 'is_string')));
+        $this->adminDirs = array_values(array_unique(array_filter((array) ($paths['admin_theme'] ?? []), 'is_string')));
 
-        $this->components = new Components($componentDirs);
+        $this->components = new Components(array_map(
+            static fn (string $d): string => $d . '/components',
+            $this->themeDirs
+        ));
         // The default until the entry point says otherwise, which it does on
         // every request that carries a locale prefix.
         $this->locale     = $this->defaultLocale();
@@ -87,10 +89,19 @@ final class Cms
         $this->cf         = new Cloudflare($config['cloudflare']);
         $this->locks      = new Locks(dirname($paths['cache']) . '/locks');
 
-        // Site roots come first and package roots follow. Twig and component
-        // discovery use the same precedence, so overriding a starter component
-        // means adding two files locally and never editing vendor/.
-        $loader = new FilesystemLoader($templateDirs);
+        // Site theme first, engine theme after — same precedence as component
+        // discovery. The panel lives in its own @admin namespace so a site's
+        // edit.twig can never shadow the panel's, and each layer also gets a
+        // @theme<i> namespace so a component's template is bound to the layer
+        // its schema won (see Components::all()): schema, template and assets
+        // come from the same folder or none do.
+        $loader = new FilesystemLoader($this->themeDirs);
+        foreach ($this->themeDirs as $i => $dir) {
+            $loader->addPath($dir, 'theme' . $i);
+        }
+        foreach ($this->adminDirs as $dir) {
+            $loader->addPath($dir, 'admin');
+        }
         $this->twig = new Environment($loader, [
             'cache'      => $config['twig_cache'] ? $paths['cache'] . '/twig' : false,
             'autoescape' => 'html',
@@ -115,6 +126,16 @@ final class Cms
          */
         $this->twig->addFunction(new TwigFunction('ts', fn (string $k, string|int ...$a): string
             => $this->siteLang()->t($k, ...$a)));
+
+        // The asset pipeline's three touch points. head/foot return '' when no
+        // Assets instance is active — a template rendered outside the three
+        // entry points, 500.twig inside the error handler above all — so a
+        // stray call degrades to an unstyled render, never a second throw.
+        $this->twig->addFunction(new TwigFunction('theme_head',
+            fn (): string => $this->assets?->head() ?? '', ['is_safe' => ['html']]));
+        $this->twig->addFunction(new TwigFunction('theme_foot',
+            fn (): string => $this->assets?->foot() ?? '', ['is_safe' => ['html']]));
+        $this->twig->addFunction(new TwigFunction('theme_attach', $this->themeAttach(...)));
         // NOTE: there is deliberately no `|rich` filter. A filter that marks
         // arbitrary strings `is_safe: html` is an XSS primitive waiting for
         // someone to reach for it; richtext is already sanitised on save and
@@ -548,6 +569,11 @@ final class Cms
      */
     public function renderPage(array $page, array $extra = []): string
     {
+        // A fresh collector for exactly this render: Cms outlives a request,
+        // and a longer-lived one would leak this page's component CSS into the
+        // next (the tests render fifteen pages on one instance).
+        $this->assets = new Assets($this->themeDirs);
+
         // Resolved once and hung on the page, so `page.seo` is the same shape
         // in the layout as in any component that wants to read it.
         $page['seo'] = $this->seo($page);
@@ -578,6 +604,63 @@ final class Cms
             'blocks'        => $this->renderBlocks((array) $page['blocks'], $shared),
             'footer_blocks' => $this->renderGlobal('_footer', $shared),
         ]);
+    }
+
+    /**
+     * A standalone template with the site's global assets but no blocks — the
+     * 404 page. Its own collector, for the same reason renderPage builds one.
+     *
+     * @param array<string, mixed> $vars
+     */
+    public function renderTemplate(string $name, array $vars = []): string
+    {
+        $this->assets = new Assets($this->themeDirs);
+
+        return $this->twig->render($name, $vars);
+    }
+
+    /**
+     * A panel screen: the same pipeline against the admin theme's roots. The
+     * panel's manifest carries no external entries by policy — authenticated
+     * and no-store is the last place to add a third-party request.
+     *
+     * @param array<string, mixed> $vars
+     */
+    public function renderAdmin(string $name, array $vars = []): string
+    {
+        $this->assets = new Assets($this->adminDirs);
+
+        return $this->twig->render($name, $vars);
+    }
+
+    /**
+     * {% do theme_attach(_self, 'assets/js/editor.js') %} — one extra file for
+     * the current render. `_self` is the calling template's logical name;
+     * resolving it back to a path pins the file to the layer that template
+     * actually came from, so an engine template can never be handed a site's
+     * file of the same name.
+     */
+    private function themeAttach(string $template, string $rel): void
+    {
+        if ($this->assets === null) {
+            return;
+        }
+
+        try {
+            $path = $this->twig->getLoader()->getSourceContext($template)->getPath();
+        } catch (\Twig\Error\LoaderError) {
+            return;
+        }
+
+        $real = realpath($path);
+        foreach ([...$this->themeDirs, ...$this->adminDirs] as $root) {
+            $rootReal = realpath($root);
+            if ($real !== false && $rootReal !== false && str_starts_with($real, $rootReal . '/')) {
+                $this->assets->attachFrom($root, $rel);
+
+                return;
+            }
+        }
     }
 
     /**
@@ -624,6 +707,8 @@ final class Cms
                 // live client site. Visible only in the admin panel.
                 continue;
             }
+
+            $this->assets?->component($schema);
 
             $html[] = $this->twig->render($schema['template'], $shared + [
                 'block'  => $block,

@@ -1,0 +1,83 @@
+{% extends '@admin/_layout.twig' %}
+{% block title %}{{ t('list.title') }}{% endblock %}
+
+{% block content %}
+  <h1>{{ t('list.title') }}</h1>
+  <p class="sub">{{ t('list.intro') }}</p>
+
+  {% if notice %}<div class="flash ok">{{ notice }}</div>{% endif %}
+  {% if warn %}<div class="flash warn">{{ warn }}</div>{% endif %}
+
+  {# One tab per configured language. Nothing renders on a single-language
+     site, which is most of them. #}
+  {% if locales|length > 1 %}
+    <p class="sub">
+      {% for code, def in locales %}
+        {% if code == locale %}<strong>{{ def.label }}</strong>
+        {% else %}<a href="?locale={{ code }}">{{ def.label }}</a>{% endif %}
+        {{- not loop.last ? ' · ' : '' }}
+      {% endfor %}
+    </p>
+  {% endif %}
+
+  <div class="card">
+    <table>
+      <tr><th>{{ t('list.col_page') }}</th><th>{{ t('list.col_address') }}</th><th>{{ t('list.col_actions') }}</th></tr>
+      {% for p in pages %}
+        <tr>
+          <td>
+            <strong>{{ p.title }}</strong>
+            {# The payoff of filename-as-identity: a missing translation is a
+               missing file, so it can be said here instead of discovered. #}
+            {% for code in p.missing|default([]) %}
+              <span class="pill warn">{{ t('list.missing_in', locales[code].label) }}</span>
+            {% endfor %}
+          </td>
+          <td><code>{{ p.slug }}</code></td>
+          <td style="text-align:end">
+            <a class="btn ghost" href="{{ locales[locale].prefix }}{{ p.slug }}" target="_blank" rel="noopener">{{ t('list.view') }}</a>
+            <a class="btn" href="?action=edit&amp;page={{ p.id }}&amp;locale={{ locale }}">{{ t('list.edit') }}</a>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="3">{{ t('list.empty') }}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  {# Admin only, like revisions: submissions are visitor PII, and an editor
+     has no reason to read them. #}
+  {% if user.role == 'admin' %}
+    <p class="sub" style="margin-top:28px">
+      <a class="btn ghost" href="?action=submissions">{{ t('list.submissions') }}</a>
+    </p>
+  {% endif %}
+
+  {# Adding a page is adding a file, so this is a notice rather than a button. #}
+  {% if untranslated|default([]) %}
+    <p class="sub">
+      {{ t('list.untranslated', untranslated|join(', '))|raw }}
+    </p>
+  {% endif %}
+
+  {# Globals: content that shows up on every page rather than at one address.
+     No "Προβολή" link, because there is nothing to visit — they are visible on
+     every page of the site already. #}
+  {% if globals %}
+    <h2 style="margin-top:36px">{{ t('list.globals') }}</h2>
+    <p class="sub">{{ t('list.globals_intro') }}</p>
+
+    <div class="card">
+      <table>
+        {% for g in globals %}
+          <tr>
+            <td><strong>{{ g.title }}</strong></td>
+            <td style="text-align:end">
+              <a class="btn" href="?action=edit&amp;page={{ g.id }}&amp;locale={{ locale }}">{{ t('list.edit') }}</a>
+            </td>
+          </tr>
+        {% endfor %}
+      </table>
+    </div>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,11 @@
+# The engine theme's global assets, loaded on every page of every site that
+# does not override them. Local paths resolve inside this theme/ and are
+# inlined; https:// entries become real <link>/<script defer> tags — a map
+# form ({url, integrity, async}) carries SRI. No external entries here on
+# purpose: the engine must not depend on a particular CSS framework, so CDN
+# defaults live in the skeleton's theme.yml instead.
+css:
+  - assets/css/site.css
+
+js:
+  - assets/js/site.js

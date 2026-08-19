@@ -1,0 +1,310 @@
+{% extends '@admin/_layout.twig' %}
+{% block title %}{{ page.title }}{% endblock %}
+
+{# The rail becomes a table of contents for this page's blocks. The section
+   cards are already one per block and already carry a label, so this is the
+   same list read twice — no new data, and nothing to keep in step. #}
+{% block aside %}
+  <div class="side-head">
+    <strong>{{ t('nav.editor') }}</strong>
+    <span>{{ t('nav.editing', page.title) }}</span>
+  </div>
+  <nav>
+    {# No "all pages" link here: the action bar's breadcrumb already carries it,
+       and the rail reads better as nothing but the index of this page. #}
+    {% if not global %}<a href="#page-settings">{{ t('edit.page') }}</a>{% endif %}
+    {% for block in blocks %}
+      <a href="#{{ block.id }}">{{ block.label }}</a>
+    {% endfor %}
+    {% if not global %}<a href="#seo">{{ t('edit.seo') }}</a>{% endif %}
+  </nav>
+{% endblock %}
+
+{# Title, address and the save controls are one piece of chrome: everything
+   that says "which page is this and what happens when I press the button".
+   The buttons reach the form by id, since the bar renders outside it. #}
+{% block actionbar %}
+  <div class="savebar"><div class="inner">
+    <div class="titles">
+      <h1>{{ page.title }}</h1>
+      <p class="sub">
+        <a href="?locale={{ locale }}">{{ t('nav.back') }}</a> ·
+        {% if locales|length > 1 %}{{ locales[locale].label }} · {% endif %}
+        {% if global %}
+          {{ t('edit.everywhere') }}
+        {% else %}
+          <code>{{ page.slug }}</code>
+        {% endif %}
+      </p>
+    </div>
+    <span class="status" id="status">{{ t('edit.published') }}</span>
+    {% if user.role == 'admin' %}
+      <a class="btn ghost" href="?action=revisions&amp;page={{ page.id }}&amp;locale={{ locale }}">{{ t('edit.revisions') }}</a>
+    {% endif %}
+    {# A global has no address to open — it is already on every page. #}
+    {% if not global %}
+      <a class="btn ghost" href="{{ locales[locale].prefix }}{{ page.slug }}" target="_blank" rel="noopener">{{ t('edit.view_page') }}</a>
+    {% endif %}
+    <button class="btn" type="submit" form="editor">{{ t('edit.save') }}</button>
+  </div></div>
+{% endblock %}
+
+{% block content %}
+  {% if notice %}<div class="flash ok">{{ notice }}</div>{% endif %}
+  {% if warn %}<div class="flash warn">{{ warn }}</div>{% endif %}
+
+  {% if errors|default({})|length %}
+    <div class="flash err">
+      <strong>{{ t('flash.nothing_saved') }}</strong>
+      <p style="margin:.6em 0 0">
+        {{ errors|length == 1
+             ? t('flash.fields_need_filling', errors|length)
+             : t('flash.fields_need_filling_plural', errors|length) }}
+        {{ t('flash.text_kept') }}
+      </p>
+    </div>
+  {% endif %}
+
+  {% if conflict %}
+    <div class="flash err">
+      <strong>{{ conflict }}</strong>
+      <p style="margin:.6em 0 0">
+        {{ t('flash.conflict_help') }}
+      </p>
+    </div>
+  {% endif %}
+
+  {% if held_by %}
+    <div class="flash warn">
+      {{ t('flash.held_by', held_by.user, held_by.minutes < 1
+           ? t('flash.held_just_now')
+           : t('flash.held_minutes', held_by.minutes)) }}
+    </div>
+  {% endif %}
+
+  <form method="post" id="editor" enctype="multipart/form-data">
+    <input type="hidden" name="action" value="save">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="page" value="{{ page.id }}">
+    {# Which language this form is editing. Without it a save from the English
+       screen would land in the Greek file, which is the kind of mistake nobody
+       notices until the wrong copy is live. #}
+    <input type="hidden" name="locale" value="{{ locale }}">
+    {# Fingerprint of the file as it was when this form was rendered. The save
+       is refused if it no longer matches, so a second tab cannot silently
+       overwrite what the first one saved. #}
+    <input type="hidden" name="baseline" value="{{ baseline }}">
+
+    {% if not global %}
+      <div class="card" id="page-settings">
+        <header><h2>{{ t('edit.page') }}</h2></header>
+        <div class="body">
+          <div class="field">
+            <label for="page-title">{{ t('edit.page_title') }}</label>
+            <input type="text" id="page-title" name="title" value="{{ page.title }}" maxlength="120">
+            <p class="hint">{{ t('edit.page_title_hint') }}</p>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
+    {% for block in blocks %}
+      <div class="card" id="{{ block.id }}">
+        <header>
+          <h2>{{ block.label }}</h2>
+          <span class="pill">{{ block.type }}</span>
+        </header>
+        <div class="body">
+          {% if block.missing %}
+            <div class="flash err">{{ t('edit.missing_component', block.type) }}</div>
+          {% elseif block.fields is empty %}
+            <p class="hint">{{ t('edit.no_fields') }}</p>
+          {% else %}
+            {% if block.hint %}<p class="hint" style="margin-bottom:16px">{{ block.hint }}</p>{% endif %}
+
+            {% for name, def in block.fields %}
+              {% set value = block.values[name]|default('') %}
+              {% set id = block.id ~ '-' ~ name %}
+              {% set fname = 'blocks[' ~ block.id ~ '][' ~ name ~ ']' %}
+              {# The same function the save path calls. Locking here is a
+                 courtesy to the editor; cleanValues() is what enforces it. #}
+              {% set locked = not may_edit(def.editable, user.role) %}
+
+              {% if def.type == 'list' %}
+                {{ _self.repeater(def, id, fname, value, locked, pages, page_ids, user.role, errors|default({})) }}
+              {% else %}
+                {{ _self.field(def, id, fname, value, locked, pages, page_ids, errors|default({})) }}
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+
+    {# Last on the form and collapsed: SEO is the one card an editor is
+       entitled to ignore completely, so it sits after the copy they came here
+       to change rather than in front of it. Every field is optional, the
+       inputs post whether or not the card was ever opened, and the save path
+       writes the stored values straight back — "never touched it" and "cannot
+       save" must not be the same thing. #}
+    {# A global renders inside every page and has no head of its own, so there
+       is nothing for these five fields to reach. Admin::save() skips the same
+       walk — the card is not merely hidden. #}
+    {% if not global %}
+      {# The anchor sits on the summary, not the <details>: 02_admin.php pins
+         the opening tag exactly, and the summary is what a jump should land on
+         anyway when the card is shut. #}
+      <details class="card">
+        <summary id="seo">
+          <h2>{{ t('edit.seo') }}</h2>
+          <span class="pill">{{ t('edit.optional') }}</span>
+        </summary>
+        <div class="body">
+          {# The same renderer as every other field, so a locked one is locked
+             here too and the alt input appears exactly where the save path
+             demands one. #}
+          {% for name, def in seo_fields %}
+            {{ _self.field(def, 'seo-' ~ name, 'seo[' ~ name ~ ']', seo[name]|default(''),
+                           not may_edit(def.editable, user.role), pages, page_ids, errors|default({})) }}
+          {% endfor %}
+        </div>
+      </details>
+    {% endif %}
+  </form>
+{% endblock %}
+
+{#
+  One input renderer, called at the top level and once per row of a list. Two
+  copies of this chain would drift, and the copy inside the repeater is exactly
+  where a locked field or a missing alt would stop being enforced in the UI.
+#}
+{% macro field(def, id, fname, value, locked, pages, page_ids, errors) %}
+              {# Keyed by the input's own name attribute, which is the string
+                 the save path reports a refusal against — so the message lands
+                 on the box that caused it, at any nesting depth. #}
+              {% set errors = errors|default({}) %}
+              {% set error = errors[fname]|default(null) %}
+              {# The schema's own `required`, handed to the browser. Only on
+                 inputs the client can see and focus: a required control that
+                 is hidden (richtext's mirror textarea) blocks the submit with
+                 a bubble nobody can read. Those are refused server-side and
+                 come back as an inline message like everything else. #}
+              {% set demand = def.required|default(false) and not locked %}
+              <div class="field{{ error ? ' has-error' : '' }}">
+                <label for="{{ id }}">
+                  {{ t(def.label) }}
+                  {% if locked %}<span class="pill" style="margin-inline-start:6px">{{ t('edit.locked') }}</span>{% endif %}
+                  {% if def.editable is same as('admin') %}<span class="pill" style="margin-inline-start:6px">{{ t('edit.admin_only') }}</span>{% endif %}
+                  {% if def.max is defined and not locked %}
+                    <span class="counter" data-for="{{ id }}" data-max="{{ def.max }}"></span>
+                  {% endif %}
+                </label>
+
+                {# One file per type, named after it. The array form falls
+                   through to text.twig when the first does not exist, so an
+                   unrecognised type renders a text input — the same answer
+                   Fields::sanitise() gives it. `only` is deliberate: a widget
+                   that needs a variable must be handed it, rather than
+                   silently inheriting whatever this macro happens to hold. #}
+                {% include ['@admin/fields/' ~ def.type ~ '.twig', '@admin/fields/text.twig']
+                   with {def: def, id: id, fname: fname, value: value, locked: locked,
+                         demand: demand, error: error, errors: errors,
+                         pages: pages, page_ids: page_ids} only %}
+
+                {% if error %}<p class="err">{{ error }}</p>{% endif %}
+                {% if def.hint is defined %}<p class="hint">{{ t(def.hint) }}</p>{% endif %}
+              </div>
+{% endmacro %}
+
+{#
+  A repeater over a fixed sub-schema. The client adds and removes *rows*, which
+  is content; the fields inside a row are the developer's, which is structure.
+  Rows carry no id — the save path re-indexes with array_values() and cuts to
+  `max` before it sanitises anything, so a reordered or renumbered form is not
+  something this has to keep straight.
+#}
+{% macro repeater(def, id, fname, rows, locked, pages, page_ids, role, errors) %}
+  <div class="field">
+    <label>
+      {{ t(def.label) }}
+      {% if locked %}<span class="pill" style="margin-inline-start:6px">{{ t('edit.locked') }}</span>{% endif %}
+      <span class="pill" style="margin-inline-start:6px">{{ t('edit.up_to', def.max) }}</span>
+    </label>
+    {% if def.hint is defined %}<p class="hint">{{ t(def.hint) }}</p>{% endif %}
+
+    <div class="repeater" id="{{ id }}-rows" data-repeater="{{ id }}" data-max="{{ def.max }}">
+      {% for i, row in (rows is iterable ? rows : []) %}
+        <div class="repeater-row" data-row>
+          <header>
+            <strong>{{ row[def.item_label]|default('')|striptags|slice(0, 60) ?: t(def.label) }}</strong>
+            {% if not locked %}<button type="button" class="btn ghost" data-row-remove>{{ t('edit.remove_row') }}</button>{% endif %}
+          </header>
+          {% for subName, subDef in def.fields %}
+            {{ _self.field(
+                 subDef,
+                 id ~ '-' ~ i ~ '-' ~ subName,
+                 fname ~ '[' ~ i ~ '][' ~ subName ~ ']',
+                 row[subName]|default(''),
+                 locked or not may_edit(subDef.editable, role),
+                 pages,
+                 page_ids,
+                 errors|default({})
+               ) }}
+          {% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+
+    {% if not locked %}
+      <button type="button" class="btn ghost" data-row-add="{{ id }}">{{ t('edit.add_row') }}</button>
+      {# __INDEX__ is replaced on insert. A <template> keeps the blank row out
+         of the form until it is wanted — an empty row that posts is an empty
+         row the save path has to refuse. #}
+      <template id="{{ id }}-template">
+        <div class="repeater-row" data-row>
+          <header>
+            <strong>{{ t(def.label) }}</strong>
+            <button type="button" class="btn ghost" data-row-remove>{{ t('edit.remove_row') }}</button>
+          </header>
+          {% for subName, subDef in def.fields %}
+            {{ _self.field(
+                 subDef,
+                 id ~ '-__INDEX__-' ~ subName,
+                 fname ~ '[__INDEX__][' ~ subName ~ ']',
+                 '',
+                 not may_edit(subDef.editable, role),
+                 pages,
+                 page_ids,
+                 {}
+               ) }}
+          {% endfor %}
+        </div>
+      </template>
+    {% endif %}
+  </div>
+{% endmacro %}
+
+{% block foot %}
+{# Every string the script below shows, in one object. Inlining t() into each
+   line would mean a translator hunting through JavaScript for them, and one
+   escaping mistake away from a broken panel. `%1`/`%2` rather than sprintf,
+   because JavaScript has no sprintf and two replaces are not worth a helper. #}
+<script>
+  const T = {
+    linkPrompt: {{ t('rt.link_prompt')|json_encode|raw }},
+    uploading: {{ t('edit.uploading')|json_encode|raw }},
+    uploadingN: {{ t('edit.uploading_n')|json_encode|raw }},
+    uploadFailed: {{ t('up.failed')|json_encode|raw }},
+    imageUploaded: {{ t('edit.image_uploaded')|json_encode|raw }},
+    videoUploaded: {{ t('edit.video_uploaded')|json_encode|raw }},
+    noImage: {{ t('edit.no_image')|json_encode|raw }},
+    atLimit: {{ t('edit.at_limit')|json_encode|raw }},
+    uploadDone: {{ t('edit.upload_done')|json_encode|raw }},
+    uploadSomeFailed: {{ t('edit.upload_some_failed')|json_encode|raw }},
+    unsaved: {{ t('edit.unsaved')|json_encode|raw }},
+  };
+</script>
+{# Only the edit screen needs the editor, so it is attached here rather than
+   declared in theme.yml — the list and settings screens never ship it. #}
+{% do theme_attach(_self, 'assets/js/editor.js') %}
+{% endblock %}
