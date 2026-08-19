@@ -274,4 +274,39 @@ ok($asRole('pelatis@example.gr', 'submission_delete', ['month' => '2026-08', 'id
 ok($asRole('pelatis@example.gr', 'submission_retry', ['month' => '2026-08', 'id' => str_repeat('a', 16)], 'POST') === 403,
     'and so is a forged retry');
 
+section('Choice inputs: select, radio, checkbox');
+// These never reach the browser's honesty: a POST can claim any value, so a
+// select and a radio are whitelisted against their declared options, and a
+// checkbox stores exactly '1' or ''.
+$choices = $form->inputs(['form' => [
+    'size'  => ['type' => 'select', 'options' => ['' => '—', 's' => 'Small', 'm' => 'Medium']],
+    'via'   => ['type' => 'radio', 'required' => true, 'options' => ['tel' => 'Phone', 'email' => 'Email']],
+    'news'  => ['type' => 'checkbox'],
+    'weird' => ['type' => 'file'],
+]]);
+ok($choices['size']['type'] === 'select' && $choices['size']['options'] === ['' => '—', 's' => 'Small', 'm' => 'Medium'],
+    'a select keeps its options, normalised to a map');
+ok($choices['via']['type'] === 'radio' && $choices['news']['type'] === 'checkbox',
+    'radio and checkbox are accepted types');
+ok($choices['weird']['type'] === 'text', 'an undeclared type still downgrades to text');
+
+$validate = new ReflectionMethod(Form::class, 'validate');
+$try = static fn (array $body): array => $validate->invoke(
+    $form,
+    Request::create('/epikoinonia', 'POST', $body),
+    $choices
+);
+
+[$values, $errors] = $try(['size' => 'm', 'via' => 'tel', 'news' => '1']);
+ok($errors === [] && $values['size'] === 'm' && $values['via'] === 'tel' && $values['news'] === '1',
+    'declared values pass through');
+
+[$values, $errors] = $try(['size' => 'xxl; DROP', 'via' => 'carrier-pigeon']);
+ok($values['size'] === '', 'a forged select value falls back to the first (placeholder) option');
+ok(isset($errors['via']), 'a forged radio value is empty, so a required group refuses');
+ok($values['news'] === '', 'an unchecked checkbox stores the empty string, not an absence');
+
+[, $errors] = $try(['size' => 's']);
+ok(isset($errors['via']), 'a missing required radio refuses too');
+
 summary();

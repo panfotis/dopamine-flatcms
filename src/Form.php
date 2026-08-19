@@ -37,7 +37,7 @@ use Throwable;
 final class Form
 {
     /** What a `form:` input may declare as its type. */
-    private const TYPES = ['text', 'email', 'tel', 'textarea'];
+    private const TYPES = ['text', 'email', 'tel', 'textarea', 'select', 'radio', 'checkbox'];
 
     public function __construct(private readonly Cms $cms)
     {
@@ -163,7 +163,7 @@ final class Form
      * from — which is the one thing structure-in-files exists to prevent.
      *
      * @param  array<string, mixed> $schema
-     * @return array<string, array{label: string, type: string, required: bool, max: int}>
+     * @return array<string, array{label: string, type: string, required: bool, max: int, options: array<string, string>}>
      */
     public function inputs(array $schema): array
     {
@@ -181,6 +181,10 @@ final class Form
                 'type'     => in_array($type, self::TYPES, true) ? $type : 'text',
                 'required' => ($def['required'] ?? false) === true,
                 'max'      => max(1, (int) ($def['max'] ?? 500)),
+                // Empty for every other type, and harmless there. A select
+                // whose first option has an empty key is the placeholder, and
+                // is what makes `required` mean anything on a dropdown.
+                'options'  => Fields::options($def),
             ];
         }
 
@@ -201,10 +205,23 @@ final class Form
             // input said it was: this lands in an email, in a JSON file and on
             // an admin screen, and none of those wants markup from a stranger.
             $raw = $request->request->get($name);
-            $value = Fields::sanitise(
-                ['type' => $def['type'] === 'textarea' ? 'textarea' : 'text', 'max' => $def['max']],
-                is_scalar($raw) ? (string) $raw : ''
-            );
+            $raw = is_scalar($raw) ? (string) $raw : '';
+
+            $value = match ($def['type']) {
+                // Whitelisted against its own options: the browser only offers
+                // what we declared, a POST can say anything. A select falls
+                // back to its first option — declare an empty-keyed placeholder
+                // first so `required` means something — while a radio stays
+                // empty on a miss, because nothing on screen was checked.
+                'select'   => Fields::sanitise(['type' => 'select', 'options' => $def['options']], $raw),
+                'radio'    => array_key_exists($raw, $def['options']) ? $raw : '',
+                // One yes/no box, same shape as consent: checked stores '1'.
+                'checkbox' => $raw !== '' ? '1' : '',
+                default    => Fields::sanitise(
+                    ['type' => $def['type'] === 'textarea' ? 'textarea' : 'text', 'max' => $def['max']],
+                    $raw
+                ),
+            };
 
             if ($def['required'] && $value === '') {
                 $errors[$name] = $this->cms->siteLang()->t(

@@ -27,7 +27,10 @@ blocks:
         width: 3859
         height: 2573
       cta_label: Επικοινωνία
-      cta_url: epikoinonia
+      cta_url:
+        page: epikoinonia
+        url: ''
+        target: _self
       align: center
   -
     id: intro
@@ -106,7 +109,7 @@ blocks:
         width: 1920
         height: 1440
       loop:
-        src: ''
+        src: /uploads/2026/08/284683363-mexican-food-fiesta-family-and-259948.mp4
         poster:
           src: ''
           alt: ''

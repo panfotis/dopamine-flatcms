@@ -5,6 +5,10 @@ description: Φόρμα που στέλνει μήνυμα με email και κ�
 # This is NOT a `fields:` entry and never becomes one: a client who could edit
 # this list could add an input, and an input is where a value comes from. The
 # client edits the words around the form; the form itself is yours.
+#
+# Types: text, email, tel, textarea, select, radio, checkbox. select and radio
+# take `options:` (list or map); give a select an empty-keyed first option as
+# the placeholder — `'': '—'` — or `required` cannot refuse it.
 form:
   name:
     label: form.name

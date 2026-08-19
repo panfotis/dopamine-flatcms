@@ -513,7 +513,10 @@ foreach ($componentsLoad ? $set['ids'] : [] as $id) {
             if (($def['type'] ?? '') !== 'link') {
                 continue;
             }
-            $target = (string) ($block['fields'][$name] ?? '');
+            // A link stores a map now, a bare id in files saved before that;
+            // the check is about the page half either way.
+            $stored = $block['fields'][$name] ?? '';
+            $target = is_array($stored) ? (string) ($stored['page'] ?? '') : (string) $stored;
             // Against the routable ids, not every file: pageUrl() resolves
             // through Content::list(), so a link pointing at `_footer` renders
             // as plain text exactly like a link to a page that was deleted.
