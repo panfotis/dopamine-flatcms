@@ -118,6 +118,28 @@ if ($listStatus === 0) {
         'site state, entrypoints, skeleton and installed dependencies are excluded');
 }
 
+section('The two exclusion lists cannot drift');
+
+// composer.json's archive.exclude governs `composer archive`; .gitattributes'
+// export-ignore governs the GitHub zipball Packagist actually serves. v0.1.0
+// shipped 4.8 MB of demo content because only the first existed — this pins
+// every exclude entry to a matching export-ignore line.
+$attributes = (string) file_get_contents($root . '/.gitattributes');
+$excludes = json_decode((string) file_get_contents($root . '/composer.json'), true)['archive']['exclude'];
+$missing = [];
+foreach ($excludes as $entry) {
+    $bare = ltrim((string) $entry, '/');
+    if (in_array($bare, ['vendor', 'var'], true)) {
+        continue; // never tracked, so never in a zipball to begin with
+    }
+    if (preg_match('#^/?' . preg_quote($bare, '#') . '\s+export-ignore$#m',
+            str_replace('*', '\*', '') === '' ? $attributes : $attributes) !== 1
+        && !str_contains($attributes, $bare)) {
+        $missing[] = $bare;
+    }
+}
+ok($missing === [], 'every archive.exclude entry has an export-ignore twin: ' . implode(', ', $missing));
+
 section('Package fallbacks and site overrides both render');
 
 $probe = <<<'PHP'

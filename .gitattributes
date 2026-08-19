@@ -1,0 +1,22 @@
+# What GitHub's tag zipball — the dist Packagist actually serves — leaves out.
+# composer.json's archive.exclude covers only `composer archive`; THIS file is
+# what keeps the demo content, tests and dev tooling out of `composer require`.
+# tests/09_package.php asserts the two lists stay in step.
+/.ddev                              export-ignore
+/.gitattributes                     export-ignore
+/.github                            export-ignore
+/.gitignore                         export-ignore
+/CLAUDE.md                          export-ignore
+/PENS                               export-ignore
+/bin/new-site                       export-ignore
+/composer.lock                      export-ignore
+/config                             export-ignore
+/config.php                         export-ignore
+/config.yaml.example                export-ignore
+/content                            export-ignore
+/ddev                               export-ignore
+dopamine-flatcms-*.md               export-ignore
+/nginx.conf.example                 export-ignore
+/public                             export-ignore
+/skeleton                           export-ignore
+/tests                              export-ignore
