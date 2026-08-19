@@ -2,7 +2,7 @@
     "name": "dopamine/flatcms",
     "description": "Flat-file CMS for small client sites. Locked components, text-only editing, Cloudflare Access auth, R2 media, edge cache purge.",
     "type": "library",
-    "license": "proprietary",
+    "license": "MIT",
     "require": {
         "php": ">=8.4",
         "ext-curl": "*",
