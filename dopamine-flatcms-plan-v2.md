@@ -590,7 +590,7 @@ cookie reads that header explicitly; and the session cache limiter is disabled
 
 ```yaml
 # config/roles.yml — no secrets, safe to commit
-- { email: fotis@wearedope.com, role: admin }
+- { email: fotispanokis@gmail.com, role: admin }
 - { email: pelatis@example.gr,  role: editor }
 ```
 

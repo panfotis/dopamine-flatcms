@@ -109,7 +109,12 @@ $cmsBoot = require $root . '/config.php';
 $composer = json_decode((string) file_get_contents($root . '/composer.json'), true);
 ok(!array_key_exists('version', $composer),
     'composer.json leaves versioning to git tags, so Composer can publish it cleanly');
-ok(($composer['license'] ?? '') === 'proprietary', 'license is still proprietary; going public is a deliberate decision, not a slip');
+// MIT was the deliberate decision (Packagist requires an OSS license); this
+// pins it so a *drift* — back to proprietary, or to some third thing — is
+// caught as loudly as going public accidentally would have been.
+ok(($composer['license'] ?? '') === 'MIT', 'license is MIT — the deliberate public release decision');
+ok(is_file($root . '/LICENSE') && str_contains((string) file_get_contents($root . '/LICENSE'), 'MIT License'),
+    'and the LICENSE file backing it exists');
 ok(($composer['type'] ?? '') === 'library', 'the root package is the reusable engine, not a runnable project pretending to be one');
 ok(in_array('src/bootstrap.php', (array) ($composer['autoload']['files'] ?? []), true),
     'its process-level error handler is loaded through Composer rather than a site-relative require');

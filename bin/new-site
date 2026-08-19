@@ -120,7 +120,7 @@ YAML
 cat > "$target/config/roles.yml" <<'YAML'
 # email -> role. Committed, no secrets. An authenticated address that is not
 # listed here gets a 403, never an implicit editor role.
-- { email: change-me@wearedope.com, role: admin }
+- { email: change-me@example.gr, role: admin }
 YAML
 
 sed -i "s/'name'     => '[^']*'/'name'     => '$name'/" "$target/config.php"

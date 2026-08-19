@@ -78,7 +78,7 @@ restore re-runs sanitisation). Visitor submissions live in
 
 ## Reporting
 
-Email **fotis@wearedope.com** with the request that crosses the boundary and
+Email **fotispanokis@gmail.com** with the request that crosses the boundary and
 what it changed. Content edited through the panel is expected to appear on
 the site — include why the write should have been refused, not only that it
 occurred. There is no bug bounty; reports are answered and credited.
