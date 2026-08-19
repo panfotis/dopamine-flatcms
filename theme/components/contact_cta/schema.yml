@@ -1,16 +1,16 @@
-label: Στοιχεία επικοινωνίας
-description: Κλείσιμο σελίδας με τηλέφωνο, email και διεύθυνση.
+label: Contact details
+description: A page closer with phone, email and address.
 
 fields:
   heading:
     type: text
-    label: Τίτλος
+    label: Heading
     max: 60
     required: true
 
   phone:
     type: text
-    label: Τηλέφωνο
+    label: Phone
     max: 30
 
   # The address the site publishes is a business decision, not copy: changing
@@ -24,5 +24,5 @@ fields:
 
   address:
     type: textarea
-    label: Διεύθυνση
+    label: Address
     max: 140

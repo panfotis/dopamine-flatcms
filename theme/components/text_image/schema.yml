@@ -1,28 +1,28 @@
-label: Κείμενο με εικόνα
-description: Ενότητα με τίτλο, κείμενο και εικόνα στο πλάι.
+label: Text with image
+description: A section with a heading, text and an image beside it.
 
 fields:
   heading:
     type: text
-    label: Τίτλος
+    label: Heading
     max: 80
 
   body:
     type: richtext
-    label: Κείμενο
-    hint: Επιτρέπονται έντονα, πλάγια, λίστες και σύνδεσμοι.
+    label: Text
+    hint: Bold, italics, lists and links are allowed.
 
   # No `image_alt` beside it any more: alt lives inside the image object, so it
   # arrives with the field instead of being remembered separately.
   image:
     type: image
-    label: Εικόνα
+    label: Image
 
   media_side:
     type: select
-    label: Θέση εικόνας
+    label: Image position
     editable: false
     options:
-      end: Δεξιά
-      start: Αριστερά
+      end: Right
+      start: Left
     default: end

@@ -1,10 +1,10 @@
-label: Βίντεο
-description: Ένα βίντεο από YouTube ή Vimeo, ή ένα σύντομο loop χωρίς ήχο.
+label: Video
+description: A YouTube or Vimeo video, or a short muted loop.
 
 fields:
   heading:
     type: text
-    label: Τίτλος
+    label: Heading
     max: 60
 
   # The client pastes what is in their address bar. What is stored is a
@@ -13,20 +13,20 @@ fields:
   # the site sets no third-party cookie and needs no banner for one.
   embed:
     type: video_embed
-    label: Σύνδεσμος YouTube ή Vimeo
-    hint: Επικολλήστε τη διεύθυνση από τη γραμμή του browser.
+    label: YouTube or Vimeo link
+    hint: Paste the address from the browser bar.
 
   # Not the provider's auto-generated thumbnail: fetching that is an SSRF
   # surface for a picture the client did not choose and usually would not have.
   # This is an ordinary image field, uploaded like every other.
   poster:
     type: image
-    label: Εικόνα αφίσας
-    hint: Φαίνεται πριν πατήσει κανείς αναπαραγωγή.
+    label: Poster image
+    hint: Shown before anyone presses play.
 
   # Self-hosted alternative: a short muted clip behind the section. Hard 10 MB
   # cap, no transcoding — anything longer belongs on YouTube.
   loop:
     type: video_loop
-    label: Βίντεο loop (MP4)
-    hint: Χωρίς ήχο, έως 10 MB. Για μεγαλύτερα, χρησιμοποιήστε τον σύνδεσμο YouTube παραπάνω.
+    label: Loop video (MP4)
+    hint: Muted, up to 10 MB. For anything longer, use the YouTube link above.

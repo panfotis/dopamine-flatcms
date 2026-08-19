@@ -12,3 +12,5 @@ blocks:
         alt: ''
         width: 0
         height: 0
+      nav_label: 'Κύρια πλοήγηση'
+      lang_label: Γλώσσα

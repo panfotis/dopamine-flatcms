@@ -1,5 +1,5 @@
-label: Φόρμα επικοινωνίας
-description: Φόρμα που στέλνει μήνυμα με email και κρατά αντίγραφο στον server.
+label: Contact form
+description: A form that emails the message and keeps a copy on the server.
 
 # ── What the visitor fills in. Developer-owned. ──────────────────────────────
 # This is NOT a `fields:` entry and never becomes one: a client who could edit
@@ -34,28 +34,28 @@ form:
 fields:
   heading:
     type: text
-    label: Τίτλος
+    label: Heading
     max: 60
     required: true
 
   intro:
     type: textarea
-    label: Εισαγωγικό κείμενο
+    label: Intro text
     max: 300
 
   success:
     type: textarea
-    label: Μήνυμα επιτυχίας
+    label: Success message
     max: 300
-    default: Ευχαριστούμε! Λάβαμε το μήνυμά σας και θα επικοινωνήσουμε σύντομα.
+    default: Thank you! We received your message and will be in touch shortly.
 
   # Empty = no consent checkbox at all. A site that does not need one should
   # not show one, and a checkbox with no text beside it is worse than none.
   consent_text:
     type: text
-    label: Κείμενο συγκατάθεσης (GDPR)
+    label: Consent text (GDPR)
     max: 200
-    default: Συμφωνώ να επικοινωνήσετε μαζί μου για το αίτημά μου.
+    default: I agree to be contacted about my request.
 
   # `editable: admin`, and for the same reason the Turnstile toggle below is:
   # as client-editable text this redirects every lead off-site — or fans out to
@@ -63,10 +63,10 @@ fields:
   # out, so a value that is not one is not used at all.
   recipient:
     type: text
-    label: Παραλήπτης (email)
+    label: Recipient (email)
     editable: admin
     max: 120
-    hint: Πού φτάνουν τα μηνύματα. Μία διεύθυνση. Κενό = η ρύθμιση του site.
+    hint: Where messages are delivered. One address. Empty = the site-wide setting.
 
   # Off by default. Rate limit + honeypot + minimum time-to-submit is the
   # always-on baseline and stops effectively all drive-by bots on a brochure
@@ -76,6 +76,6 @@ fields:
   # spam control. Enforced on save, not merely locked in the form.
   turnstile:
     type: boolean
-    label: Έλεγχος Cloudflare Turnstile
+    label: Cloudflare Turnstile check
     editable: admin
-    hint: Χρειάζεται TURNSTILE_SITE_KEY και TURNSTILE_SECRET στο .env. Χωρίς αυτά συμπεριφέρεται σαν κλειστό.
+    hint: Needs TURNSTILE_SITE_KEY and TURNSTILE_SECRET in .env. Without them it behaves as off.

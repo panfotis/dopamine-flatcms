@@ -15,7 +15,7 @@ ok($types === ['contact_cta', 'contact_form', 'faq', 'gallery', 'hero',
 ok($cms->components->get('hero')['fields']['heading']['max'] === 70, 'hero.heading max parsed from schema.yml');
 ok($cms->components->get('hero')['fields']['align']['editable'] === false, 'hero.align is marked non-editable');
 ok(!array_key_exists('align', $cms->components->editableFields('hero')), 'non-editable field excluded from editable set');
-ok($cms->components->get('hero')['fields']['align']['options'] === ['start' => 'Αριστερά', 'center' => 'Κέντρο'], 'select options normalised to a map');
+ok($cms->components->get('hero')['fields']['align']['options'] === ['start' => 'Left', 'center' => 'Center'], 'select options normalised to a map');
 
 section('Page rendering');
 $page = $cms->content->findBySlug('/');

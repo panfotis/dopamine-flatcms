@@ -1,5 +1,5 @@
-label: Κεφαλίδα
-description: Το λογότυπο και το μενού, σε κάθε σελίδα του site.
+label: Header
+description: The logo and the menu, on every page of the site.
 
 # The menu itself is not a field. Its labels and its order come from each page's
 # `nav:` key, which is developer-owned like every other structural key — so a
@@ -8,8 +8,8 @@ description: Το λογότυπο και το μενού, σε κάθε σελ�
 fields:
   logo:
     type: image
-    label: Λογότυπο
-    hint: Κενό = εμφανίζεται το όνομα του site ως κείμενο.
+    label: Logo
+    hint: Empty = the site name is shown as text.
 
   # Read aloud by a screen reader to tell the two navigations apart, so it has
   # to be in the language of the page — and _header.yml is per language, which
@@ -18,14 +18,14 @@ fields:
   # breaks a page nobody sighted would notice.
   nav_label:
     type: text
-    label: Ετικέτα μενού (screen reader)
+    label: Menu label (screen reader)
     editable: false
     max: 40
-    default: Κύρια πλοήγηση
+    default: Main navigation
 
   lang_label:
     type: text
-    label: Ετικέτα επιλογής γλώσσας (screen reader)
+    label: Language switcher label (screen reader)
     editable: false
     max: 40
-    default: Γλώσσα
+    default: Language

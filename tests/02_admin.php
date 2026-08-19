@@ -30,7 +30,7 @@ contains($edit, 'name="blocks[hero][heading]"', 'field input named by block id a
 contains($edit, 'name="blocks[intro][body]"', 'richtext field present for the second block');
 contains($edit, 'data-max="70"', 'max length exposed to the character counter');
 contains($edit, 'name="csrf"', 'CSRF token embedded in the form');
-contains($edit, 'Κεντρική ενότητα', 'component label from schema.yml shown as the card title');
+contains($edit, 'Hero', 'component label from schema.yml shown as the card title');
 contains($edit, cms()->lang->t('field.alt_hint'), 'field hint rendered');
 
 section('A component built from schema.yml alone round-trips');
@@ -610,8 +610,9 @@ contains((string) $fellBack->getContent(), 'Pick a page', 'in the source languag
 
 // The panel's language and the *site's* are different questions. A component's
 // own label is written by the developer in whatever language the site is, and
-// must survive the panel being English.
-contains($edit, 'Κεντρική ενότητα', "a component's own Greek label is not translated away");
+// must survive the panel being English. The locked_rows fixture above carries
+// a Greek label for exactly this check.
+contains($lockedForm, 'Κλειδωμένες γραμμές', "a component's own Greek label is not translated away");
 
 // The catalogue is complete, or the panel shows English where it is not — and
 // that is a thing to know before a client does.

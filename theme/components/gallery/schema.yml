@@ -1,10 +1,10 @@
-label: Γκαλερί
-description: Πλέγμα φωτογραφιών. Ο πελάτης ανεβάζει, αναδιατάσσει και αφαιρεί.
+label: Gallery
+description: A photo grid. The client uploads, reorders and removes.
 
 fields:
   heading:
     type: text
-    label: Τίτλος
+    label: Heading
     max: 60
 
   # A gallery is its own type, not a `list` with one image inside: thirty
@@ -16,6 +16,6 @@ fields:
   # strings, and a screen reader reads those out instead of skipping them.
   photos:
     type: image_list
-    label: Φωτογραφίες
+    label: Photos
     max: 30
-    hint: Επιλέξτε πολλές μαζί. Η περιγραφή είναι προαιρετική εδώ — γράψτε την όπου έχει νόημα.
+    hint: Select several at once. The description is optional here — write it where it carries meaning.

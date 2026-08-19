@@ -1,18 +1,18 @@
-label: Κεντρική ενότητα
-description: Η μεγάλη ενότητα στην κορυφή της σελίδας.
+label: Hero
+description: The large section at the top of the page.
 
 fields:
   heading:
     type: text
-    label: Τίτλος
+    label: Heading
     max: 70
     required: true
 
   subheading:
     type: textarea
-    label: Υπότιτλος
+    label: Subheading
     max: 180
-    hint: Μία ή δύο προτάσεις. Κρατήστε το σύντομο.
+    hint: One or two sentences. Keep it short.
 
   # It sits behind the heading, carries no information of its own, and alt=""
   # is the correct markup for it. Declared here because whether an image is
@@ -21,26 +21,26 @@ fields:
   # key.
   image:
     type: image
-    label: Εικόνα φόντου
+    label: Background image
     decorative: true
 
   cta_label:
     type: text
-    label: Κείμενο κουμπιού
+    label: Button text
     max: 30
 
   cta_url:
     type: link
-    label: Σύνδεσμος κουμπιού
-    placeholder: /epikoinonia
+    label: Button link
+    placeholder: /contact
 
   # The client picks copy, not layout. Flip `editable` to true if you ever
   # want to hand a specific site's alignment over to them.
   align:
     type: select
-    label: Στοίχιση
+    label: Alignment
     editable: false
     options:
-      start: Αριστερά
-      center: Κέντρο
+      start: Left
+      center: Center
     default: center
