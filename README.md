@@ -3,13 +3,16 @@
 A flat-file CMS for small client sites (3–10 pages). Components are defined in
 files. The client edits text and images — nothing else.
 
-No database. No build step. No admin UI for structure.
+No database. No build step. No admin UI for structure. A built-in contact
+form with CSRF, honeypot, rate limiting and optional Turnstile — submissions
+stored to disk before any mail is attempted, with retries and retention.
 
 This repository is the Composer engine package (`dopamine/flatcms`). The
 [`skeleton/`](skeleton/) directory is the separate
 `dopamine/flatcms-skeleton` project template: publish it as its own VCS package,
-then create each site with `composer create-project`. Site code overrides
-package components and templates without editing `vendor/`.
+then create each site with `composer create-project`. A site's `theme/` layers over
+the engine's — dropping a same-named file there overrides it, without ever
+editing `vendor/`.
 
 ```
 theme/components/hero/schema.yml   →  the fields the client sees
@@ -25,7 +28,7 @@ content/pages/el/home.yml    →  which components this page has, and their valu
 **Structure lives in files. Content lives in the panel.**
 
 You control which components a page has, in what order, with what fields, by
-editing `content/pages/<locale>/*.yml` and `components/*/schema.yml`. The client opens
+editing `content/pages/<locale>/*.yml` and `theme/components/*/schema.yml`. The client opens
 `/admin.php` and sees a form. There is no "add section" button, no drag and
 drop, no component picker — those UIs do not exist.
 
@@ -120,10 +123,10 @@ bash tests/run.sh
 Two files. That is the entire workflow.
 
 ```bash
-mkdir components/testimonial
+mkdir theme/components/testimonial
 ```
 
-`components/testimonial/schema.yml`:
+`theme/components/testimonial/schema.yml`:
 
 ```yaml
 label: Μαρτυρία πελάτη
@@ -145,7 +148,7 @@ fields:
     max: 60
 ```
 
-`components/testimonial/testimonial.twig`:
+`theme/components/testimonial/testimonial.twig`:
 
 ```twig
 <section class="testimonial">
@@ -155,6 +158,13 @@ fields:
   </div>
 </section>
 ```
+
+Optionally drop a `testimonial.css` (or `.js`) beside it — no declaration
+needed: the file existing is the declaration, and it loads only on pages where
+a testimonial actually renders, once, however many testimonials the page has.
+Global CSS/JS — a font, a framework from a CDN, your `site.css` — is declared
+in `theme/theme.yml`; local entries are inlined, `https://` entries become
+real `<link>`/`<script defer>` tags with SRI.
 
 Then put it on a page — `content/pages/el/home.yml`:
 
@@ -252,7 +262,7 @@ chown -R www-data:www-data shared/content shared/var
 ### One deploy
 
 ```bash
-DEPLOY_ROOT=/var/www/pelatis DEPLOY_REPO=git@github.com:dope/pelatis.git \
+DEPLOY_ROOT=/var/www/pelatis DEPLOY_REPO=git@github.com:example/pelatis.git \
   bin/deploy.sh v1.4.0
 ```
 
@@ -308,7 +318,7 @@ stops the deploy instead of the site.
 # check every referenced image is in it, run doctor against the result.
 # A green backup cron without this proves a push happened, nothing more.
 40 4 * * 1  cd /var/www/pelatis/current && ENV_FILE=/var/www/pelatis/shared/.env \
-              BACKUP_REMOTE=git@github.com:dope/pelatis-content.git \
+              BACKUP_REMOTE=git@github.com:example/pelatis-content.git \
               DRILL_ALERT='/usr/local/bin/alert' bin/restore-drill
 
 # Disk, derivative-cache growth, permissions, content health.
@@ -338,7 +348,7 @@ Log rotation, `/etc/logrotate.d/pelatis`:
 bin/new-site ../pelatis-gr "Πελάτης ΑΕ" pelatis.gr
 ```
 
-Copies code, components and templates — never content, uploads, revisions or
+Copies code, theme and admin-theme — never content, uploads, revisions or
 secrets. The scaffold starts with `SITE_NOINDEX=1`, because nobody has approved
 the copy yet.
 
@@ -513,9 +523,9 @@ only symptom of getting it wrong is months of nothing being indexed.
 ## What is deliberately not here
 
 - Adding, removing or reordering components from the panel
-- Multi-user accounts and roles (Cloudflare Access handles who gets in)
+- A user-management UI — Cloudflare Access decides who gets in, a committed
+  `config/roles.yml` decides who is admin and who is editor
 - Draft / publish workflow — saving publishes
-- Forms and form submissions (use a Worker, or Formspree, plus Turnstile)
 - A media library — `image` fields upload and replace in place
 
 Each of those is a real chunk of work. Leave them out until a client actually
@@ -562,9 +572,11 @@ tests/08_form.php        contact validation, spam controls, durable delivery,
                          retry state, permissions and retention
 tests/09_package.php     clean Composer install, archive boundary, package
                          fallbacks, site overrides and installed CLI tools
+tests/10_assets.php      the asset pipeline: per-component CSS/JS collection,
+                         dedup, tier order, path confinement, themed 404/500
 ```
 
-974 checks: `ddev exec bash tests/run.sh`. Run all of them after touching
+1,099 checks: `ddev exec bash tests/run.sh`. Run all of them after touching
 `Fields`, `Admin`, `Components`, `Media` or anything in `bin/`.
 
 CI (`.github/workflows/ci.yml`) runs lint, `composer audit`, `bin/doctor`, and
