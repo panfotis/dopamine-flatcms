@@ -1,0 +1,29 @@
+name: Split skeleton
+
+# Mirrors skeleton/ into panfotis/dopamine-flatcms-skeleton on every release
+# tag, so `composer create-project dopamine/flatcms-skeleton` resolves from
+# Packagist. The split repo is a write-only mirror: nobody commits there, its
+# whole history is this subtree's, and --force is what keeps it a mirror.
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # subtree split walks the full history
+
+      - name: Push the skeleton subtree
+        env:
+          SSH_KEY: ${{ secrets.SKELETON_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          split=$(git subtree split --prefix=skeleton HEAD)
+          git push git@github.com:panfotis/dopamine-flatcms-skeleton.git \
+            --force "$split:refs/heads/main" "$split:refs/tags/${GITHUB_REF_NAME}"

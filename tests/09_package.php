@@ -132,9 +132,7 @@ foreach ($excludes as $entry) {
     if (in_array($bare, ['vendor', 'var'], true)) {
         continue; // never tracked, so never in a zipball to begin with
     }
-    if (preg_match('#^/?' . preg_quote($bare, '#') . '\s+export-ignore$#m',
-            str_replace('*', '\*', '') === '' ? $attributes : $attributes) !== 1
-        && !str_contains($attributes, $bare)) {
+    if (!str_contains($attributes, $bare)) {
         $missing[] = $bare;
     }
 }

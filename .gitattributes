@@ -7,7 +7,6 @@
 /.github                            export-ignore
 /.gitignore                         export-ignore
 /CLAUDE.md                          export-ignore
-/PENS                               export-ignore
 /bin/new-site                       export-ignore
 /composer.lock                      export-ignore
 /config                             export-ignore
