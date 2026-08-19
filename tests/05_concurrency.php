@@ -74,24 +74,24 @@ missing($body, '<script>alert(1)</script>', 'a hostile value in the rejected sub
 
 section('Advisory presence markers');
 $locks = new Locks(dirname(__DIR__) . '/var/locks');
-$locks->touch('home', 'fotis@wearedope.com');
+$locks->touch('home', 'dev@example.gr');
 
-ok($locks->heldByOther('home', 'fotis@wearedope.com') === null, 'you never collide with yourself');
+ok($locks->heldByOther('home', 'dev@example.gr') === null, 'you never collide with yourself');
 
 $other = $locks->heldByOther('home', 'pelatis@example.gr');
-ok(is_array($other) && $other['user'] === 'fotis@wearedope.com', 'a second editor is told who else is in the page');
+ok(is_array($other) && $other['user'] === 'dev@example.gr', 'a second editor is told who else is in the page');
 ok(is_array($other) && $other['minutes'] === 0, 'and how long ago they arrived');
 
 $locks->release('home', 'pelatis@example.gr');
 ok($locks->heldByOther('home', 'pelatis@example.gr') !== null, 'releasing someone else\'s marker does nothing');
 
-$locks->release('home', 'fotis@wearedope.com');
+$locks->release('home', 'dev@example.gr');
 ok($locks->heldByOther('home', 'pelatis@example.gr') === null, 'releasing your own marker clears it');
 
 section('A stale marker never strands a page');
-$locks->touch('home', 'fotis@wearedope.com');
+$locks->touch('home', 'dev@example.gr');
 $lockFile = dirname(__DIR__) . '/var/locks/home.json';
-file_put_contents($lockFile, json_encode(['user' => 'fotis@wearedope.com', 'at' => time() - 3600]));
+file_put_contents($lockFile, json_encode(['user' => 'dev@example.gr', 'at' => time() - 3600]));
 ok($locks->heldByOther('home', 'pelatis@example.gr') === null, 'a marker older than the TTL is ignored');
 @unlink($lockFile);
 

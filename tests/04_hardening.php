@@ -108,15 +108,15 @@ section('A validly signed token with the wrong claims is refused');
 //
 // The control first: this address passes with the claims left alone, so the
 // 403s below are the claim check refusing, not roles.yml.
-ok(as_user('fotis@wearedope.com')->getStatusCode() === 200, 'the same address is accepted when the claims match');
+ok(as_user('dev@example.gr')->getStatusCode() === 200, 'the same address is accepted when the claims match');
 
-$wrongAud = as_user('fotis@wearedope.com', 'GET', [], ['aud' => str_repeat('b', 64)]);
+$wrongAud = as_user('dev@example.gr', 'GET', [], ['aud' => str_repeat('b', 64)]);
 ok($wrongAud->getStatusCode() === 403, 'a token minted for a different Access application is refused');
 // "Cloudflare Access" is the not-authenticated message, which proves the token
 // died at verification — not merely at the roles lookup, whose message differs.
 contains((string) $wrongAud->getContent(), 'Cloudflare Access', 'and refused as unauthenticated, not as unlisted');
 
-$wrongIss = as_user('fotis@wearedope.com', 'GET', [], ['team_domain' => 'evil.cloudflareaccess.com']);
+$wrongIss = as_user('dev@example.gr', 'GET', [], ['team_domain' => 'evil.cloudflareaccess.com']);
 ok($wrongIss->getStatusCode() === 403, 'a token from a different team domain is refused');
 contains((string) $wrongIss->getContent(), 'Cloudflare Access', 'also as unauthenticated');
 

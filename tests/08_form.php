@@ -280,7 +280,7 @@ $asRole = static function (string $email, string $action, array $params = [], st
 };
 
 ok($asRole('pelatis@example.gr', 'submissions') === 403, 'an editor cannot list them');
-ok($asRole('fotis@wearedope.com', 'submissions') === 200, 'an admin can');
+ok($asRole('dev@example.gr', 'submissions') === 200, 'an admin can');
 ok($asRole('pelatis@example.gr', 'submission_delete', ['month' => '2026-08', 'id' => str_repeat('a', 16)], 'POST') === 403,
     'an editor forging a delete is refused before CSRF is even considered');
 ok($asRole('pelatis@example.gr', 'submission_retry', ['month' => '2026-08', 'id' => str_repeat('a', 16)], 'POST') === 403,

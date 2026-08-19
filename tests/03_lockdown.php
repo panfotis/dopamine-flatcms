@@ -173,13 +173,13 @@ foreach ([
     '//evil.gr/x'          => 'a protocol-relative host',
     '/\\evil.gr'           => 'the backslash variant browsers normalise to //',
 ] as $bad => $why) {
-    as_user('fotis@wearedope.com', 'POST', $saveSeo(['canonical' => $bad]));
+    as_user('dev@example.gr', 'POST', $saveSeo(['canonical' => $bad]));
     ok($seoOf()['canonical'] === '', 'refused: ' . $why . ' (stored: "' . $seoOf()['canonical'] . '")');
 }
 
-as_user('fotis@wearedope.com', 'POST', $saveSeo(['canonical' => 'https://pelatis.gr/selida']));
+as_user('dev@example.gr', 'POST', $saveSeo(['canonical' => 'https://pelatis.gr/selida']));
 ok($seoOf()['canonical'] === 'https://pelatis.gr/selida', 'while a real absolute URL is stored');
-as_user('fotis@wearedope.com', 'POST', $saveSeo(['canonical' => '/selida']));
+as_user('dev@example.gr', 'POST', $saveSeo(['canonical' => '/selida']));
 ok($seoOf()['canonical'] === '/selida', 'and so is a site-relative path');
 
 section('seo.canonical is admin-only, and forging it does not help');
@@ -194,7 +194,7 @@ ok($seoOf()['canonical'] === '/selida', 'but the canonical is unchanged (' . $se
 
 $editorForm = (string) as_user('pelatis@example.gr', 'GET', ['action' => 'edit', 'page' => 'home'])->getContent();
 ok((bool) preg_match('/id="seo-canonical"[^>]*readonly/', $editorForm), 'and the form locks it for them, as the save path would');
-$adminForm = (string) as_user('fotis@wearedope.com', 'GET', ['action' => 'edit', 'page' => 'home'])->getContent();
+$adminForm = (string) as_user('dev@example.gr', 'GET', ['action' => 'edit', 'page' => 'home'])->getContent();
 ok(!preg_match('/id="seo-canonical"[^>]*readonly/', $adminForm), 'while an admin may type in it');
 
 // The client half of the block is still theirs.
@@ -208,7 +208,7 @@ section('The share image is decorative, so it never blocks a save');
 ok(\Dopamine\FlatCms\Components::seoFields()['og_image']['decorative'] === true,
     'og_image is declared decorative');
 
-$ogAlt = as_user('fotis@wearedope.com', 'POST', $saveSeo([
+$ogAlt = as_user('dev@example.gr', 'POST', $saveSeo([
     'og_image' => [
         'src'    => (string) $storedImage['src'],
         'alt'    => 'Κείμενο που δεν πρέπει να αποθηκευτεί',
@@ -404,7 +404,7 @@ contains($html, 'Νέος υπότιτλος', 'edited copy is live');
 // question Phase 3 added — "this address authenticated, but may it be here?" —
 // only has an honest answer on the path a real request takes.
 
-$ADMIN   = 'fotis@wearedope.com';   // config/roles.yml: admin
+$ADMIN   = 'dev@example.gr';   // config/roles.yml: admin
 $EDITOR  = 'pelatis@example.gr';    // config/roles.yml: editor
 $UNKNOWN = 'kanenas@example.gr';    // not in config/roles.yml at all
 

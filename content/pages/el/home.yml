@@ -19,7 +19,7 @@ blocks:
     id: hero
     type: hero
     fields:
-      heading: 'Μικρά site, χωρίς βαρύ CMS leme!'
+      heading: 'Μικρά site, χωρίς βαρύ CMS'
       subheading: 'Στατική ταχύτητα, flat αρχεία, και ένα panel που ο πελάτης δεν μπορεί να χαλάσει.'
       image:
         src: /uploads/2026/08/pexels-willianjusten-30929497.jpg

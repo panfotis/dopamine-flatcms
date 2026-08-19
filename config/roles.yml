@@ -34,5 +34,5 @@
 # No secrets. Safe to commit. In production this file lives in shared/ and is
 # pointed at by ROLES_FILE, so it survives a deploy and APP_ENV=prod refuses to
 # boot without it — see tests/fixtures/production.env.
-- { email: fotis@wearedope.com, role: admin }
+- { email: dev@example.gr, role: admin }
 - { email: pelatis@example.gr,  role: editor }

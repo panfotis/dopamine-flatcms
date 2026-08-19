@@ -113,7 +113,8 @@ if ($listStatus === 0) {
     ok(in_array('src/Cms.php', $names, true) && in_array('theme/components/hero/schema.yml', $names, true),
         'engine classes and starter components are included');
     ok(!in_array('config.php', $names, true)
-        && !array_filter($names, static fn (string $name): bool => preg_match('#^(content|public|skeleton|vendor)/#', $name) === 1),
+        && !array_filter($names, static fn (string $name): bool => preg_match('#^(content|public|skeleton|vendor|PENS)/#', $name) === 1
+            || preg_match('#^dopamine-flatcms-.*\.md$#', $name) === 1),
         'site state, entrypoints, skeleton and installed dependencies are excluded');
 }
 
