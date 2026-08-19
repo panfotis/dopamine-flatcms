@@ -119,7 +119,7 @@ that happens, or every portrait on the site is sideways. `bin/doctor` checks the
 same list against the *running* interpreter, since Composer resolves under the
 CLI php and the site runs under php-fpm.
 
-Test suite: 1,090 checks across ten files. Run all of them, not just the new ones.
+Test suite: 1,098 checks across ten files. Run all of them, not just the new ones.
 
 **Do not add anything else without asking.** Explicitly rejected, with reasons:
 

@@ -24,17 +24,9 @@
       {% endif %}
 
       <form method="post" novalidate>
-        <input type="hidden" name="csrf" value="{{ form_csrf }}">
-
-        {# The honeypot. Hidden from people, not from bots — and off-screen
-           rather than `type=hidden`, because a hidden input is the first thing
-           a scripted submitter learns to skip. `tabindex=-1` and
-           `autocomplete=off` keep it away from anyone using a keyboard or a
-           password manager. #}
-        <div class="hp" aria-hidden="true">
-          <label for="{{ block.id }}-website">{{ ts('form.honeypot_label') }}</label>
-          <input type="text" id="{{ block.id }}-website" name="website" tabindex="-1" autocomplete="off">
-        </div>
+        {# CSRF + honeypot, from Form::guards(). One line a rewritten form
+           cannot get wrong — bin/doctor refuses a form template without it. #}
+        {{ form_guards() }}
 
         {% for name, input in form_inputs %}
           {% set id = block.id ~ '-' ~ name %}

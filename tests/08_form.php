@@ -56,6 +56,18 @@ $cms = $make(['rate_limit' => 1000]);
 $page = $cms->content->load('epikoinonia');
 $form = new Form($cms);
 
+section('form_guards() emits the two inputs handle() validates by name');
+
+$rendered = $cms->renderPage($page, ['form_csrf' => 'form-token', 'form_inputs' => $form->inputs(
+    $cms->components->get('contact_form') ?? []
+), 'form_errors' => [], 'form_values' => [], 'form_sent' => false, 'turnstile_site_key' => '']);
+contains($rendered, '<input type="hidden" name="csrf" value="form-token">', 'the CSRF token, from the request context');
+contains($rendered, 'name="website" tabindex="-1" autocomplete="off"',
+    'and the honeypot, out of the tab order and away from password managers');
+contains($rendered, 'left:-9999px', 'hidden off-screen with inline style — it survives a form whose author replaced every stylesheet');
+missing($rendered, 'display:none', 'never display:none — a bot that skips obviously hidden inputs is the bot the trap is for');
+ok(substr_count($rendered, 'name="website"') === 1, 'exactly one honeypot');
+
 /** A POST that would succeed, unless a case below breaks it on purpose. */
 $post = static function (array $body = [], array $server = []): Request {
     // $body first: `+` keeps the left operand, so an override has to be there.

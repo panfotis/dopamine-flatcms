@@ -44,6 +44,41 @@ final class Form
     }
 
     /**
+     * The two inputs handle() validates by name, emitted from PHP so a site
+     * that rewrites the whole form keeps one line it cannot get wrong:
+     *
+     *   <form method="post">
+     *     {{ form_guards() }}
+     *     …
+     *
+     * A missing CSRF token fails loudly — every submission rejected. A missing
+     * honeypot fails *silently*: an absent input reads as '' in the check
+     * above and passes as human, and nothing ever reports the spam protection
+     * gone. That asymmetry is why this helper exists, and why it lives in this
+     * file: the emitter and the validator are two halves of one contract.
+     *
+     * Off-screen rather than display:none or `hidden` — a bot that skips
+     * obviously hidden inputs is exactly the bot this is for — and the style
+     * is inline so the trap keeps working in a form whose author replaced
+     * every stylesheet. tabindex and autocomplete keep keyboards and password
+     * managers out of it.
+     *
+     * Deliberately narrow: consent and the Turnstile widget stay the
+     * template's responsibility. Both fail loudly when missing, so the
+     * template author finds out; the honeypot never would.
+     */
+    public static function guards(string $csrf, string $blockId, Lang $lang): string
+    {
+        $id = htmlspecialchars($blockId) . '-website';
+
+        return '<input type="hidden" name="csrf" value="' . htmlspecialchars($csrf) . '">' . "\n"
+            . '<div style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden" aria-hidden="true">'
+            . '<label for="' . $id . '">' . htmlspecialchars($lang->t('form.honeypot_label')) . '</label>'
+            . '<input type="text" id="' . $id . '" name="website" tabindex="-1" autocomplete="off">'
+            . '</div>';
+    }
+
+    /**
      * Handle a POST against a page that carries a form block.
      *
      * Returns `['ok' => bool, 'errors' => [...], 'block' => id]` — never a

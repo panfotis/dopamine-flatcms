@@ -388,6 +388,28 @@ foreach ($componentDirs as $type => $dir) {
     } catch (Throwable) {
         continue; // an unparseable schema.yml is already reported above
     }
+
+    // A form's security inputs are validated by name in Form::handle(). A
+    // rewritten template that drops the CSRF token fails loudly; one that
+    // drops the honeypot fails *silently* — spam gets in and nothing ever
+    // says so. Compiled source, not strpos: a commented-out form_guards()
+    // does not count.
+    if ((array) ($schema['form'] ?? []) !== []) {
+        try {
+            $compiled = $cms->twig->compileSource(
+                $cms->twig->getLoader()->getSourceContext((string) $schema['template'])
+            );
+            if (!str_contains($compiled, 'form_guards')
+                && !(str_contains($compiled, 'name="csrf"') && str_contains($compiled, 'name="website"'))) {
+                $fail(sprintf(
+                    'component "%s" declares form: but renders neither form_guards() nor both the csrf and honeypot inputs — submissions would be rejected, or spam silently accepted',
+                    $type
+                ));
+            }
+        } catch (Throwable) {
+            // a missing or broken template is reported above
+        }
+    }
     foreach (['css', 'js'] as $kind) {
         foreach ((array) ($schema['assets'][$kind] ?? []) as $entry) {
             $entry = is_array($entry) ? $entry : ['url' => (string) $entry];

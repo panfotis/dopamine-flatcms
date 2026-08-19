@@ -471,6 +471,24 @@ ok($s === 1, 'refuses a component CSS with relative references');
 contains($o, 'cannot resolve once inlined', '...and says why: they break the moment the file is inlined');
 array_map('unlink', glob($tmpDir . '/*') ?: []);
 
+// A rewritten form template that drops the honeypot fails silently — spam in,
+// nothing reported. doctor is where that gets loud, from compiled source, so
+// a commented-out form_guards() does not count.
+array_map('unlink', glob($tmpDir . '/*') ?: []);
+@mkdir($tmpDir, 0775, true);
+file_put_contents($tmpDir . '/schema.yml', "label: X\nform:\n  msg:\n    type: text\n");
+file_put_contents($tmpDir . '/' . $tmpType . '.twig',
+    '{# form_guards() #}<form method="post"><input name="msg"></form>');
+[$s, $o] = $doctor(['pages/el/home.yml' => $goodPage('/')]);
+ok($s === 1, 'refuses a form template that renders neither form_guards() nor the two inputs by hand');
+contains($o, 'spam silently accepted', '...and says what the silent half of the failure is');
+
+file_put_contents($tmpDir . '/' . $tmpType . '.twig',
+    '<form method="post">{{ form_guards() }}<input name="msg"></form>');
+[$s, $o] = $doctor(['pages/el/home.yml' => $goodPage('/')]);
+ok($s === 0, 'and accepts the same form once form_guards() is a real call: ' . trim($o));
+array_map('unlink', glob($tmpDir . '/*') ?: []);
+
 array_map('unlink', glob($tmpDir . '/*') ?: []);
 @rmdir($tmpDir);
 

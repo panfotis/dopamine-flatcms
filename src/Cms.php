@@ -136,6 +136,16 @@ final class Cms
         $this->twig->addFunction(new TwigFunction('theme_foot',
             fn (): string => $this->assets?->foot() ?? '', ['is_safe' => ['html']]));
         $this->twig->addFunction(new TwigFunction('theme_attach', $this->themeAttach(...)));
+
+        // The contact form's CSRF and honeypot inputs, emitted from PHP so a
+        // rewritten form template cannot silently drop them — Form::guards()
+        // documents why, and Form::handle() is the other half of the contract.
+        $this->twig->addFunction(new TwigFunction('form_guards',
+            fn (array $context): string => Form::guards(
+                (string) ($context['form_csrf'] ?? ''),
+                (string) ($context['block']['id'] ?? 'form'),
+                $this->siteLang()
+            ), ['needs_context' => true, 'is_safe' => ['html']]));
         // NOTE: there is deliberately no `|rich` filter. A filter that marks
         // arbitrary strings `is_safe: html` is an XSS primitive waiting for
         // someone to reach for it; richtext is already sanitised on save and
