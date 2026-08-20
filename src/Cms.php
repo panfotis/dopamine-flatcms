@@ -995,6 +995,10 @@ final class Cms
 
         $out = [
             '<?xml version="1.0" encoding="UTF-8"?>',
+            // Cosmetic only, for the human who opens the sitemap in a browser:
+            // without it Firefox renders the xhtml:link alternates as an HTML
+            // document and shows the text nodes run together. Crawlers ignore it.
+            '<?xml-stylesheet type="text/xsl" href="/sitemap.xsl"?>',
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"'
                 . ' xmlns:xhtml="http://www.w3.org/1999/xhtml">',
         ];
@@ -1034,6 +1038,61 @@ final class Cms
         $out[] = '</urlset>';
 
         return implode("\n", $out) . "\n";
+    }
+
+    /**
+     * The stylesheet `/sitemap.xml` points at: a plain table for the human who
+     * opens the sitemap in a browser. A string here rather than a file, because
+     * there is nothing per-site in it and nothing for a theme to own — the one
+     * consumer is the browser's XSLT engine, and robots never fetch it.
+     */
+    public function sitemapXsl(): string
+    {
+        return <<<'XSL'
+<?xml version="1.0" encoding="UTF-8"?>
+<xsl:stylesheet version="1.0"
+    xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+    xmlns:s="http://www.sitemaps.org/schemas/sitemap/0.9"
+    xmlns:xhtml="http://www.w3.org/1999/xhtml">
+<xsl:output method="html" encoding="UTF-8"/>
+<xsl:template match="/">
+<html>
+<head>
+<title>Sitemap</title>
+<style>
+body{font:14px/1.5 system-ui,sans-serif;margin:2rem;color:#222}
+table{border-collapse:collapse;width:100%}
+th,td{padding:.4rem .6rem;border:1px solid #ddd;text-align:left;vertical-align:top}
+th{background:#f5f5f5}
+a{color:#06c}
+</style>
+</head>
+<body>
+<h1>Sitemap</h1>
+<p><xsl:value-of select="count(s:urlset/s:url)"/> URLs</p>
+<table>
+<tr><th>URL</th><th>Last modified</th><th>Languages</th></tr>
+<xsl:for-each select="s:urlset/s:url">
+<tr>
+<td><a href="{s:loc}"><xsl:value-of select="s:loc"/></a></td>
+<td><xsl:value-of select="s:lastmod"/></td>
+<td>
+<xsl:for-each select="xhtml:link[@hreflang!='x-default']">
+<div>
+<xsl:value-of select="translate(@hreflang,'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ')"/>
+<xsl:text>: </xsl:text>
+<a href="{@href}"><xsl:value-of select="@href"/></a>
+</div>
+</xsl:for-each>
+</td>
+</tr>
+</xsl:for-each>
+</table>
+</body>
+</html>
+</xsl:template>
+</xsl:stylesheet>
+XSL;
     }
 
     /**

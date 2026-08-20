@@ -27,6 +27,7 @@ $page = null;
 // request builds neither.
 $feed = match ($slug) {
     '/sitemap.xml' => ['application/xml; charset=utf-8', $cms->sitemap()],
+    '/sitemap.xsl' => ['text/xsl; charset=utf-8', $cms->sitemapXsl()],
     '/robots.txt'  => ['text/plain; charset=utf-8', $cms->robotsTxt()],
     default        => null,
 };

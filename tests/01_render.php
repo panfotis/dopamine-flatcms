@@ -174,6 +174,11 @@ ok((bool) preg_match('#<lastmod>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{
     'in W3C datetime, from the page file mtime');
 missing($sitemap, '<changefreq>', 'no changefreq — Google ignores it, and a value invented to fill it is a wrong claim');
 missing($sitemap, '<priority>', 'nor priority, for the same reason');
+contains($sitemap, '<?xml-stylesheet type="text/xsl" href="/sitemap.xsl"?>',
+    'it points at the XSL, so a browser shows a table instead of run-together text');
+$xsl = $cms->sitemapXsl();
+contains($xsl, '<xsl:stylesheet', 'and /sitemap.xsl serves a stylesheet');
+ok(simplexml_load_string($xsl) !== false, 'that is well-formed XML');
 
 // A page lists itself among its own alternates — without that the group is not
 // valid at all — plus every language that has it, plus x-default.
