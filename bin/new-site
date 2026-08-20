@@ -2,7 +2,7 @@
 #
 # Scaffold a new client site from this one.
 #
-#   bin/new-site ../pelatis-gr "Πελάτης ΑΕ" pelatis.gr
+#   bin/new-site ../example-domain-com "Πελάτης ΑΕ" example-domain.com
 #
 # Site one is copy-paste. By site six the copies have drifted, and the drift is
 # invisible: a missing 500.twig, an old media_bases, a config that predates a
@@ -28,7 +28,7 @@ mkdir -p "$target"
 # Code, components and templates. Not content: a new site starts empty, and
 # inheriting another client's pages is how demo copy reaches production.
 for item in src public theme admin-theme lang bin composer.json composer.lock \
-            nginx.conf.example config.php README.md CLAUDE.md tests .gitignore; do
+            nginx.conf.example apache.conf.example config.php README.md CLAUDE.md tests .gitignore; do
   cp -R "$src/$item" "$target/$item"
 done
 
@@ -120,7 +120,7 @@ YAML
 cat > "$target/config/roles.yml" <<'YAML'
 # email -> role. Committed, no secrets. An authenticated address that is not
 # listed here gets a 403, never an implicit editor role.
-- { email: change-me@example.gr, role: admin }
+- { email: change-me@example-domain.com, role: admin }
 YAML
 
 sed -i "s/'name'     => '[^']*'/'name'     => '$name'/" "$target/config.php"
@@ -148,8 +148,10 @@ CF_ZONE_ID=
 CF_API_TOKEN=
 YAML
 
-sed -i "s/pelatis\.gr/$domain/g" "$target/nginx.conf.example"
-sed -i "s|/var/www/pelatis|/var/www/$domain|g" "$target/nginx.conf.example"
+for vhost in nginx apache; do
+  sed -i "s/example-domain\.com/$domain/g" "$target/$vhost.conf.example"
+  sed -i "s|/var/www/example-domain|/var/www/$domain|g" "$target/$vhost.conf.example"
+done
 
 echo "Scaffolded $target"
 echo

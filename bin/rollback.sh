@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-root="${DEPLOY_ROOT:-/var/www/pelatis}"
+root="${DEPLOY_ROOT:-/var/www/example-domain}"
 
 # shellcheck source=bin/release.sh
 . "$(dirname "$0")/release.sh"

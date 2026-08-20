@@ -74,25 +74,25 @@ missing($body, '<script>alert(1)</script>', 'a hostile value in the rejected sub
 
 section('Advisory presence markers');
 $locks = new Locks(dirname(__DIR__) . '/var/locks');
-$locks->touch('home', 'dev@example.gr');
+$locks->touch('home', 'admin@example-domain.com');
 
-ok($locks->heldByOther('home', 'dev@example.gr') === null, 'you never collide with yourself');
+ok($locks->heldByOther('home', 'admin@example-domain.com') === null, 'you never collide with yourself');
 
-$other = $locks->heldByOther('home', 'pelatis@example.gr');
-ok(is_array($other) && $other['user'] === 'dev@example.gr', 'a second editor is told who else is in the page');
+$other = $locks->heldByOther('home', 'editor@example-domain.com');
+ok(is_array($other) && $other['user'] === 'admin@example-domain.com', 'a second editor is told who else is in the page');
 ok(is_array($other) && $other['minutes'] === 0, 'and how long ago they arrived');
 
-$locks->release('home', 'pelatis@example.gr');
-ok($locks->heldByOther('home', 'pelatis@example.gr') !== null, 'releasing someone else\'s marker does nothing');
+$locks->release('home', 'editor@example-domain.com');
+ok($locks->heldByOther('home', 'editor@example-domain.com') !== null, 'releasing someone else\'s marker does nothing');
 
-$locks->release('home', 'dev@example.gr');
-ok($locks->heldByOther('home', 'pelatis@example.gr') === null, 'releasing your own marker clears it');
+$locks->release('home', 'admin@example-domain.com');
+ok($locks->heldByOther('home', 'editor@example-domain.com') === null, 'releasing your own marker clears it');
 
 section('A stale marker never strands a page');
-$locks->touch('home', 'dev@example.gr');
+$locks->touch('home', 'admin@example-domain.com');
 $lockFile = dirname(__DIR__) . '/var/locks/home.json';
-file_put_contents($lockFile, json_encode(['user' => 'dev@example.gr', 'at' => time() - 3600]));
-ok($locks->heldByOther('home', 'pelatis@example.gr') === null, 'a marker older than the TTL is ignored');
+file_put_contents($lockFile, json_encode(['user' => 'admin@example-domain.com', 'at' => time() - 3600]));
+ok($locks->heldByOther('home', 'editor@example-domain.com') === null, 'a marker older than the TTL is ignored');
 @unlink($lockFile);
 
 section('A global rides the same transaction as a page');

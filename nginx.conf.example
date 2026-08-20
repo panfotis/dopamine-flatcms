@@ -1,14 +1,18 @@
+# An nginx virtual host for a deployed site — nothing in the CMS reads this
+# file. Copy it to /etc/nginx/sites-available/, then edit the certificate
+# path and the php-fpm socket. DDEV writes its own vhost; this is for the
+# server. apache.conf.example beside it is the same vhost for Apache.
 server {
     listen 443 ssl http2;
-    server_name pelatis.gr;
+    server_name example-domain.com;
 
     # current is the atomic release symlink. content/, src/, vendor/ and
     # config.php sit above its public/ docroot and are never reachable over HTTP.
-    root /var/www/pelatis/current/public;
+    root /var/www/example-domain/current/public;
     index index.php;
 
-    ssl_certificate     /etc/letsencrypt/live/pelatis.gr/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/pelatis.gr/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/example-domain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/example-domain.com/privkey.pem;
 
     # The real visitor address, and the reason the contact form's rate limiter
     # works at all. Behind Cloudflare every request arrives from Cloudflare, so
@@ -38,7 +42,7 @@ server {
     # verifies the Access JWT so the origin cannot be hit directly.
     location = /admin.php {
         include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/run/php/php8.4-fpm-pelatis.sock;
+        fastcgi_pass unix:/run/php/php8.4-fpm-example-domain.sock;
 
         # Never let the panel be cached anywhere.
         add_header Cache-Control "no-store, private" always;
@@ -46,7 +50,7 @@ server {
 
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/run/php/php8.4-fpm-pelatis.sock;
+        fastcgi_pass unix:/run/php/php8.4-fpm-example-domain.sock;
     }
 
     # Uploads live in the content repository, not under the docroot, so that
@@ -58,7 +62,7 @@ server {
     # Only used when R2_ENABLED=0. With R2 on, these URLs are absolute and never
     # reach this server at all.
     location /uploads/ {
-        alias /var/www/pelatis/shared/content/uploads/;
+        alias /var/www/example-domain/shared/content/uploads/;
         expires 30d;
         add_header Cache-Control "public, immutable";
         # Uploaded files are never executed, whatever their extension. This is
@@ -75,6 +79,6 @@ server {
 
 server {
     listen 80;
-    server_name pelatis.gr;
+    server_name example-domain.com;
     return 301 https://$host$request_uri;
 }

@@ -26,6 +26,27 @@ a file that never receives an engine update again.
 
 Never edit files in `vendor/`; Composer updates replace them.
 
+## Production requirements
+
+- **Cloudflare Access in front of `admin.php` — required.** The panel has no
+  password of its own; Access *is* the login system, and a production boot
+  refuses to start with auth off.
+- **Cloudflare page caching — recommended.** The engine tags every response and
+  purges the edge on each save, so pages are served from cache and never stale.
+- **R2 — optional.** By default uploads live in `content/uploads/` and travel
+  with the content git repo — that repo is the backup: one `git clone` restores
+  pages and images together. A media-heavy site flips `R2_ENABLED=1` instead.
+
+Setup steps for all three are in the engine README's "Cloudflare setup"
+section (`vendor/dopamine/flatcms/README.md`).
+
+`nginx.conf.example` and `apache.conf.example` in this directory are **web
+server virtual hosts** — nothing here reads them. Copy one to the server's
+config directory (`/etc/nginx/sites-available/`, `/etc/apache2/sites-available/`)
+and edit the certificate path and the php-fpm socket; the domain and deploy
+root are already filled in. DDEV writes its own vhost, so locally you need
+neither file.
+
 Run the health check from the site root with:
 
 ```bash

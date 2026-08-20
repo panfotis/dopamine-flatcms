@@ -33,7 +33,7 @@ function f(string $method, mixed ...$args): mixed
     return $r->invoke(null, ...$args);
 }
 
-$BASES = ['media_bases' => ['/uploads/', 'https://media.pelatis.gr/']];
+$BASES = ['media_bases' => ['/uploads/', 'https://media.example-domain.com/']];
 
 section('env_bool: string booleans do not silently enable things');
 putenv('T_FLAG=false');
@@ -108,15 +108,15 @@ section('A validly signed token with the wrong claims is refused');
 //
 // The control first: this address passes with the claims left alone, so the
 // 403s below are the claim check refusing, not roles.yml.
-ok(as_user('dev@example.gr')->getStatusCode() === 200, 'the same address is accepted when the claims match');
+ok(as_user('admin@example-domain.com')->getStatusCode() === 200, 'the same address is accepted when the claims match');
 
-$wrongAud = as_user('dev@example.gr', 'GET', [], ['aud' => str_repeat('b', 64)]);
+$wrongAud = as_user('admin@example-domain.com', 'GET', [], ['aud' => str_repeat('b', 64)]);
 ok($wrongAud->getStatusCode() === 403, 'a token minted for a different Access application is refused');
 // "Cloudflare Access" is the not-authenticated message, which proves the token
 // died at verification — not merely at the roles lookup, whose message differs.
 contains((string) $wrongAud->getContent(), 'Cloudflare Access', 'and refused as unauthenticated, not as unlisted');
 
-$wrongIss = as_user('dev@example.gr', 'GET', [], ['team_domain' => 'evil.cloudflareaccess.com']);
+$wrongIss = as_user('admin@example-domain.com', 'GET', [], ['team_domain' => 'evil.cloudflareaccess.com']);
 ok($wrongIss->getStatusCode() === 403, 'a token from a different team domain is refused');
 contains((string) $wrongIss->getContent(), 'Cloudflare Access', 'also as unauthenticated');
 
@@ -147,7 +147,7 @@ ok(\Dopamine\FlatCms\Components::mayEdit(true, 'editor') === true, 'editable: tr
 section('Image src is restricted to media we host');
 ok(f('mediaPath', 'https://evil.tld/x.jpg', $BASES['media_bases']) === '', 'third-party URL rejected — no open image proxy via /cdn-cgi/image');
 ok(f('mediaPath', '/uploads/2026/08/a.jpg', $BASES['media_bases']) === '/uploads/2026/08/a.jpg', 'local upload path accepted');
-ok(f('mediaPath', 'https://media.pelatis.gr/uploads/a.jpg', $BASES['media_bases']) === 'https://media.pelatis.gr/uploads/a.jpg', 'configured R2 host accepted');
+ok(f('mediaPath', 'https://media.example-domain.com/uploads/a.jpg', $BASES['media_bases']) === 'https://media.example-domain.com/uploads/a.jpg', 'configured R2 host accepted');
 ok(f('mediaPath', '/uploads/../../config.php', $BASES['media_bases']) === '', 'traversal rejected');
 ok(f('mediaPath', '//evil.tld/x.jpg', $BASES['media_bases']) === '', 'protocol-relative rejected');
 

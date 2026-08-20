@@ -17,8 +17,9 @@ use RuntimeException;
  *   - media survives moving the site between servers
  *   - one media backend shared across every client install
  *
- * If r2.enabled is false everything falls back to public/uploads/ and the CMS
- * works exactly the same, which is handy for local development.
+ * If r2.enabled is false everything falls back to content/uploads/ — committed
+ * to git with the pages, so one clone restores the site whole — and the CMS
+ * works exactly the same. That is the default; R2 is for sites that outgrow it.
  */
 final class R2
 {

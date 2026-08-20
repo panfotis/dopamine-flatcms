@@ -4,7 +4,7 @@
 /**
  * Delete submissions past the retention window. Run from cron, daily.
  *
- *   17 4 * * * cd /var/www/pelatis/current && bin/prune-submissions >> /var/log/flatcms-mail.log 2>&1
+ *   17 4 * * * cd /var/www/example-domain/current && bin/prune-submissions >> /var/log/flatcms-mail.log 2>&1
  *
  * A retention policy nobody enforces is a sentence in a privacy notice. This is
  * the half that makes it a control: FORM_RETAIN_MONTHS, twelve by default, and

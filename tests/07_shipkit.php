@@ -510,7 +510,7 @@ contains($o, 'sitemap.xml and og:image URLs are built from it', '...but it does 
 ok($s === 1, 'while in production it is a refusal');
 contains($o, 'site.base_url is http://localhost:8080', '...naming the value that would ship');
 
-[$s, $o] = $doctor(['pages/el/home.yml' => $goodPage('/')], ['SITE_BASE_URL' => 'https://pelatis.gr']);
+[$s, $o] = $doctor(['pages/el/home.yml' => $goodPage('/')], ['SITE_BASE_URL' => 'https://example-domain.com']);
 missing($o, 'base_url', 'a real domain says nothing at all');
 
 // A missing roles file denies every address, so a box in that state serves a
@@ -637,8 +637,18 @@ ok(strpos($deployText, 'site_env_load "$env_file" 1') > strpos($deployText, 'tes
 contains($deployText, 'ENV_FILE="$env_file"', 'doctor and the release smoke test receive the shared environment');
 
 $nginx = (string) file_get_contents($root . '/nginx.conf.example');
-contains($nginx, 'root /var/www/pelatis/current/public;',
+contains($nginx, 'root /var/www/example-domain/current/public;',
     'the production vhost serves the atomic current release rather than a stale public directory');
+
+// The Apache twin has to make the same three claims, or a site deployed on
+// Apache is one silently different vhost — a docroot that is not the release,
+// an executable uploads directory, or a panel served from a cache.
+$apache = (string) file_get_contents($root . '/apache.conf.example');
+contains($apache, 'DocumentRoot /var/www/example-domain/current/public',
+    'and so does the Apache vhost beside it');
+contains($apache, 'Alias /uploads/ /var/www/example-domain/shared/content/uploads/',
+    'aliasing uploads out of the content repository rather than symlinking into the docroot');
+contains($apache, 'SetHandler none', 'with uploaded files never executed, whatever their extension');
 
 // Everything, not by tag: a template or CSS change has no page id, so tag
 // purging would leave a year of stale HTML on every page it touched.
@@ -787,7 +797,7 @@ register_shutdown_function(static function () use ($scaffold): void {
     exec('rm -rf ' . escapeshellarg($scaffold));
 });
 
-[$s, $out] = sh('bin/new-site ' . escapeshellarg($scaffold) . ' ' . escapeshellarg('Πελάτης ΑΕ') . ' pelatis.gr');
+[$s, $out] = sh('bin/new-site ' . escapeshellarg($scaffold) . ' ' . escapeshellarg('Πελάτης ΑΕ') . ' client-site.gr');
 ok($s === 0, 'the scaffold runs: ' . trim(explode("\n", $out)[0]));
 ok(is_file($scaffold . '/content/pages/el/home.yml'), 'with a page in the locale directory');
 ok(is_dir($scaffold . '/content/uploads'), 'and an uploads directory inside content/');
@@ -797,9 +807,11 @@ ok(glob($scaffold . '/content/uploads/*') === [], 'nor any of its images');
 contains((string) file_get_contents($scaffold . '/config.php'), 'Πελάτης ΑΕ', 'the site name is substituted');
 contains((string) file_get_contents($scaffold . '/.env.example'), 'SITE_NOINDEX=1',
     'and a new site starts noindexed, because nobody has approved the copy yet');
-contains((string) file_get_contents($scaffold . '/nginx.conf.example'), 'pelatis.gr', 'the nginx example names the domain');
-contains((string) file_get_contents($scaffold . '/nginx.conf.example'), '/var/www/pelatis.gr/current/public',
+contains((string) file_get_contents($scaffold . '/nginx.conf.example'), 'client-site.gr', 'the nginx example names the domain');
+contains((string) file_get_contents($scaffold . '/nginx.conf.example'), '/var/www/client-site.gr/current/public',
     'and its docroot uses the same deploy root as the generated environment');
+contains((string) file_get_contents($scaffold . '/apache.conf.example'), '/var/www/client-site.gr/current/public',
+    'the Apache example is templated with the same domain and deploy root, not left naming the last client');
 contains($out, 'composer install', 'and the next steps say so, since there is no vendor/ yet');
 
 // A real new site runs `composer install` here. Borrowing this one's vendor/ is

@@ -4,7 +4,7 @@
 /**
  * Retry submissions that failed to send. Run from cron every 15 minutes.
  *
- *   0,15,30,45 * * * * cd /var/www/pelatis/current && bin/mail-retry >> /var/log/flatcms-mail.log 2>&1
+ *   0,15,30,45 * * * * cd /var/www/example-domain/current && bin/mail-retry >> /var/log/flatcms-mail.log 2>&1
  *
  * A submission is on disk before anything tries to deliver it, so a mail outage
  * costs the client nothing — but a record that sits there unsent forever is not

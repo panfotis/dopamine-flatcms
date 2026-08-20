@@ -21,4 +21,5 @@ var/submissions/
 # bad. Thirty to eighty images at store_max_edge is 25–100 MB: nothing.
 #
 # This stops being right at a gallery site or past a few hundred MB. That site
-# sets R2_ENABLED=1 and the paths stop being local; see README "The ceiling".
+# sets R2_ENABLED=1 and the paths stop being local; see README "Safety net"
+# and "R2 — media storage".

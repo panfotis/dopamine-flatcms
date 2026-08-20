@@ -58,10 +58,10 @@ $fixture = __DIR__ . '/fixtures/production.env';
 ok(is_file($fixture), 'tests/fixtures/production.env exists');
 
 $env = fixture_env($fixture);
-ok($env['CONTENT_PATH'] === '/var/www/pelatis/shared/content', 'content/ is shared, outside the release directory');
-ok($env['VAR_PATH'] === '/var/www/pelatis/shared/var', 'var/ is shared: cache, locks, submissions never deployed');
+ok($env['CONTENT_PATH'] === '/var/www/example-domain/shared/content', 'content/ is shared, outside the release directory');
+ok($env['VAR_PATH'] === '/var/www/example-domain/shared/var', 'var/ is shared: cache, locks, submissions never deployed');
 ok(str_starts_with($env['UPLOADS_PATH'], $env['CONTENT_PATH']), 'uploads live inside the content repository, not the release');
-ok($env['ROLES_FILE'] === '/var/www/pelatis/shared/roles.yml', 'the roles file is shared state too');
+ok($env['ROLES_FILE'] === '/var/www/example-domain/shared/roles.yml', 'the roles file is shared state too');
 
 // The engine must actually honour them — a fixture nobody reads is a comment.
 $probe = __DIR__ . '/_probe_paths.php';

@@ -29,7 +29,7 @@ fi
 
 remote="${BACKUP_REMOTE:-}"
 php="${PHP_BIN:-php}"
-release="${RELEASE_PATH:-${DEPLOY_ROOT:-/var/www/pelatis}/current}"
+release="${RELEASE_PATH:-${DEPLOY_ROOT:-/var/www/example-domain}/current}"
 alert="${DRILL_ALERT:-}"
 
 [ -n "$remote" ] || { echo "BACKUP_REMOTE is not set" >&2; exit 2; }

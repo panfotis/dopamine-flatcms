@@ -15,6 +15,7 @@
 /content                            export-ignore
 /ddev                               export-ignore
 dopamine-flatcms-*.md               export-ignore
+/apache.conf.example                export-ignore
 /nginx.conf.example                 export-ignore
 /public                             export-ignore
 /skeleton                           export-ignore

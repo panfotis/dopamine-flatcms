@@ -1,0 +1,83 @@
+# An Apache virtual host for a deployed site — nothing in the CMS reads this
+# file. Copy it to /etc/apache2/sites-available/, then edit the certificate
+# path and the php-fpm socket. DDEV writes its own vhost; this is for the
+# server. It is the twin of nginx.conf.example — same layout, same rules,
+# same reasoning (the longer why-comments live there). Requires:
+#   a2enmod ssl remoteip proxy_fcgi headers
+# FallbackResource is core Apache; no rewrite rules are needed.
+<VirtualHost *:443>
+    ServerName example-domain.com
+
+    # current is the atomic release symlink. content/, src/, vendor/ and
+    # config.php sit above its public/ docroot and are never reachable over HTTP.
+    DocumentRoot /var/www/example-domain/current/public
+
+    SSLEngine on
+    SSLCertificateFile    /etc/letsencrypt/live/example-domain.com/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/example-domain.com/privkey.pem
+
+    # The real visitor address, and the reason the contact form's rate limiter
+    # works at all: Apache checks *who it is talking to* before believing
+    # CF-Connecting-IP, so the header cannot be forged by anyone reaching the
+    # origin directly. PHP then sees a REMOTE_ADDR that is already correct.
+    #
+    # Refresh the ranges from cloudflare.com/ips/ on a cron — both families:
+    #   curl -s https://www.cloudflare.com/ips-v4 https://www.cloudflare.com/ips-v6 \
+    #     | sed 's/^/RemoteIPTrustedProxy /' > /etc/apache2/cloudflare-ips.conf
+    RemoteIPHeader CF-Connecting-IP
+    IncludeOptional /etc/apache2/cloudflare-ips.conf
+
+    # Pretty URLs: every path that is not a real file goes to index.php,
+    # which resolves it against content/pages/<locale>/*.yml by slug.
+    FallbackResource /index.php
+
+    # FollowSymLinks is what lets the current -> releases/... switch work.
+    <Directory /var/www/example-domain/current/public>
+        Options FollowSymLinks
+        AllowOverride None
+        Require all granted
+    </Directory>
+
+    <FilesMatch \.php$>
+        SetHandler "proxy:unix:/run/php/php8.4-fpm-example-domain.sock|fcgi://localhost"
+    </FilesMatch>
+
+    # The admin panel. Cloudflare Access sits in front of this path; PHP
+    # verifies the Access JWT so the origin cannot be hit directly.
+    # Never let the panel be cached anywhere.
+    <Files admin.php>
+        Header always set Cache-Control "no-store, private"
+    </Files>
+
+    # Uploads live in the content repository, not under the docroot, so that
+    # one `git clone` of shared/content/ restores the pages *and* the images on
+    # them. Only used when R2_ENABLED=0 — with R2 on, these URLs are absolute
+    # and never reach this server at all.
+    Alias /uploads/ /var/www/example-domain/shared/content/uploads/
+    <Directory /var/www/example-domain/shared/content/uploads/>
+        Require all granted
+        Header set Cache-Control "public, immutable, max-age=2592000"
+        # Uploaded files are never executed, whatever their extension. This is
+        # the reason the directory must not be reachable by any other path.
+        <FilesMatch \.php$>
+            SetHandler none
+            Require all denied
+        </FilesMatch>
+    </Directory>
+
+    # Belt and braces: block dotfiles and any stray YAML under the docroot.
+    <LocationMatch "/\.">
+        Require all denied
+    </LocationMatch>
+    <LocationMatch "\.ya?ml$">
+        Require all denied
+    </LocationMatch>
+
+    # 16m, matching client_max_body_size in the nginx example.
+    LimitRequestBody 16777216
+</VirtualHost>
+
+<VirtualHost *:80>
+    ServerName example-domain.com
+    Redirect permanent / https://example-domain.com/
+</VirtualHost>

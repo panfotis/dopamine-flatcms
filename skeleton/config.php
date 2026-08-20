@@ -65,7 +65,7 @@ if (!function_exists('env_bool')) {
  * releases/<timestamp>/, which holds code + vendor and is disposable. Client
  * state lives outside it and is pointed at by these two variables:
  *
- *   /var/www/pelatis/
+ *   /var/www/example-domain/
  *     current -> releases/20260816-143000/   # code only; switching it is the deploy
  *     shared/content/                        # its own private git repository
  *     shared/var/                            # cache, locks, submissions; never deployed
@@ -178,13 +178,13 @@ $config = [
     ],
 
     'r2' => [
-        // Leave 'enabled' false and uploads go to public/uploads instead.
+        // Leave 'enabled' false and uploads go to content/uploads instead.
         'enabled'     => env_bool('R2_ENABLED'),
         'account_id'  => env('R2_ACCOUNT_ID', ''),
         'access_key'  => env('R2_ACCESS_KEY_ID', ''),
         'secret_key'  => env('R2_SECRET_ACCESS_KEY', ''),
         'bucket'      => env('R2_BUCKET', ''),
-        // Public hostname bound to the bucket, e.g. https://media.pelatis.gr
+        // Public hostname bound to the bucket, e.g. https://media.example-domain.com
         'public_base' => env('R2_PUBLIC_BASE', ''),
         'prefix'      => 'uploads/',
     ],

@@ -204,10 +204,10 @@ $deliverable = new ReflectionMethod(Form::class, 'recipient');
 $deliverable->setAccessible(true);
 $to = static fn (string $value): string => $deliverable->invoke($form, ['recipient' => $value]);
 
-ok($to('lead@pelatis.gr') === 'lead@pelatis.gr', 'one valid address is used');
+ok($to('lead@example-domain.com') === 'lead@example-domain.com', 'one valid address is used');
 // As client-editable text this is a lead redirect; as a comma-separated list it
 // is a lead redirect with a copy left behind so nobody notices.
-ok($to('lead@pelatis.gr, attacker@evil.gr') === '', 'a second address smuggled in with a comma is refused entirely');
+ok($to('lead@example-domain.com, attacker@evil.gr') === '', 'a second address smuggled in with a comma is refused entirely');
 ok($to('not-an-address') === '', 'and so is anything that is not one');
 ok($to('') === '', 'empty falls through to the site default, which is empty on this box');
 
@@ -279,11 +279,11 @@ $asRole = static function (string $email, string $action, array $params = [], st
     )->getStatusCode();
 };
 
-ok($asRole('pelatis@example.gr', 'submissions') === 403, 'an editor cannot list them');
-ok($asRole('dev@example.gr', 'submissions') === 200, 'an admin can');
-ok($asRole('pelatis@example.gr', 'submission_delete', ['month' => '2026-08', 'id' => str_repeat('a', 16)], 'POST') === 403,
+ok($asRole('editor@example-domain.com', 'submissions') === 403, 'an editor cannot list them');
+ok($asRole('admin@example-domain.com', 'submissions') === 200, 'an admin can');
+ok($asRole('editor@example-domain.com', 'submission_delete', ['month' => '2026-08', 'id' => str_repeat('a', 16)], 'POST') === 403,
     'an editor forging a delete is refused before CSRF is even considered');
-ok($asRole('pelatis@example.gr', 'submission_retry', ['month' => '2026-08', 'id' => str_repeat('a', 16)], 'POST') === 403,
+ok($asRole('editor@example-domain.com', 'submission_retry', ['month' => '2026-08', 'id' => str_repeat('a', 16)], 'POST') === 403,
     'and so is a forged retry');
 
 section('Choice inputs: select, radio, checkbox');

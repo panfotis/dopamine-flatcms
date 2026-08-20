@@ -152,10 +152,10 @@ ok((new \Dopamine\FlatCms\Cms($cfgOg))->seo(['title' => 'T', 'slug' => '/x', 'bl
     'while an image on the page beats the site default');
 
 $noindexed = $cms->renderPage(['id' => 'x', 'title' => 'T', 'slug' => '/x', 'blocks' => [], 'seo' => [
-    'noindex' => true, 'canonical' => 'https://pelatis.gr/kanoniko',
+    'noindex' => true, 'canonical' => 'https://example-domain.com/kanoniko',
 ]]);
 contains($noindexed, '<meta name="robots" content="noindex, nofollow">', 'seo.noindex emits the robots meta');
-contains($noindexed, '<link rel="canonical" href="https://pelatis.gr/kanoniko">', 'and a canonical is rendered when set');
+contains($noindexed, '<link rel="canonical" href="https://example-domain.com/kanoniko">', 'and a canonical is rendered when set');
 
 section('/sitemap.xml is generated from the content files');
 $sitemap = $cms->sitemap();

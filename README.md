@@ -47,7 +47,18 @@ unaffected.
 
 - PHP 8.4 with `curl`, `dom`, `exif`, `gd`, `json`, `openssl`
 - A web server pointing at `public/`
-- Optional: a Cloudflare zone, an R2 bucket
+- **Required in production: a Cloudflare zone with Access in front of
+  `/admin.php`.** Access is the entire login system — the panel has no password
+  of its own, and `APP_ENV=prod` refuses to boot with auth off. See
+  [Cloudflare setup](#cloudflare-setup).
+- Strongly recommended: the two cache rules from [4. Cache](#4-cache). The
+  engine is designed for full-page edge caching — every save purges its own
+  tags, so the cache is never stale.
+- Optional: an R2 bucket. Without it uploads land in `content/uploads/` and are
+  committed to git with the rest of the content — deliberate for small sites
+  (immutable hash-named files, one `git clone` restores the site whole). Flip
+  `R2_ENABLED=1` when a site outgrows that (a gallery, or a few hundred MB) —
+  see [Safety net](#safety-net).
 
 ## Engine development (DDEV)
 
@@ -256,7 +267,7 @@ directory holding code and vendor only; everything a client owns lives outside
 it and survives every deploy and every rollback.
 
 ```
-/var/www/pelatis/
+/var/www/example-domain/
 ├── current -> releases/20260816-143000/   ← flipping this is the deploy
 ├── releases/
 │   └── 20260816-143000/    public/ src/ theme/ admin-theme/ vendor/ bin/
@@ -272,8 +283,11 @@ it and survives every deploy and every rollback.
 ```
 
 The vhost docroot is `current/public/`, and `/uploads/` is **aliased** to
-`shared/content/uploads/` — see `nginx.conf.example`. No symlink out of the
-docroot, and stored `src` values stay `/uploads/...` either way.
+`shared/content/uploads/` — see `nginx.conf.example`, or
+`apache.conf.example` for the same vhost on Apache (needs `ssl`, `remoteip`,
+`proxy_fcgi` and `headers` enabled). No symlink out of the docroot, and stored
+`src` values stay `/uploads/...` either way. `bin/new-site` rewrites the domain
+and deploy root in both files, so start from whichever matches your server.
 
 ```bash
 chown -R www-data:www-data shared/content shared/var
@@ -282,7 +296,7 @@ chown -R www-data:www-data shared/content shared/var
 ### One deploy
 
 ```bash
-DEPLOY_ROOT=/var/www/pelatis DEPLOY_REPO=git@github.com:example/pelatis.git \
+DEPLOY_ROOT=/var/www/example-domain DEPLOY_REPO=git@github.com:example/example-domain.git \
   bin/deploy.sh v1.4.0
 ```
 
@@ -331,28 +345,28 @@ stops the deploy instead of the site.
 # Content backup. The recovery point is at most one hour, not "whenever
 # someone remembered". Holds the site-wide content lock, so it can never
 # commit a half-applied save.
-17 * * * *  cd /var/www/pelatis/current && ENV_FILE=/var/www/pelatis/shared/.env \
+17 * * * *  cd /var/www/example-domain/current && ENV_FILE=/var/www/example-domain/shared/.env \
               BACKUP_ALERT='/usr/local/bin/alert' bin/backup
 
 # The drill that makes the backup a backup: clone the remote somewhere else,
 # check every referenced image is in it, run doctor against the result.
 # A green backup cron without this proves a push happened, nothing more.
-40 4 * * 1  cd /var/www/pelatis/current && ENV_FILE=/var/www/pelatis/shared/.env \
-              BACKUP_REMOTE=git@github.com:example/pelatis-content.git \
+40 4 * * 1  cd /var/www/example-domain/current && ENV_FILE=/var/www/example-domain/shared/.env \
+              BACKUP_REMOTE=git@github.com:example/example-domain-content.git \
               DRILL_ALERT='/usr/local/bin/alert' bin/restore-drill
 
 # Disk, derivative-cache growth, permissions, content health.
-*/30 * * * * cd /var/www/pelatis/current && ENV_FILE=/var/www/pelatis/shared/.env \
+*/30 * * * * cd /var/www/example-domain/current && ENV_FILE=/var/www/example-domain/shared/.env \
               bin/doctor --quiet || /usr/local/bin/alert 'doctor failed'
 
 # Public smoke check.
-*/5 * * * *  curl -fsS -o /dev/null https://pelatis.gr/ || /usr/local/bin/alert 'site down'
+*/5 * * * *  curl -fsS -o /dev/null https://example-domain.com/ || /usr/local/bin/alert 'site down'
 ```
 
-Log rotation, `/etc/logrotate.d/pelatis`:
+Log rotation, `/etc/logrotate.d/example-domain`:
 
 ```
-/var/www/pelatis/shared/var/*.log {
+/var/www/example-domain/shared/var/*.log {
     weekly
     rotate 8
     compress
@@ -365,19 +379,19 @@ Log rotation, `/etc/logrotate.d/pelatis`:
 ### A new site
 
 ```bash
-bin/new-site ../pelatis-gr "Πελάτης ΑΕ" pelatis.gr
+bin/new-site ../example-domain-com "Πελάτης ΑΕ" example-domain.com
 ```
 
 Copies code, theme and admin-theme — never content, uploads, revisions or
 secrets. The scaffold starts with `SITE_NOINDEX=1`, because nobody has approved
 the copy yet.
 
-Copy `.env.example` to `/var/www/pelatis/shared/.env`, fill it, make it readable
+Copy `.env.example` to `/var/www/example-domain/shared/.env`, fill it, make it readable
 only by the deploy/PHP-FPM users, and point the FPM pool at that one file
-(`/etc/php/8.4/fpm/pool.d/pelatis.conf`):
+(`/etc/php/8.4/fpm/pool.d/example-domain.conf`):
 
 ```ini
-env[ENV_FILE] = /var/www/pelatis/shared/.env
+env[ENV_FILE] = /var/www/example-domain/shared/.env
 ```
 
 The standard atomic layout also discovers `shared/.env` automatically; the
@@ -395,7 +409,7 @@ for every panel request, regardless of its source address.
 
 Zero Trust → Access → Applications → **Add a self-hosted application**
 
-- Domain: `pelatis.gr`, path `admin.php`
+- Domain: `example-domain.com`, path `admin.php`
 - Policy: Allow → Emails → the client's address, plus yours
 - Login method: One-time PIN
 
@@ -408,7 +422,7 @@ Access. There are no passwords stored anywhere in this codebase.
 
 ### 2. R2 — media storage
 
-Create a bucket, connect a custom domain (`media.pelatis.gr`), then R2 → Manage
+Create a bucket, connect a custom domain (`media.example-domain.com`), then R2 → Manage
 API tokens → create a token with **Object Read & Write** scoped to that bucket.
 
 Zero egress fees, so image-heavy client sites cost nothing to serve. With
@@ -459,7 +473,7 @@ shows a warning, and the page updates when the TTL expires.
 **Headers are not proof that anything is cached.** Cloudflare does not cache
 HTML by default whatever you send, so the zone needs explicit rules:
 
-1. Cache Rules → *Cache public HTML*: `http.host eq "pelatis.gr"` → **Eligible
+1. Cache Rules → *Cache public HTML*: `http.host eq "example-domain.com"` → **Eligible
    for cache**, Edge TTL *Use cache-control header*.
 2. Cache Rules → *Bypass panel and forms*, **above** the rule above:
    `http.request.uri.path eq "/admin.php" or http.response.headers["cache-control"][0]
@@ -468,9 +482,9 @@ HTML by default whatever you send, so the zone needs explicit rules:
 Then verify, twice, rather than trusting the config screen:
 
 ```bash
-curl -sI https://pelatis.gr/          | grep -i cf-cache-status   # want HIT (second request)
-curl -sI https://pelatis.gr/admin.php | grep -i cf-cache-status   # want BYPASS
-curl -sI https://pelatis.gr/epikoinonia | grep -i cf-cache-status # want BYPASS — form page
+curl -sI https://example-domain.com/          | grep -i cf-cache-status   # want HIT (second request)
+curl -sI https://example-domain.com/admin.php | grep -i cf-cache-status   # want BYPASS
+curl -sI https://example-domain.com/epikoinonia | grep -i cf-cache-status # want BYPASS — form page
 ```
 
 A contact page served from a shared cache hands one visitor's CSRF token to the

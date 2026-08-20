@@ -46,6 +46,7 @@
             "/content",
             "/ddev",
             "/dopamine-flatcms-*.md",
+            "/apache.conf.example",
             "/nginx.conf.example",
             "/public",
             "/skeleton",

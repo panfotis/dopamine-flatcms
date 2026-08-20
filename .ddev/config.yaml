@@ -25,7 +25,7 @@ web_environment:
   # contact-form phase onward.
   - MAIL_DSN=smtp://localhost:1025
 
-  # Cloudflare features off locally: uploads fall back to public/uploads,
+  # Cloudflare features off locally: uploads fall back to content/uploads,
   # images are served untransformed, saves skip the purge call.
   - R2_ENABLED=
   - CF_IMAGES_ENABLED=

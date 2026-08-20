@@ -12,7 +12,7 @@
 #
 # Configuration, all with defaults that match plan §3:
 #
-#   DEPLOY_ROOT     /var/www/pelatis
+#   DEPLOY_ROOT     /var/www/example-domain
 #   DEPLOY_REPO     the git remote to fetch from
 #   DEPLOY_KEEP     releases to keep for rollback (default 3)
 #   SMOKE_URL       what the post-switch smoke test requests
@@ -28,7 +28,7 @@
 
 set -euo pipefail
 
-root="${DEPLOY_ROOT:-/var/www/pelatis}"
+root="${DEPLOY_ROOT:-/var/www/example-domain}"
 env_file="${ENV_FILE:-$root/shared/.env}"
 repo="${DEPLOY_REPO:-}"
 keep="${DEPLOY_KEEP:-3}"

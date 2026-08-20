@@ -146,7 +146,7 @@ A client site is `create-project` output in its own git repo. That is not a
 third package; it is just "each site is a repo", which is already true today.
 
 ```
-pelatis-gr/                      ← from create-project, then yours
+example-domain-com/                      ← from create-project, then yours
   composer.json                  → requires dopamine/flatcms
   vendor/dopamine/flatcms/       ← the engine
   components/                    ← this client's own components
@@ -160,7 +160,7 @@ That is the development/source layout. Production uses atomic releases with
 client-owned state outside the release directory:
 
 ```
-/var/www/pelatis/
+/var/www/example-domain/
   current -> releases/20260816-143000/
   releases/<timestamp>/                 # code + vendor; disposable
   shared/content/                       # its own private git repository
@@ -591,7 +591,7 @@ cookie reads that header explicitly; and the session cache limiter is disabled
 ```yaml
 # config/roles.yml — no secrets, safe to commit
 - { email: fotispanokis@gmail.com, role: admin }
-- { email: pelatis@example.gr,  role: editor }
+- { email: editor@example-domain.com,  role: editor }
 ```
 
 An authenticated email absent from `config/roles.yml` receives **403**, not an
@@ -650,7 +650,7 @@ attacker-chosen array keys can't turn a list into a map in the YAML.
 
 ```yaml
 image:
-  src:    https://media.pelatis.gr/uploads/2026/08/team-a1b2c3.jpg
+  src:    https://media.example-domain.com/uploads/2026/08/team-a1b2c3.jpg
   alt:    Η ομάδα μας στο γραφείο
   width:  2400
   height: 1600
