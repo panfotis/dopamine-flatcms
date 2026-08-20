@@ -371,8 +371,10 @@ final class Admin
             // deliberate overwrite rather than a stale one.
             'baseline' => $this->cms->content->baseline($id),
             'user'     => $user,
-            'notice'   => $opts['notice'] ?? null,
-            'warn'     => $opts['warn'] ?? null,
+            // save() and restore() land here via a 303 carrying the flash in
+            // the query string, exactly like the list action reads it.
+            'notice'   => $opts['notice'] ?? $request->query->get('ok'),
+            'warn'     => $opts['warn'] ?? $request->query->get('warn'),
             'conflict' => $opts['conflict'] ?? null,
             // Field name -> message, looked up by the input renderer.
             'errors'   => (array) ($opts['errors'] ?? []),
