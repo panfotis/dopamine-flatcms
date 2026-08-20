@@ -95,7 +95,11 @@ $config = [
     'site' => [
         'name'     => 'My FlatCMS site',
         'locale'   => 'en',
-        'base_url' => env('SITE_BASE_URL', 'http://localhost:8080'),
+        // DDEV sets DDEV_PRIMARY_URL to the project's real URL, so a local site
+        // is correct without anyone pinning a hostname that stops matching the
+        // day the directory is renamed. Production always sets SITE_BASE_URL
+        // and never sees the fallbacks.
+        'base_url' => env('SITE_BASE_URL', env('DDEV_PRIMARY_URL', 'http://localhost:8080')),
 
         // Emits X-Robots-Tag: noindex on every response. For the window between
         // "the domain resolves" and "the client has approved the copy" — which

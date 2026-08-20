@@ -183,6 +183,26 @@ foreach (['', '   '] as $blank) {
 putenv('IMAGE_MAX_UPLOAD');
 putenv('VIDEO_MAX_UPLOAD');
 
+// The skeleton pins neither a DDEV project name nor SITE_BASE_URL, so a second
+// site created from it does not collide with the first. What makes that safe is
+// this fallback: DDEV hands every project its own URL, and img(), the sitemap
+// and every canonical are built from whatever lands here.
+$hadBase = getenv('SITE_BASE_URL');
+putenv('SITE_BASE_URL');
+putenv('DDEV_PRIMARY_URL=https://whatever-they-called-it.ddev.site');
+$local = require $root . '/config.php';
+ok($local['site']['base_url'] === 'https://whatever-they-called-it.ddev.site',
+    'with SITE_BASE_URL unset, the DDEV project URL is used rather than a pinned hostname');
+
+// Production sets SITE_BASE_URL and must never be second-guessed by a stray
+// DDEV variable inherited from a shell.
+putenv('SITE_BASE_URL=https://example-domain.com');
+$prod = require $root . '/config.php';
+ok($prod['site']['base_url'] === 'https://example-domain.com', 'and SITE_BASE_URL still wins when set');
+
+putenv('DDEV_PRIMARY_URL');
+putenv('SITE_BASE_URL' . ($hadBase === false ? '' : '=' . $hadBase));
+
 // ── SEO routes over real HTTP ───────────────────────────────────────────────
 
 section('/sitemap.xml and /robots.txt are served, and tagged for purging');

@@ -1,4 +1,7 @@
-name: dopamine-flatcms-site
+# No `name:` on purpose. DDEV falls back to the directory name, so
+# `composer create-project … my-site` gives a project called my-site at
+# my-site.ddev.site. A name pinned here would put every site a developer
+# creates at the same hostname, and the second one would collide.
 type: php
 docroot: public
 php_version: "8.4"
@@ -17,9 +20,11 @@ web_environment:
   - AUTH_DEV_BYPASS=1
   - AUTH_MODE=cf_access
 
-  # Must match the DDEV URL: img() builds absolute URLs from it when
-  # Cloudflare transformations are on.
-  - SITE_BASE_URL=https://dopamine-flatcms-site.ddev.site
+  # SITE_BASE_URL is deliberately absent: config.php falls back to
+  # DDEV_PRIMARY_URL, which DDEV sets to this project's real URL whatever the
+  # directory is called. Pinning it here would hardcode one hostname into every
+  # site, and img() builds absolute URLs from it — so a wrong value is wrong on
+  # every share card rather than visibly broken.
 
   # Mailpit ships with DDEV — `ddev mailpit` opens the inbox. Used from the
   # contact-form phase onward.
