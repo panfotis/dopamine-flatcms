@@ -163,6 +163,26 @@ foreach (['0', 'false', 'off', ''] as $off) {
 }
 putenv('SITE_NOINDEX');
 
+// The upload ceilings are the one pair of limits a site may need to move
+// without a code deploy, so they read from the environment like every other
+// per-site setting — with the committed default as the fallback.
+putenv('IMAGE_MAX_UPLOAD=' . (20 * 1024 * 1024));
+putenv('VIDEO_MAX_UPLOAD=' . (15 * 1024 * 1024));
+$raised = require $root . '/config.php';
+ok($raised['images']['max_upload'] === 20 * 1024 * 1024, 'IMAGE_MAX_UPLOAD raises the image ceiling');
+ok($raised['video']['max_upload'] === 15 * 1024 * 1024, 'VIDEO_MAX_UPLOAD raises the video ceiling');
+
+// Empty is the dangerous one: (int) "" is 0, and a ceiling of zero refuses
+// every upload the client attempts, with nothing in the panel to explain why.
+foreach (['', '   '] as $blank) {
+    putenv('IMAGE_MAX_UPLOAD=' . $blank);
+    $c = require $root . '/config.php';
+    ok($c['images']['max_upload'] === 12 * 1024 * 1024,
+        'a blank IMAGE_MAX_UPLOAD falls back to the default rather than refusing every upload');
+}
+putenv('IMAGE_MAX_UPLOAD');
+putenv('VIDEO_MAX_UPLOAD');
+
 // ── SEO routes over real HTTP ───────────────────────────────────────────────
 
 section('/sitemap.xml and /robots.txt are served, and tagged for purging');

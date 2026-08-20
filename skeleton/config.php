@@ -58,6 +58,18 @@ if (!function_exists('env_bool')) {
 
         return in_array(strtolower(trim($v)), ['1', 'true', 'yes', 'on'], true);
     }
+
+    /**
+     * A byte size from the environment. Same reason as env_bool: getenv()
+     * hands back strings, and (int) "" is 0 — a limit of zero would refuse
+     * every upload rather than fall back to the default.
+     */
+    function env_int(string $key, int $default): int
+    {
+        $v = getenv($key);
+
+        return $v === false || trim($v) === '' ? $default : (int) $v;
+    }
 }
 
 /**
@@ -195,7 +207,7 @@ $config = [
         // proxied through Cloudflare with Image Resizing enabled.
         'transform'   => env_bool('CF_IMAGES_ENABLED'),
         'quality'     => 82,
-        'max_upload'  => 12 * 1024 * 1024, // 12 MB
+        'max_upload'  => env_int('IMAGE_MAX_UPLOAD', 12 * 1024 * 1024), // 12 MB
         // AVIF is refused on the way in as well as on the way out: GD's support
         // for it is build-dependent, and a prototype that "accepted" one could
         // write JPEG bytes under an .avif name while downscaling.
@@ -334,7 +346,7 @@ $config = [
      * longer belongs on YouTube, which is what `video_embed` is for.
      */
     'video' => [
-        'max_upload' => 10 * 1024 * 1024, // 10 MB, hard
+        'max_upload' => env_int('VIDEO_MAX_UPLOAD', 10 * 1024 * 1024), // 10 MB
     ],
 
     // Where an image `src` is allowed to point. Anything else is rejected on
