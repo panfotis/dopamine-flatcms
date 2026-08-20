@@ -108,12 +108,18 @@ the package repositories.
 ## Create a site
 
 ```bash
-composer create-project dopamine/flatcms-skeleton my-site
+composer create-project dopamine/flatcms-skeleton my-site --no-install --ignore-platform-req=php
 cd my-site
 cp .env.example .env
 ddev start
 ddev launch /admin.php
 ```
+
+`--no-install` skips the host-side install — DDEV's post-start hook runs
+`composer install` inside the container, where PHP 8.4 and every required
+extension exist. `--ignore-platform-req=php` lets `create-project` download
+the skeleton even when the host PHP is older than 8.4; nothing runs on the
+host, so the host version never matters.
 
 The engine is installed at `vendor/dopamine/flatcms`; the site owns only its
 config, content, public entrypoints, layout, and optional overrides. See

@@ -3,12 +3,16 @@
 Create a site, start DDEV, and open the panel:
 
 ```bash
-composer create-project dopamine/flatcms-skeleton my-site
+composer create-project dopamine/flatcms-skeleton my-site --no-install --ignore-platform-req=php
 cd my-site
 cp .env.example .env
 ddev start
 ddev launch /admin.php
 ```
+
+`--no-install` and `--ignore-platform-req=php` keep the host PHP out of the
+picture: DDEV's post-start hook runs `composer install` inside the container,
+where PHP 8.4 and all required extensions exist.
 
 The engine lives in `vendor/dopamine/flatcms`. Site-owned files live here:
 
