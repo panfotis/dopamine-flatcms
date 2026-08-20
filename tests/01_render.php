@@ -65,7 +65,7 @@ contains($html, '<meta name="description" content="Δείγμα σελίδας �
 contains($html, '<meta property="og:title" content="Αρχική">', 'og:title uses the same resolved title');
 contains($html, '<meta property="og:url" content="' . $base . '/">', 'og:url is absolute, since a scraper does not resolve a relative one');
 missing($html, '<meta name="robots"', 'a page that is not noindex says nothing about robots');
-missing($html, 'rel="canonical"', 'nor claims a canonical it does not have');
+contains($html, '<link rel="canonical" href="' . $base . '/">', 'and a self-referencing canonical, so ?fbclid= variants collapse to the real URL');
 // home.yml's hero image is the first image on the page, so og:image is filled
 // in from it rather than being absent.
 contains($html, '<meta property="og:image"', 'og:image is filled in from the page itself');
@@ -74,7 +74,15 @@ missing($html, 'og:image:alt', 'with no og:image:alt — the share image is deco
 // The keys a template may ask for are the schema's, whatever is in the file.
 $stray = $cms->seo(['title' => 'T', 'slug' => '/x', 'seo' => ['description' => 'D', 'evil' => 'x']]);
 ok(!array_key_exists('evil', $stray), 'a key the file carries but Fields::SEO does not is never exposed as page.seo.*');
-ok($stray['noindex'] === false && $stray['canonical'] === '', 'while every declared key is present, defaulted');
+ok($stray['noindex'] === false && $stray['canonical'] === $base . '/x', 'while every declared key is present, defaulted — canonical to the page\'s own URL');
+
+// The URL a request should be served at: no trailing slash, except a locale
+// root. This is what the front controller 301s to.
+ok($cms->canonicalPath('/about/') === '/about', 'canonicalPath strips a trailing slash');
+ok($cms->canonicalPath('/about') === '/about', 'and leaves the canonical form alone');
+ok($cms->canonicalPath('/') === '/', 'the site root keeps its slash');
+ok($cms->canonicalPath('/en') === '/en/', 'a bare locale prefix gains one — /en/ is the English home');
+ok($cms->canonicalPath('/en/about/') === '/en/about', 'and a locale page loses one');
 
 // og_image is a map now, not a string, and it must leave here absolute.
 $withOg = $cms->seo(['title' => 'T', 'slug' => '/x', 'seo' => [

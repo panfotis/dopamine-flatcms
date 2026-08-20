@@ -277,6 +277,19 @@ final class Cms
      *
      * @return array{0: string, 1: string}
      */
+    /**
+     * The one URL a path should be served at: no trailing slash, except a
+     * locale root — exactly the form localeUrl() generates in menus and the
+     * sitemap. `/about/` → `/about`, `/el` → `/el/`. The front controller
+     * 301s anything that differs, so a page never renders at two addresses.
+     */
+    public function canonicalPath(string $path): string
+    {
+        [$locale, $rest] = $this->localeOf($path);
+
+        return $this->localeUrl(rtrim($rest, '/') ?: '/', $locale);
+    }
+
     public function localeOf(string $path): array
     {
         $path = '/' . ltrim($path, '/');
@@ -857,6 +870,11 @@ final class Cms
         ];
 
         $seo['url'] = $base . $this->localeUrl((string) ($page['slug'] ?? '/'));
+
+        // Self-referencing by default: ?fbclid= and friends make every shared
+        // URL a duplicate, and this is the tag that collapses them. The admin
+        // field stays an override for the rare page whose real home is elsewhere.
+        $seo['canonical'] = $seo['canonical'] ?: $seo['url'];
 
         return $seo;
     }

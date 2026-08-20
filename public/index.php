@@ -40,6 +40,21 @@ if ($feed !== null) {
     [$locale, $path] = $cms->localeOf($slug);
     $cms->useLocale($locale);
 
+    // One URL per page: /about/ 301s to /about before anything renders, so
+    // the slash variant never exists as a duplicate. GET/HEAD only — a 301
+    // would turn a POSTed form into a GET and drop the submission.
+    $canonical = $cms->canonicalPath($slug);
+    if ($slug !== $canonical && $request->isMethodSafe()) {
+        $qs = $request->getQueryString();
+        (new RedirectResponse(
+            $canonical . ($qs === null ? '' : '?' . $qs),
+            301,
+            ['Cache-Control' => 'public, max-age=3600']
+        ))->send();
+
+        exit;
+    }
+
     $page = $cms->content->findBySlug($path);
 
     // No translation at this address. `fallback: default` serves the default
