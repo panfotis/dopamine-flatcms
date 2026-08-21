@@ -271,7 +271,7 @@ file_put_contents($lockedPage, \Symfony\Component\Yaml\Yaml::dump([
 
 $lockedCfg = require dirname(__DIR__) . '/config.php';
 // First theme layer wins, exactly as a site overrides a starter component.
-$lockedCfg['paths']['theme'] = [$fixtureDir, $lockedCfg['paths']['theme']];
+$lockedCfg['paths']['theme'] = array_merge([$fixtureDir], (array) $lockedCfg['paths']['theme']);
 $lockedForm = (string) admin_get(['action' => 'edit', 'page' => 'tmp-locked-rows'], $lockedCfg)->getContent();
 
 contains($lockedForm, 'name="blocks[lr][rows][0][label]"', 'the editable field in the row renders');

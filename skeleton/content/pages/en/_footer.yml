@@ -2,7 +2,6 @@ title: Footer
 blocks:
   -
     id: footer
-    type: site_footer
+    type: demo_footer
     fields:
-      note: ''
-      links: []
+      note: Dopamine FlatCMS — flat-file CMS for small client sites.

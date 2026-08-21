@@ -1,0 +1,801 @@
+{
+  "version": "2.17",
+  "children": [
+    {
+      "type": "frame",
+      "id": "Ctf40",
+      "x": 0,
+      "y": 0,
+      "name": "First Run",
+      "clip": true,
+      "width": 1440,
+      "fill": "$paper",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "s0htE",
+          "name": "demo_header",
+          "width": "fill_container",
+          "fill": "$ink",
+          "padding": [
+            20,
+            48
+          ],
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "Wz9xO",
+              "name": "Brand",
+              "fill": "#FFFFFF",
+              "content": "DOPAMINE FLATCMS",
+              "fontFamily": "$font-display",
+              "fontSize": 16,
+              "fontWeight": "800",
+              "letterSpacing": 1
+            },
+            {
+              "type": "frame",
+              "id": "Q15xz",
+              "name": "Install chip",
+              "fill": "$lime",
+              "cornerRadius": 999,
+              "padding": [
+                6,
+                14
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "coman",
+                  "name": "Install chip label",
+                  "fill": "$ink",
+                  "content": "FRESH INSTALL",
+                  "fontFamily": "$font-mono",
+                  "fontSize": 11,
+                  "fontWeight": "500",
+                  "letterSpacing": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "fCFEk",
+          "name": "Hero",
+          "width": "fill_container",
+          "fill": "$lime",
+          "layout": "vertical",
+          "gap": 28,
+          "padding": [
+            88,
+            48
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "c6aTh",
+              "name": "H1",
+              "fill": "$ink",
+              "content": "YOU'RE LIVE.",
+              "lineHeight": 1,
+              "fontFamily": "$font-display",
+              "fontSize": 92,
+              "fontWeight": "900",
+              "letterSpacing": -2
+            },
+            {
+              "type": "frame",
+              "id": "tiWPV",
+              "name": "Tagline highlight",
+              "fill": "$ink",
+              "padding": [
+                4,
+                14
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "w1hFE",
+                  "name": "Tagline",
+                  "fill": "$lime",
+                  "content": "NOW MAKE IT YOURS.",
+                  "fontFamily": "$font-display",
+                  "fontSize": 38,
+                  "fontWeight": "900",
+                  "letterSpacing": 0.5
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "EjEts",
+              "name": "Lede",
+              "fill": "$ink",
+              "textGrowth": "fixed-width",
+              "width": 760,
+              "content": "This page is a component — a folder holding a schema and a template. Nothing here is special-cased, and everything on it is editable in the panel.",
+              "lineHeight": 1.5,
+              "fontFamily": "$font-body",
+              "fontSize": 18,
+              "fontWeight": "500"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "YdnaH",
+          "name": "demo_home_content",
+          "width": "fill_container",
+          "fill": "$paper",
+          "layout": "vertical",
+          "gap": 88,
+          "padding": [
+            72,
+            48
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "N1SCi",
+              "name": "Start here card",
+              "width": "fill_container",
+              "fill": "$paper",
+              "cornerRadius": 14,
+              "stroke": "$ink",
+              "strokeWidth": 2,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0D0D0D",
+                "offset": {
+                  "x": 5,
+                  "y": 5
+                }
+              },
+              "gap": 48,
+              "padding": [
+                40,
+                44
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "RS5Nl",
+                  "name": "Card copy",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 16,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Fbl2C",
+                      "name": "Start chip",
+                      "fill": "$lime",
+                      "cornerRadius": 999,
+                      "stroke": "$ink",
+                      "strokeWidth": 1.5,
+                      "padding": [
+                        6,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "BCEkK",
+                          "name": "Start chip label",
+                          "fill": "$ink",
+                          "content": "START HERE",
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "500",
+                          "letterSpacing": 1
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "pH67y",
+                      "name": "Card heading",
+                      "fill": "$ink",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Change the headline above",
+                      "lineHeight": 1.1,
+                      "fontFamily": "$font-display",
+                      "fontSize": 40,
+                      "fontWeight": "900",
+                      "letterSpacing": -1
+                    },
+                    {
+                      "type": "text",
+                      "id": "oqREX",
+                      "name": "Card body",
+                      "fill": "$muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "The headline above is a text field on this component, not markup. Open the panel, type something else, save — and it changes. That is the whole editing model, and the panel your client gets is this one.",
+                      "lineHeight": 1.6,
+                      "fontFamily": "$font-body",
+                      "fontSize": 16,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "qsBBP",
+                  "name": "Card action",
+                  "fill": "$lime",
+                  "cornerRadius": 14,
+                  "stroke": "$ink",
+                  "strokeWidth": 2,
+                  "effect": {
+                    "type": "shadow",
+                    "shadowType": "outer",
+                    "color": "#0D0D0D",
+                    "offset": {
+                      "x": 5,
+                      "y": 5
+                    }
+                  },
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": [
+                    26,
+                    28
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "D82Qa",
+                      "name": "Action label",
+                      "fill": "$ink",
+                      "content": "OPEN THE PANEL",
+                      "fontFamily": "$font-display",
+                      "fontSize": 14,
+                      "fontWeight": "800",
+                      "letterSpacing": 1.4
+                    },
+                    {
+                      "type": "frame",
+                      "id": "A5CwEL",
+                      "name": "Path bar",
+                      "fill": "$ink",
+                      "cornerRadius": 4,
+                      "stroke": "$ink",
+                      "strokeWidth": 1.5,
+                      "padding": [
+                        11,
+                        16
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "YUWMh",
+                          "name": "Path",
+                          "fill": "$lime",
+                          "content": "/admin.php",
+                          "fontFamily": "$font-mono",
+                          "fontSize": 15,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "NvIwD",
+                      "name": "Action note",
+                      "fill": "$ink",
+                      "content": "No login needed locally.",
+                      "fontFamily": "$font-body",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "qxOnC",
+              "name": "Steps",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 28,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "liI7V",
+                  "name": "Steps head",
+                  "width": "fill_container",
+                  "gap": 20,
+                  "justifyContent": "space_between",
+                  "alignItems": "end",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "ed5HG",
+                      "name": "Steps heading stack",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "c0FLN",
+                          "name": "Steps heading",
+                          "fill": "$ink",
+                          "content": "THREE THINGS",
+                          "fontFamily": "$font-display",
+                          "fontSize": 40,
+                          "fontWeight": "900"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "AokYb",
+                          "name": "Steps highlight",
+                          "fill": "$lime",
+                          "padding": [
+                            2,
+                            12
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Cuzax",
+                              "name": "Steps heading 2",
+                              "fill": "$ink",
+                              "content": "WORTH DOING.",
+                              "fontFamily": "$font-display",
+                              "fontSize": 40,
+                              "fontWeight": "900"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "E1Mz3",
+                      "name": "Steps counter",
+                      "fill": "$lilac",
+                      "cornerRadius": 999,
+                      "stroke": "$ink",
+                      "strokeWidth": 1.5,
+                      "padding": [
+                        6,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "x4u2t",
+                          "name": "Counter label",
+                          "fill": "$ink",
+                          "content": "03 STEPS / 00 CONFIG",
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal",
+                          "letterSpacing": 1
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "m0gFU",
+                  "name": "Steps grid",
+                  "width": "fill_container",
+                  "gap": 20,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "d5jYD",
+                      "name": "GET A STARTER THEME",
+                      "width": "fill_container",
+                      "height": 201,
+                      "fill": "$sky",
+                      "cornerRadius": 14,
+                      "stroke": "$ink",
+                      "strokeWidth": 2,
+                      "effect": {
+                        "type": "shadow",
+                        "shadowType": "outer",
+                        "color": "#0D0D0D",
+                        "offset": {
+                          "x": 5,
+                          "y": 5
+                        }
+                      },
+                      "layout": "vertical",
+                      "gap": 14,
+                      "padding": [
+                        28,
+                        26
+                      ],
+                      "justifyContent": "space_between",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "NpbvK",
+                          "name": "Card top",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "OyNkz",
+                              "name": "Title",
+                              "fill": "$ink",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "GET A STARTER THEME",
+                              "fontFamily": "$font-display",
+                              "fontSize": 19,
+                              "fontWeight": "800",
+                              "letterSpacing": 0.8
+                            },
+                            {
+                              "type": "text",
+                              "id": "Ec7Y4",
+                              "name": "Copy",
+                              "fill": "$ink",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "This one is a placeholder. The demo theme is a full starting point — twelve styled components and bilingual content.",
+                              "lineHeight": 1.55,
+                              "fontFamily": "$font-body",
+                              "fontSize": 13.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "yzFbL",
+                          "name": "Code",
+                          "width": "fill_container",
+                          "fill": "$ink",
+                          "cornerRadius": 4,
+                          "stroke": "$ink",
+                          "strokeWidth": 1.5,
+                          "padding": [
+                            9,
+                            12
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "s3K7VW",
+                              "name": "Code text",
+                              "fill": "#FFFFFF",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "git clone …/flatcms-theme-demo theme",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "500"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "YVLJH",
+                      "name": "ADD A COMPONENT",
+                      "width": "fill_container",
+                      "height": 201,
+                      "fill": "$peach",
+                      "cornerRadius": 14,
+                      "stroke": "$ink",
+                      "strokeWidth": 2,
+                      "effect": {
+                        "type": "shadow",
+                        "shadowType": "outer",
+                        "color": "#0D0D0D",
+                        "offset": {
+                          "x": 5,
+                          "y": 5
+                        }
+                      },
+                      "layout": "vertical",
+                      "gap": 14,
+                      "padding": [
+                        28,
+                        26
+                      ],
+                      "justifyContent": "space_between",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "G84f4",
+                          "name": "Card top",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "GB4u6",
+                              "name": "Title",
+                              "fill": "$ink",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "ADD A COMPONENT",
+                              "fontFamily": "$font-display",
+                              "fontSize": 19,
+                              "fontWeight": "800",
+                              "letterSpacing": 0.8
+                            },
+                            {
+                              "type": "text",
+                              "id": "dnX8N",
+                              "name": "Copy",
+                              "fill": "$ink",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Two files — schema.yml and a .twig beside it. The panel reads the schema and builds its own form.",
+                              "lineHeight": 1.55,
+                              "fontFamily": "$font-body",
+                              "fontSize": 13.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "x6O8e",
+                          "name": "Code",
+                          "width": "fill_container",
+                          "fill": "$ink",
+                          "cornerRadius": 4,
+                          "stroke": "$ink",
+                          "strokeWidth": 1.5,
+                          "padding": [
+                            9,
+                            12
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "V7gay",
+                              "name": "Code text",
+                              "fill": "#FFFFFF",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "theme/components/<name>/",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "500"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "RC6Lo",
+                      "name": "READ THE DOCS",
+                      "width": "fill_container",
+                      "height": 201,
+                      "fill": "$lilac",
+                      "cornerRadius": 14,
+                      "stroke": "$ink",
+                      "strokeWidth": 2,
+                      "effect": {
+                        "type": "shadow",
+                        "shadowType": "outer",
+                        "color": "#0D0D0D",
+                        "offset": {
+                          "x": 5,
+                          "y": 5
+                        }
+                      },
+                      "layout": "vertical",
+                      "gap": 14,
+                      "padding": [
+                        28,
+                        26
+                      ],
+                      "justifyContent": "space_between",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "wEbld",
+                          "name": "Card top",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "gsK03",
+                              "name": "Title",
+                              "fill": "$ink",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "READ THE DOCS",
+                              "fontFamily": "$font-display",
+                              "fontSize": 19,
+                              "fontWeight": "800",
+                              "letterSpacing": 0.8
+                            },
+                            {
+                              "type": "text",
+                              "id": "Er5ir",
+                              "name": "Copy",
+                              "fill": "$ink",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Cloudflare Access as the login, R2 for media, edge caching, deploys and backups. Already on this disk — no network needed.",
+                              "lineHeight": 1.55,
+                              "fontFamily": "$font-body",
+                              "fontSize": 13.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "XWh6m",
+                          "name": "Code",
+                          "width": "fill_container",
+                          "fill": "$ink",
+                          "cornerRadius": 4,
+                          "stroke": "$ink",
+                          "strokeWidth": 1.5,
+                          "padding": [
+                            9,
+                            12
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Q6n1EG",
+                              "name": "Code text",
+                              "fill": "#FFFFFF",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "vendor/dopamine/flatcms/README.md",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "500"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "SqizZ",
+          "name": "demo_footer",
+          "width": "fill_container",
+          "fill": "$ink",
+          "padding": [
+            28,
+            48
+          ],
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "C3GZF",
+              "name": "Copyright",
+              "fill": "#B9BEC5",
+              "content": "Dopamine FlatCMS — flat-file CMS for small client sites.",
+              "fontFamily": "$font-body",
+              "fontSize": 12,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "XzIWX",
+              "name": "Foot links",
+              "gap": 20,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "SwerC",
+                  "name": "Link GITHUB",
+                  "fill": "$lime",
+                  "content": "GITHUB",
+                  "fontFamily": "$font-body",
+                  "fontSize": 11,
+                  "fontWeight": "700",
+                  "letterSpacing": 1.2
+                },
+                {
+                  "type": "text",
+                  "id": "tkQk5",
+                  "name": "Link PACKAGIST",
+                  "fill": "$lime",
+                  "content": "PACKAGIST",
+                  "fontFamily": "$font-body",
+                  "fontSize": 11,
+                  "fontWeight": "700",
+                  "letterSpacing": 1.2
+                },
+                {
+                  "type": "text",
+                  "id": "QoXx7",
+                  "name": "Link DEMO THEME",
+                  "fill": "$lime",
+                  "content": "DEMO THEME",
+                  "fontFamily": "$font-body",
+                  "fontSize": 11,
+                  "fontWeight": "700",
+                  "letterSpacing": 1.2
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variables": {
+    "ink": {
+      "type": "color",
+      "value": "#0D0D0D"
+    },
+    "paper": {
+      "type": "color",
+      "value": "#FFFFFF"
+    },
+    "lime": {
+      "type": "color",
+      "value": "#C8F04F"
+    },
+    "muted": {
+      "type": "color",
+      "value": "#4A4F57"
+    },
+    "sky": {
+      "type": "color",
+      "value": "#A8DCF5"
+    },
+    "peach": {
+      "type": "color",
+      "value": "#F8C471"
+    },
+    "lilac": {
+      "type": "color",
+      "value": "#C9B8F0"
+    },
+    "lemon": {
+      "type": "color",
+      "value": "#F7DC4E"
+    },
+    "mint": {
+      "type": "color",
+      "value": "#7DE8C3"
+    },
+    "font-display": {
+      "type": "string",
+      "value": "Archivo"
+    },
+    "font-body": {
+      "type": "string",
+      "value": "Inter"
+    },
+    "font-mono": {
+      "type": "string",
+      "value": "JetBrains Mono"
+    }
+  },
+  "fileToken": "ac37e757-29fc-4de4-a654-0a41907f2d39"
+}

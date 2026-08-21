@@ -1,0 +1,71 @@
+{# Component: demo_home_content — the package theme's first-run page.
+
+   This is a placeholder, and it says so. Its job is to prove the install works
+   and then point at the three things worth doing next; a site that still shows
+   it has not been built yet.
+
+   Only heading/tagline/lede are fields. The card below deliberately names the
+   heading rather than quoting it: quoting the current text would make the
+   instruction false the moment somebody follows it. #}
+<section class="demo-hero">
+  <div class="wrap">
+    <h1>{{ fields.heading }}</h1>
+    {% if fields.tagline %}<p class="demo-tagline"><span>{{ fields.tagline }}</span></p>{% endif %}
+    {% if fields.lede %}<p class="demo-lede">{{ fields.lede|nl2br }}</p>{% endif %}
+  </div>
+</section>
+
+<section class="demo-body">
+  <div class="wrap">
+    <div class="demo-card demo-start">
+      <div class="demo-start-copy">
+        <p class="demo-chip">Start here</p>
+        <h2>Change the heading above</h2>
+        <p>The heading above is a text field on this component, not markup. Open
+           the panel, type something else, save — and it changes. That is the whole
+           editing model, and the panel your client gets is this one.</p>
+      </div>
+      {# No login locally: the skeleton's .ddev/config.yaml sets
+         AUTH_DEV_BYPASS=1, so the panel just opens. Cloudflare Access is a
+         deploy-time concern and belongs in the docs card below, not here
+         gating the first thing the page asks anyone to do. #}
+      <aside class="demo-action">
+        <p class="demo-action-label">Open the panel</p>
+        <p class="demo-path"><code>/admin.php</code></p>
+        <p class="demo-action-note">No login needed locally.</p>
+      </aside>
+    </div>
+
+    <div class="demo-steps">
+      <h2 class="demo-steps-head">Three things <span>worth doing.</span></h2>
+      <ul class="demo-grid">
+        <li class="demo-card demo-step demo-step-1">
+          <div>
+            <h3>Get a starter theme</h3>
+            <p>This one is a placeholder. The demo theme is a full starting point
+               — twelve styled components and bilingual content.</p>
+          </div>
+          <p class="demo-code"><code>git clone …/flatcms-theme-demo theme</code></p>
+        </li>
+        <li class="demo-card demo-step demo-step-2">
+          <div>
+            <h3>Add a component</h3>
+            <p>Two files — a schema and a template beside it. The panel reads the
+               schema and builds its own form.</p>
+          </div>
+          <p class="demo-code"><code>theme/components/&lt;name&gt;/</code></p>
+        </li>
+        <li class="demo-card demo-step demo-step-3">
+          <div>
+            <h3>Read the docs</h3>
+            {# The engine README ships inside every install, so this points at a
+               path rather than a URL: version-matched, offline, cannot rot. #}
+            <p>Cloudflare Access as the login, R2 for media, edge caching, deploys
+               and backups. Already on this disk — no network needed.</p>
+          </div>
+          <p class="demo-code"><code>vendor/dopamine/flatcms/README.md</code></p>
+        </li>
+      </ul>
+    </div>
+  </div>
+</section>

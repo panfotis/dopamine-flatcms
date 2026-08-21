@@ -1,0 +1,12 @@
+.demo-head{background:var(--ink);padding:20px 0}
+.demo-head .wrap{display:flex;align-items:center;justify-content:space-between;gap:20px}
+.demo-brand{color:var(--paper);text-decoration:none;font-family:var(--font-display);
+  font-weight:800;font-size:1rem;letter-spacing:.0625em;text-transform:uppercase}
+.demo-brand img{max-height:32px;width:auto}
+.demo-nav{display:flex;gap:28px;flex-wrap:wrap}
+.demo-nav a{color:var(--paper);text-decoration:none;font-weight:700;font-size:.75rem;
+  letter-spacing:.1em;text-transform:uppercase}
+.demo-nav a[aria-current="page"]{color:var(--lime)}
+.demo-install-chip{margin:0;background:var(--lime);color:var(--ink);border-radius:999px;
+  padding:6px 14px;font-family:var(--font-mono);font-size:.6875rem;font-weight:500;
+  letter-spacing:.09em;text-transform:uppercase}

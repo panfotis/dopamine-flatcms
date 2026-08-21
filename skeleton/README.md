@@ -23,10 +23,16 @@ The engine lives in `vendor/dopamine/flatcms`. Site-owned files live here:
 - `content/` contains pages, globals, revisions, and uploads.
 - `config.php` and `.env` configure this installation.
 
-Styling ladder, cheapest first: add rules to `theme/assets/css/site.css`
-(emitted last, wins the cascade) → copy a component's `.css` beside your own
-copy of its folder → copy the whole component folder. Each step up costs you
-a file that never receives an engine update again.
+A new site opens on the engine theme's **first-run page** — a placeholder that
+says where you are and points at the docs. Replace it: clone the
+[demo theme](https://github.com/panfotis/flatcms-theme-demo) over `theme/`, or
+write your own components here. Once you do, every component on the site is
+yours outright and there is nothing in `vendor/` left to override.
+
+Styling, cheapest first: add rules to `theme/assets/css/site.css` (emitted last,
+wins the cascade) → edit the component's own `.css`, which sits beside its
+template → change the template. Nothing here receives engine updates, because
+nothing here comes from the engine.
 
 Never edit files in `vendor/`; Composer updates replace them.
 

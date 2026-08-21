@@ -1,0 +1,10 @@
+label: Footer
+description: The bottom bar on every page. A placeholder — replace it.
+
+fields:
+  note:
+    type: text
+    label: Footer line
+    max: 120
+    hint: Left-hand text. The links beside it are part of the theme.
+    default: Dopamine FlatCMS — flat-file CMS for small client sites.

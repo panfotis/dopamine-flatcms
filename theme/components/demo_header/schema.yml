@@ -1,0 +1,19 @@
+label: Header
+description: The brand line at the top of every page. A placeholder — replace it.
+
+fields:
+  logo:
+    type: image
+    label: Logo
+    hint: Empty = the site name is shown as text.
+
+  # Read aloud by a screen reader to tell the two navigations apart, so it has
+  # to be in the language of the page — and _header.yml is per language, which
+  # makes that free. Not client-editable: it is a developer's decision, and
+  # changing it silently breaks a page nobody sighted would notice.
+  nav_label:
+    type: text
+    label: Menu label (screen reader)
+    editable: false
+    max: 40
+    default: Main navigation

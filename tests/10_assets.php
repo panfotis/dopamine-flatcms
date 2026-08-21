@@ -83,7 +83,7 @@ file_put_contents($siteDir . '/components/plain/schema.yml', "label: Plain\nfiel
 file_put_contents($siteDir . '/components/plain/plain.twig', '<p class="plain">{{ fields.text }}</p>');
 
 $cfg = require dirname(__DIR__) . '/config.php';
-$cfg['paths']['theme'] = [$siteDir, $cfg['paths']['theme']];
+$cfg['paths']['theme'] = array_merge([$siteDir], (array) $cfg['paths']['theme']);
 $layered = new Cms($cfg);
 
 $html = $layered->renderPage(['id' => 'b1', 'title' => 'B', 'slug' => '/b1', 'blocks' => [
@@ -129,7 +129,7 @@ register_shutdown_function(static function () use ($evilDir): void {
 file_put_contents($evilDir . '/theme.yml', "css:\n  - ../" . basename($secret) . "\n");
 
 $evilCfg = require dirname(__DIR__) . '/config.php';
-$evilCfg['paths']['theme'] = [$evilDir, $evilCfg['paths']['theme']];
+$evilCfg['paths']['theme'] = array_merge([$evilDir], (array) $evilCfg['paths']['theme']);
 $evil = new Cms($evilCfg);
 $html = $evil->renderPage(['id' => 'c1', 'title' => 'C', 'slug' => '/c1', 'blocks' => []]);
 missing($html, 'TOPSECRET-DO-NOT-INLINE', 'a ../ entry is rejected, not inlined into a public page');

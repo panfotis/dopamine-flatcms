@@ -1,0 +1,7 @@
+.demo-foot{background:var(--ink);padding:28px 0}
+.demo-foot .wrap{display:flex;align-items:center;justify-content:space-between;gap:20px;
+  flex-wrap:wrap}
+.demo-foot-note{margin:0;color:#b9bec5;font-size:.75rem}
+.demo-foot-links{display:flex;gap:20px;flex-wrap:wrap}
+.demo-foot-links a{color:var(--lime);text-decoration:none;font-weight:700;font-size:.6875rem;
+  letter-spacing:.1em;text-transform:uppercase}

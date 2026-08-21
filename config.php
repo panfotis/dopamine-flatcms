@@ -147,7 +147,13 @@ $config = [
         'lang'       => __DIR__ . '/lang',
         // One folder per layer: the site's theme over the engine's. This repo
         // is the engine plus its own demo site, so a single root each.
-        'theme'       => __DIR__ . '/theme',
+        // Two roots, and this file never ships — it is export-ignored, the
+        // engine's development config. theme/ is the first-run placeholder the
+        // package actually distributes; tests/fixtures/theme holds the nine
+        // components the suite attacks and the dev site renders. Keeping them
+        // apart is why the shipped theme can be three components without
+        // costing the suite a single hostile-input case.
+        'theme'       => [__DIR__ . '/theme', __DIR__ . '/tests/fixtures/theme'],
         'admin_theme' => __DIR__ . '/admin-theme',
         'cache'      => $varPath . '/cache',
         // Inside content/, not under the docroot: uploads are client-owned

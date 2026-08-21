@@ -1,4 +1,7 @@
 # Structure is developer-owned; values are edited at /admin.php.
+#
+# This is the first-run page. Replace it — and the demo_* components it uses —
+# once the site has real content.
 title: Home
 slug: /
 nav:
@@ -6,16 +9,9 @@ nav:
   order: 10
 blocks:
   -
-    id: hero
-    type: hero
+    id: welcome
+    type: demo_home_content
     fields:
-      heading: Your small site, ready to edit
-      subheading: Flat files, responsive images, revisions, and a locked component structure.
-      image:
-        src: ''
-        alt: ''
-        width: 0
-        height: 0
-      cta_label: ''
-      cta_url: ''
-      align: center
+      heading: "You're live."
+      tagline: Now make it yours.
+      lede: This page is a component — a folder holding a schema and a template. Nothing here is special-cased, and everything on it is editable in the panel.

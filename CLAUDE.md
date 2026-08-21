@@ -160,7 +160,7 @@ content/      pages/<locale>/*.yml, uploads/, .revisions/, redirects.yml
               submissions enforces retention, and neither is optional. The locale directory is the permanent shape; Phase 9
               resolves a second one beside it rather than migrating.
 bin/          doctor deploy.sh rollback.sh release.sh backup restore-drill
-              new-site mail-retry prune-submissions
+              mail-retry prune-submissions
 lang/         en.php (source) + el.php — panel and engine strings
 admin-theme/  the panel: _layout.twig, edit.twig, fields/*.twig, theme.yml,
               assets/ (admin.css, editor.js). Its own @admin Twig namespace,

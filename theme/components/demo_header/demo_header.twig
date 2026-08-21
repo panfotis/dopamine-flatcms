@@ -1,0 +1,34 @@
+{# Component: demo_header — placed in _header.yml, so it renders on every page.
+
+   The chip is the point: a site still showing "fresh install" has not been
+   built yet. The menu is rendered anyway, so the placeholder stays usable
+   while somebody works — order comes from each page's `nav:` key, never from
+   this file. #}
+<div class="demo-head">
+  <div class="wrap">
+    <a class="demo-brand" href="{{ home_url }}">
+      {% if fields.logo.src|default('') %}
+        {% include 'picture.twig' with {
+             image: fields.logo,
+             widths: [640],
+             sizes: '200px',
+             lazy: false
+           } only %}
+      {% else %}
+        {{ site('name') }}
+      {% endif %}
+    </a>
+
+    {% if nav|default([])|length > 1 %}
+      <nav class="demo-nav" aria-label="{{ fields.nav_label }}">
+        {# Against page.url, not page.slug: on a prefixed language the menu
+           links carry the prefix and the stored slug does not. #}
+        {% for item in nav %}
+          <a href="{{ item.url }}"{{ item.url == page.url ? ' aria-current="page"' : '' }}>{{ item.label }}</a>
+        {% endfor %}
+      </nav>
+    {% else %}
+      <p class="demo-install-chip">Fresh install</p>
+    {% endif %}
+  </div>
+</div>

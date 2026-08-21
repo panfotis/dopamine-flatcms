@@ -110,7 +110,7 @@ if (isset($archives[0])) {
 ok($listStatus === 0, 'the generated package is a readable zip archive');
 if ($listStatus === 0) {
     $names = preg_split('/\R/', trim($listOutput)) ?: [];
-    ok(in_array('src/Cms.php', $names, true) && in_array('theme/components/hero/schema.yml', $names, true),
+    ok(in_array('src/Cms.php', $names, true) && in_array('theme/components/demo_home_content/schema.yml', $names, true),
         'engine classes and starter components are included');
     ok(!in_array('config.php', $names, true)
         && !array_filter($names, static fn (string $name): bool => preg_match('#^(content|public|skeleton|vendor|PENS)/#', $name) === 1
@@ -145,7 +145,7 @@ require 'vendor/autoload.php';
 $cms = new Dopamine\FlatCms\Cms(require 'config.php');
 $page = $cms->content->findBySlug('/');
 $html = $cms->renderPage($page);
-if (!str_contains($html, 'Your small site, ready to edit')) { exit(20); }
+if (!str_contains($html, 'Now make it yours.')) { exit(20); }
 $response = (new Dopamine\FlatCms\Admin($cms))->handle(
     Symfony\Component\HttpFoundation\Request::create('/admin.php')
 );
@@ -157,16 +157,18 @@ PHP;
 );
 ok($probeStatus === 0, 'the demo page and panel render through package templates: ' . $probeOutput);
 
-$localComponent = $target . '/theme/components/hero';
+$localComponent = $target . '/theme/components/demo_home_content';
 mkdir($localComponent, 0775, true);
 file_put_contents($localComponent . '/schema.yml', "label: Local hero\nfields:\n  heading:\n    type: text\n");
-file_put_contents($localComponent . '/hero.twig', '<strong>LOCAL {{ fields.heading }}</strong>');
+file_put_contents($localComponent . '/demo_home_content.twig', '<strong>LOCAL {{ fields.heading }}</strong>');
 
 $overrideProbe = <<<'PHP'
 require 'vendor/autoload.php';
 $cms = new Dopamine\FlatCms\Cms(require 'config.php');
 $html = $cms->renderPage($cms->content->findBySlug('/'));
-if (!str_contains($html, '<strong>LOCAL Your small site, ready to edit</strong>')) {
+// The apostrophe in the seeded heading arrives autoescaped, which is the
+// point of asserting on rendered output rather than on the field value.
+if (!str_contains($html, '<strong>LOCAL You&#039;re live.</strong>')) {
     fwrite(STDERR, $html);
     exit(22);
 }

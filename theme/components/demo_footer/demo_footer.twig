@@ -1,0 +1,15 @@
+{# Component: demo_footer — placed in _footer.yml, so it renders on every page.
+
+   The links are markup, not fields. They point at the project rather than at
+   the site being built, so handing them to a client to edit would be wrong —
+   and this whole footer is replaced before a client ever sees it. #}
+<div class="demo-foot">
+  <div class="wrap">
+    <p class="demo-foot-note">{{ fields.note }}</p>
+    <nav class="demo-foot-links" aria-label="Project links">
+      <a href="https://github.com/panfotis/dopamine-flatcms" rel="noopener noreferrer" target="_blank">GitHub</a>
+      <a href="https://packagist.org/packages/dopamine/flatcms" rel="noopener noreferrer" target="_blank">Packagist</a>
+      <a href="https://github.com/panfotis/flatcms-theme-demo" rel="noopener noreferrer" target="_blank">Demo theme</a>
+    </nav>
+  </div>
+</div>

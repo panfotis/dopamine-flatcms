@@ -1,0 +1,27 @@
+label: Welcome
+description: The first-run page. Replace it once the site has real content.
+
+# Three fields, and the template says so: the page tells the reader to change
+# the heading, so the heading has to actually be a field. The instruction card
+# and the three step cards below it are markup, not content — they are
+# instructions to a developer, and a client would never edit them.
+fields:
+  heading:
+    type: text
+    label: Heading
+    max: 70
+    required: true
+    default: "You're live."
+
+  tagline:
+    type: text
+    label: Tagline
+    max: 60
+    hint: The short line in the inverted bar under the heading.
+    default: Now make it yours.
+
+  lede:
+    type: textarea
+    label: Lede
+    max: 260
+    hint: One or two sentences under the tagline.

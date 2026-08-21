@@ -1,0 +1,60 @@
+/* Equal-height step cards without a fixed height: the design pins them to one
+   number, but Greek runs longer than English and would overflow it. min-height
+   plus margin-top:auto on the code bar keeps the baseline and lets the card
+   grow. */
+.demo-hero{background:var(--lime);padding:88px 0}
+.demo-hero h1{font-family:var(--font-display);font-weight:900;font-size:clamp(2.6rem,7vw,5.75rem);
+  letter-spacing:-.03em;line-height:1;text-transform:uppercase;margin:0 0 28px}
+.demo-tagline{margin:0 0 28px}
+.demo-tagline span{background:var(--ink);color:var(--lime);font-family:var(--font-display);
+  font-weight:900;font-size:clamp(1.4rem,3.2vw,2.4rem);text-transform:uppercase;
+  letter-spacing:.01em;padding:4px 14px;display:inline-block}
+.demo-lede{max-width:760px;font-weight:500;font-size:1.125rem;line-height:1.5;margin:0}
+
+.demo-body{padding:72px 0}
+.demo-card{background:var(--paper);border:2px solid var(--ink);border-radius:14px;
+  box-shadow:5px 5px 0 var(--ink)}
+
+.demo-start{display:flex;gap:48px;align-items:center;padding:40px 44px}
+.demo-start-copy{flex:1}
+.demo-start h2{font-family:var(--font-display);font-weight:900;font-size:clamp(1.6rem,3.4vw,2.5rem);
+  letter-spacing:-.025em;text-transform:none;margin:0 0 16px}
+.demo-start p{color:var(--muted);margin:0}
+.demo-chip{display:inline-block;background:var(--lime);border:1.5px solid var(--ink);
+  border-radius:999px;padding:6px 12px;font-family:var(--font-mono);font-size:.6875rem;
+  font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--ink);margin:0 0 16px}
+
+.demo-action{background:var(--lime);border:2px solid var(--ink);border-radius:14px;
+  box-shadow:5px 5px 0 var(--ink);padding:26px 28px;flex:0 0 auto}
+.demo-action p{margin:0;color:var(--ink)}
+.demo-action-label{font-family:var(--font-display);font-weight:800;font-size:.875rem;
+  letter-spacing:.1em;text-transform:uppercase;margin-bottom:12px!important}
+.demo-action-note{font-size:.78rem;margin-top:12px!important}
+.demo-path code{background:var(--ink);color:var(--lime);border-radius:4px;padding:11px 16px;
+  display:inline-block;font-family:var(--font-mono);font-weight:700;font-size:.9375rem}
+
+.demo-steps{margin-top:88px}
+.demo-steps-head{font-family:var(--font-display);font-weight:900;
+  font-size:clamp(1.5rem,3.2vw,2.5rem);letter-spacing:-.025em;text-transform:uppercase;
+  margin:0 0 28px}
+.demo-steps-head span{background:var(--lime);padding:2px 12px}
+
+.demo-grid{list-style:none;margin:0;padding:0;display:grid;gap:20px;
+  grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.demo-step{display:flex;flex-direction:column;justify-content:space-between;gap:14px;
+  min-height:201px;padding:28px 26px}
+.demo-step h3{font-family:var(--font-display);font-weight:800;font-size:1.1875rem;
+  letter-spacing:.045em;text-transform:uppercase;margin:0 0 8px}
+.demo-step p{font-size:.84375rem;line-height:1.55;margin:0;color:var(--ink)}
+.demo-step-1{background:var(--sky)}
+.demo-step-2{background:var(--peach)}
+.demo-step-3{background:var(--lilac)}
+.demo-code{margin-top:auto!important}
+.demo-code code{display:block;background:var(--ink);color:var(--paper);border-radius:4px;
+  padding:9px 12px;font-family:var(--font-mono);font-size:.6875rem;font-weight:500;
+  overflow-wrap:anywhere}
+
+@media (max-width:820px){
+  .demo-start{flex-direction:column;align-items:stretch;gap:28px}
+  .demo-hero{padding:64px 0}
+}

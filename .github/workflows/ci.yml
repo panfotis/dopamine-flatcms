@@ -37,7 +37,6 @@ jobs:
           bash -n bin/site-env.sh
           bash -n bin/backup
           bash -n bin/restore-drill
-          bash -n bin/new-site
 
       - name: Doctor
         run: php bin/doctor

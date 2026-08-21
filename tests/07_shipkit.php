@@ -572,7 +572,7 @@ contains($o, 'refuses to load', '...and reports it as a config failure, not a pa
 
 section('Every script is at least syntactically a script');
 
-foreach (['deploy.sh', 'rollback.sh', 'release.sh', 'site-env.sh', 'backup', 'restore-drill', 'new-site'] as $script) {
+foreach (['deploy.sh', 'rollback.sh', 'release.sh', 'site-env.sh', 'backup', 'restore-drill'] as $script) {
     ok(is_executable($root . '/bin/' . $script), 'bin/' . $script . ' is executable');
     [$s] = sh('bash -n ' . escapeshellarg('bin/' . $script));
     ok($s === 0, '...and parses');
@@ -829,40 +829,5 @@ contains($out, 'not in the backup', '...naming the image rather than passing qui
     'DRILL_ALERT'   => 'echo ALERTED:',
 ]);
 contains($out, 'ALERTED:', 'and the monitored alert hook is called');
-
-section('bin/new-site scaffolds a site that passes its own doctor');
-
-$scaffold = $root . '/var/cache/newsite-' . bin2hex(random_bytes(4));
-register_shutdown_function(static function () use ($scaffold): void {
-    exec('rm -rf ' . escapeshellarg($scaffold));
-});
-
-[$s, $out] = sh('bin/new-site ' . escapeshellarg($scaffold) . ' ' . escapeshellarg('Πελάτης ΑΕ') . ' client-site.gr');
-ok($s === 0, 'the scaffold runs: ' . trim(explode("\n", $out)[0]));
-ok(is_file($scaffold . '/content/pages/el/home.yml'), 'with a page in the locale directory');
-ok(is_dir($scaffold . '/content/uploads'), 'and an uploads directory inside content/');
-ok(!is_dir($scaffold . '/content/.revisions') || glob($scaffold . '/content/.revisions/*') === [],
-    'and no revision history from the site it was copied from');
-ok(glob($scaffold . '/content/uploads/*') === [], 'nor any of its images');
-contains((string) file_get_contents($scaffold . '/config.php'), 'Πελάτης ΑΕ', 'the site name is substituted');
-contains((string) file_get_contents($scaffold . '/.env.example'), 'SITE_NOINDEX=1',
-    'and a new site starts noindexed, because nobody has approved the copy yet');
-contains((string) file_get_contents($scaffold . '/nginx.conf.example'), 'client-site.gr', 'the nginx example names the domain');
-contains((string) file_get_contents($scaffold . '/nginx.conf.example'), '/var/www/client-site.gr/current/public',
-    'and its docroot uses the same deploy root as the generated environment');
-contains((string) file_get_contents($scaffold . '/apache.conf.example'), '/var/www/client-site.gr/current/public',
-    'the Apache example is templated with the same domain and deploy root, not left naming the last client');
-contains($out, 'composer install', 'and the next steps say so, since there is no vendor/ yet');
-
-// A real new site runs `composer install` here. Borrowing this one's vendor/ is
-// the same thing minus the download, and keeps the suite off the network.
-symlink($root . '/vendor', $scaffold . '/vendor');
-
-[$s, $out] = sh(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($scaffold . '/bin/doctor'), [
-    'CONTENT_PATH' => $scaffold . '/content',
-    'VAR_PATH'     => $scaffold . '/var',
-    'ROLES_FILE'   => $scaffold . '/config/roles.yml',
-]);
-ok($s === 0, 'and the scaffolded site is healthy from the first minute: ' . trim($out));
 
 summary();

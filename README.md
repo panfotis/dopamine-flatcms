@@ -125,9 +125,13 @@ The engine is installed at `vendor/dopamine/flatcms`; the site owns only its
 config, content, public entrypoints, layout, and optional overrides. See
 [`skeleton/README.md`](skeleton/README.md).
 
-### Start from the demo theme (optional)
+### Start from the demo theme
 
-The skeleton ships a minimal theme. For a full starting point — twelve styled
+A new site opens on a **first-run page**: three `demo_*` components that say
+where you are and point at the docs. It is a placeholder, not a starter — there
+is nothing in it to build on, and a site still wearing it has not been started.
+
+So this step is effectively step one. For a real starting point — twelve styled
 components, layouts and bilingual demo content — clone the
 [demo theme](https://github.com/panfotis/flatcms-theme-demo) over it:
 
@@ -144,6 +148,9 @@ rm -rf theme/_demo-content
 A theme is a starting point, not a dependency: once cloned it is yours, and
 there is nothing to update from upstream. The theme's own README covers the
 bilingual config and the styling ladder.
+
+The pinned font entries in `theme/theme.yml` exist only for the placeholder
+page. Once a real theme is in place, delete them along with it.
 
 ### Without DDEV
 
@@ -292,8 +299,8 @@ The vhost docroot is `current/public/`, and `/uploads/` is **aliased** to
 `shared/content/uploads/` — see `nginx.conf.example`, or
 `apache.conf.example` for the same vhost on Apache (needs `ssl`, `remoteip`,
 `proxy_fcgi` and `headers` enabled). No symlink out of the docroot, and stored
-`src` values stay `/uploads/...` either way. `bin/new-site` rewrites the domain
-and deploy root in both files, so start from whichever matches your server.
+`src` values stay `/uploads/...` either way. Start from whichever matches your
+server and replace the example domain and deploy root throughout.
 
 ```bash
 chown -R www-data:www-data shared/content shared/var
@@ -384,13 +391,11 @@ Log rotation, `/etc/logrotate.d/example-domain`:
 
 ### A new site
 
-```bash
-bin/new-site ../example-domain-com "Πελάτης ΑΕ" example-domain.com
-```
-
-Copies code, theme and admin-theme — never content, uploads, revisions or
-secrets. The scaffold starts with `SITE_NOINDEX=1`, because nobody has approved
-the copy yet.
+`composer create-project dopamine/flatcms-skeleton` — see
+[Create a site](#create-a-site). There is deliberately only one way to start a
+site: a scaffolder that copied `src/` into each client produced a fork per
+client that could never take a Composer update, which is the problem packaging
+the engine solved.
 
 Copy `.env.example` to `/var/www/example-domain/shared/.env`, fill it, make it readable
 only by the deploy/PHP-FPM users, and point the FPM pool at that one file
