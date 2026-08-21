@@ -5,19 +5,7 @@
 # A bare string is a local path inside this theme/ (inlined) or an https://
 # URL (a real <link>/<script defer> tag). The map form carries SRI — pin CDN
 # entries to a tag, never a branch, or the hash breaks on every upstream push.
-#
-# The three faces below are what the engine theme's first-run page is drawn in.
-# They are pinned @fontsource packages rather than Google Fonts for one reason:
-# Google serves per-browser CSS, so no stable SRI exists for it and bin/doctor
-# warns on every run. A version-pinned file hashes once and stays hashed.
-# Delete them with the placeholder theme — nothing else here needs them.
 css:
-  - url: https://cdn.jsdelivr.net/npm/@fontsource-variable/archivo@5.2.5/index.css
-    integrity: sha384-9x7ZKtI6JqxxKrXRWQLsq1xMCeAzuyszXPPGSmVNXoO2By4lsWEENqJGZ9Y4zAAr
-  - url: https://cdn.jsdelivr.net/npm/@fontsource-variable/inter@5.2.5/index.css
-    integrity: sha384-ZTIcl2CmY0wyM9ANOhomBco7rEUIlWztf6lGcLKCocKUrIgGCsfisuZyE+hadW8K
-  - url: https://cdn.jsdelivr.net/npm/@fontsource-variable/jetbrains-mono@5.2.5/index.css
-    integrity: sha384-bNykZ+bGB4FclZiYvLmgUfE8clWCvZlLOJ3v63czgIEgamTe0EhkaLXIbptJkvmW
   - assets/css/site.css
 
 js:

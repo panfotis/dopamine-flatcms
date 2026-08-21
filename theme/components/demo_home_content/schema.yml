@@ -25,3 +25,20 @@ fields:
     label: Lede
     max: 260
     hint: One or two sentences under the tagline.
+
+# The faces this placeholder is drawn in. Declared here rather than in the
+# site's theme.yml so they load only while this component renders and are
+# deleted with it — a theme written over the placeholder never inherits three
+# CDN stylesheets it has no use for.
+#
+# Pinned @fontsource rather than Google Fonts: Google serves per-browser CSS,
+# so no stable SRI exists for it and bin/doctor warns on every run. A pinned
+# file hashes once. Deduped by URL, so all three components may declare them.
+assets:
+  css:
+    - url: https://cdn.jsdelivr.net/npm/@fontsource-variable/archivo@5.2.5/index.css
+      integrity: sha384-9x7ZKtI6JqxxKrXRWQLsq1xMCeAzuyszXPPGSmVNXoO2By4lsWEENqJGZ9Y4zAAr
+    - url: https://cdn.jsdelivr.net/npm/@fontsource-variable/inter@5.2.5/index.css
+      integrity: sha384-ZTIcl2CmY0wyM9ANOhomBco7rEUIlWztf6lGcLKCocKUrIgGCsfisuZyE+hadW8K
+    - url: https://cdn.jsdelivr.net/npm/@fontsource-variable/jetbrains-mono@5.2.5/index.css
+      integrity: sha384-bNykZ+bGB4FclZiYvLmgUfE8clWCvZlLOJ3v63czgIEgamTe0EhkaLXIbptJkvmW

@@ -149,8 +149,9 @@ A theme is a starting point, not a dependency: once cloned it is yours, and
 there is nothing to update from upstream. The theme's own README covers the
 bilingual config and the styling ladder.
 
-The pinned font entries in `theme/theme.yml` exist only for the placeholder
-page. Once a real theme is in place, delete them along with it.
+Nothing to clean up afterwards: the placeholder's webfonts are declared in its
+own components' `assets:`, so they load only while it renders and go away with
+it. A theme written over `theme/` never inherits them.
 
 ### Without DDEV
 
