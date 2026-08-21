@@ -71,11 +71,11 @@ $loopback = admin(
 contains((string) $loopback->getContent(), 'Cloudflare Access', 'a loopback request is refused when the bypass is off (cloudflared case)');
 ok($loopback->getStatusCode() === 403, 'and refused with a 403, not served');
 
-section('The roles file fails closed on every way it can be wrong');
+section('The users file fails closed on every way it can be wrong');
 // Authorisation is a second gate, and a gate that opens when its config is
 // broken is not a gate. Every case here grants nothing.
-$rolesFile = dirname(__DIR__) . '/var/cache/roles-hardening.yml';
-file_put_contents($rolesFile, implode("\n", [
+$usersFile = dirname(__DIR__) . '/var/cache/roles-hardening.yml';
+file_put_contents($usersFile, implode("\n", [
     '- { email: good@example.gr, role: editor }',
     '- { email: typo@example.gr, role: administrator }',   // not a role we have
     '- { email: blank@example.gr }',                       // no role at all
@@ -85,18 +85,18 @@ file_put_contents($rolesFile, implode("\n", [
 ]));
 
 $roleOf = static fn (string $email, ?string $file = null): int
-    => as_user($email, 'GET', [], ['roles_file' => $file ?? $rolesFile])->getStatusCode();
+    => as_user($email, 'GET', [], ['users_file' => $file ?? $usersFile])->getStatusCode();
 
 ok($roleOf('good@example.gr') === 200, 'a well-formed row grants access');
 ok($roleOf('GOOD@example.GR') === 200, 'and the address is matched case-insensitively, as mail is');
 ok($roleOf('typo@example.gr') === 403, 'role: administrator grants nothing — an unknown role is not a role');
 ok($roleOf('blank@example.gr') === 403, 'a row with no role grants nothing');
 ok($roleOf('nobody@example.gr') === 403, 'an address that is simply absent is refused');
-ok($roleOf('good@example.gr', $rolesFile . '.missing') === 403, 'a missing roles file denies everyone rather than opening the panel');
+ok($roleOf('good@example.gr', $usersFile . '.missing') === 403, 'a missing users file denies everyone rather than opening the panel');
 
-file_put_contents($rolesFile, "not: a list\n");
-ok($roleOf('good@example.gr') === 403, 'a roles file of the wrong shape denies everyone too');
-unlink($rolesFile);
+file_put_contents($usersFile, "not: a list\n");
+ok($roleOf('good@example.gr') === 403, 'a users file of the wrong shape denies everyone too');
+unlink($usersFile);
 
 section('A validly signed token with the wrong claims is refused');
 // Signature, exp and nbf are firebase/php-jwt's checks; audience and issuer
@@ -107,7 +107,7 @@ section('A validly signed token with the wrong claims is refused');
 // expects the overridden one — a real signature, wrong claims.
 //
 // The control first: this address passes with the claims left alone, so the
-// 403s below are the claim check refusing, not roles.yml.
+// 403s below are the claim check refusing, not users.yml.
 ok(as_user('admin@example-domain.com')->getStatusCode() === 200, 'the same address is accepted when the claims match');
 
 $wrongAud = as_user('admin@example-domain.com', 'GET', [], ['aud' => str_repeat('b', 64)]);
@@ -122,7 +122,7 @@ contains((string) $wrongIss->getContent(), 'Cloudflare Access', 'also as unauthe
 
 section('Auth::user() answers with an identity and a role, or with nothing');
 $who = new \Dopamine\FlatCms\Auth(
-    ['mode' => 'none', 'dev_bypass' => false, 'roles_file' => ''],
+    ['mode' => 'none', 'dev_bypass' => false, 'users_file' => ''],
     dirname(__DIR__) . '/var/cache'
 );
 $dev = $who->user(Request::create('/admin.php'));
@@ -130,7 +130,7 @@ ok(($dev['email'] ?? '') === 'dev@localhost', 'the dev bypass reports an email')
 ok(($dev['role'] ?? '') === 'admin', 'and a role, so nothing downstream has to guess one');
 
 $closed = new \Dopamine\FlatCms\Auth(
-    ['mode' => 'cf_access', 'dev_bypass' => false, 'aud' => 'x', 'team_domain' => 't', 'roles_file' => ''],
+    ['mode' => 'cf_access', 'dev_bypass' => false, 'aud' => 'x', 'team_domain' => 't', 'users_file' => ''],
     dirname(__DIR__) . '/var/cache'
 );
 ok($closed->user(Request::create('/admin.php')) === null, 'and an unauthenticated request is null, not a partial user');

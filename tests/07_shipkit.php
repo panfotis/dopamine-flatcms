@@ -300,7 +300,7 @@ register_shutdown_function(static function () use ($sandbox): void {
     exec('rm -rf ' . escapeshellarg($sandbox));
 });
 
-$roles = $sandbox . '/roles.yml';
+$roles = $sandbox . '/users.yml';
 
 /**
  * Write a content tree, run doctor against it, hand back its output.
@@ -326,7 +326,7 @@ $doctor = static function (array $files, array $env = []) use ($sandbox, $roles)
     // $env first: `+` keeps the left operand, so an override has to be there.
     return sh(escapeshellarg(PHP_BINARY) . ' bin/doctor', $env + [
         'CONTENT_PATH' => $sandbox . '/content',
-        'ROLES_FILE'   => $roles,
+        'USERS_FILE'   => $roles,
     ]);
 };
 
@@ -558,10 +558,10 @@ contains($o, 'site.base_url is http://localhost:8080', '...naming the value that
 [$s, $o] = $doctor(['pages/el/home.yml' => $goodPage('/')], ['SITE_BASE_URL' => 'https://example-domain.com']);
 missing($o, 'base_url', 'a real domain says nothing at all');
 
-// A missing roles file denies every address, so a box in that state serves a
+// A missing users file denies every address, so a box in that state serves a
 // panel nobody can get into — and says nothing about why.
-[$s, $o] = $doctor(['pages/el/home.yml' => $goodPage('/')], ['ROLES_FILE' => $sandbox . '/nope.yml']);
-ok($s === 1, 'refuses a missing roles file');
+[$s, $o] = $doctor(['pages/el/home.yml' => $goodPage('/')], ['USERS_FILE' => $sandbox . '/nope.yml']);
+ok($s === 1, 'refuses a missing users file');
 contains($o, 'every address would be refused', '...naming the consequence rather than the filename alone');
 
 // APP_ENV=prod with an unsafe auth config: config.php itself refuses to load,

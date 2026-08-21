@@ -143,7 +143,7 @@ function admin_post(array $body, ?array $config = null): Response
  *
  * Phase 3 turned "who are you" into a second question — "and may you be here" —
  * and the only honest way to ask it is with a token Auth really verifies. A
- * config knob that faked an identity would be precisely the backdoor roles.yml
+ * config knob that faked an identity would be precisely the backdoor users.yml
  * exists to prevent, and a test that used one would prove nothing about the
  * path a real request takes.
  *

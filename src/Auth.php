@@ -48,7 +48,7 @@ final class Auth
      * Who is making this request, and what may they do?
      *
      * Two separate questions, and null unless both answer. Cloudflare Access
-     * establishes the address; config/roles.yml decides whether that address
+     * establishes the address; users.yml decides whether that address
      * has any business here. An authenticated stranger is still a stranger.
      *
      * @return array{email: string, role: string}|null
@@ -67,7 +67,7 @@ final class Auth
     {
         if ($this->bypassed()) {
             // Nothing was authenticated, so there is no address to look up in
-            // roles.yml. Admin is the only coherent answer: the bypass means
+            // users.yml. Admin is the only coherent answer: the bypass means
             // "skip auth entirely", and APP_ENV=prod refuses to boot with it on.
             return ['email' => 'dev@localhost', 'role' => 'admin'];
         }
@@ -84,11 +84,11 @@ final class Auth
         if ($role === null) {
             // Somebody got through Cloudflare Access and was still refused, so
             // the two lists disagree — almost always because a person was added
-            // to the Access application and not to roles.yml. Log it: otherwise
+            // to the Access application and not to users.yml. Log it: otherwise
             // the only signal is the client phoning to say the panel is broken,
             // and there is nothing on the box to confirm it.
-            error_log('[dopamine-flatcms] authenticated but not in roles.yml: ' . $email
-                . ' (add them to ' . $this->config['roles_file'] . ')');
+            error_log('[dopamine-flatcms] authenticated but not in users.yml: ' . $email
+                . ' (add them to ' . $this->config['users_file'] . ')');
 
             // Deliberately not an implicit editor role. Whoever administers the
             // Access application can add a login; only this repository can add
@@ -164,7 +164,7 @@ final class Auth
             return $this->rolesCache;
         }
 
-        $file = (string) ($this->config['roles_file'] ?? '');
+        $file = (string) ($this->config['users_file'] ?? '');
         $rows = is_file($file) ? (Yaml::parseFile($file) ?? []) : [];
 
         $out = [];

@@ -61,21 +61,21 @@ $env = fixture_env($fixture);
 ok($env['CONTENT_PATH'] === '/var/www/example-domain/shared/content', 'content/ is shared, outside the release directory');
 ok($env['VAR_PATH'] === '/var/www/example-domain/shared/var', 'var/ is shared: cache, locks, submissions never deployed');
 ok(str_starts_with($env['UPLOADS_PATH'], $env['CONTENT_PATH']), 'uploads live inside the content repository, not the release');
-ok($env['ROLES_FILE'] === '/var/www/example-domain/shared/roles.yml', 'the roles file is shared state too');
+ok($env['USERS_FILE'] === '/var/www/example-domain/shared/users.yml', 'the users file is shared state too');
 
 // The engine must actually honour them — a fixture nobody reads is a comment.
 $probe = __DIR__ . '/_probe_paths.php';
 file_put_contents($probe, "<?php\n\$c = require dirname(__DIR__) . '/config.php';\n"
-    . "echo json_encode(\$c['paths'] + ['roles' => \$c['auth']['roles_file']]);\n");
-// APP_ENV dropped: the guard is item 5's business and roles.yml does not exist here.
+    . "echo json_encode(\$c['paths'] + ['roles' => \$c['auth']['users_file']]);\n");
+// APP_ENV dropped: the guard is item 5's business and users.yml does not exist here.
 $paths = json_decode(run($probe, ['CONTENT_PATH' => $env['CONTENT_PATH'], 'VAR_PATH' => $env['VAR_PATH'],
-    'UPLOADS_PATH' => $env['UPLOADS_PATH'], 'ROLES_FILE' => $env['ROLES_FILE']]), true);
+    'UPLOADS_PATH' => $env['UPLOADS_PATH'], 'USERS_FILE' => $env['USERS_FILE']]), true);
 unlink($probe);
 
 ok(($paths['content'] ?? '') === $env['CONTENT_PATH'], 'config.php resolves CONTENT_PATH');
 ok(($paths['cache'] ?? '') === $env['VAR_PATH'] . '/cache', 'config.php puts the cache under VAR_PATH');
 ok(($paths['uploads'] ?? '') === $env['UPLOADS_PATH'], 'config.php resolves UPLOADS_PATH');
-ok(($paths['roles'] ?? '') === $env['ROLES_FILE'], 'config.php resolves ROLES_FILE');
+ok(($paths['roles'] ?? '') === $env['USERS_FILE'], 'config.php resolves USERS_FILE');
 
 // Production does not export twenty values into every command. PHP entrypoints
 // load the one shared file, selected explicitly by ENV_FILE; prove that path in
@@ -443,7 +443,7 @@ $safe = [
     'AUTH_MODE'     => 'cf_access',
     'AUTH_DEV_BYPASS' => '0',
     'CF_ACCESS_AUD' => str_repeat('a', 64),
-    'ROLES_FILE'    => $roles,
+    'USERS_FILE'    => $roles,
 ];
 
 contains(run(__DIR__ . '/_boot.php', $safe), 'BOOTED', 'a correctly configured production box boots');
@@ -454,12 +454,12 @@ contains($m1, 'wide open', 'and the refusal says why');
 
 contains(run(__DIR__ . '/_boot.php', ['AUTH_DEV_BYPASS' => '1'] + $safe), 'REFUSED', 'AUTH_DEV_BYPASS=1 is refused');
 contains(run(__DIR__ . '/_boot.php', ['CF_ACCESS_AUD' => ''] + $safe), 'REFUSED', 'an empty Access audience is refused');
-contains(run(__DIR__ . '/_boot.php', ['ROLES_FILE' => $root . '/var/cache/nope.yml'] + $safe), 'REFUSED', 'a missing roles file is refused');
+contains(run(__DIR__ . '/_boot.php', ['USERS_FILE' => $root . '/var/cache/nope.yml'] + $safe), 'REFUSED', 'a missing users file is refused');
 
 // All four at once must report all four, not just the first.
 $all = run(__DIR__ . '/_boot.php', [
     'APP_ENV' => 'prod', 'AUTH_MODE' => 'none', 'AUTH_DEV_BYPASS' => '1',
-    'CF_ACCESS_AUD' => '', 'ROLES_FILE' => $root . '/var/cache/nope.yml',
+    'CF_ACCESS_AUD' => '', 'USERS_FILE' => $root . '/var/cache/nope.yml',
 ]);
 ok(substr_count($all, "\n  - ") === 4, 'a fully broken box reports all four problems at once, not one per deploy');
 

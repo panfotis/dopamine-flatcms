@@ -46,7 +46,7 @@ full in §10 of the build plan.
    request.** It is only ever `1` in `.ddev/config.yaml`. Do not reintroduce a
    `REMOTE_ADDR`/loopback check — it fails in DDEV and opens the panel to the
    internet behind Cloudflare Tunnel.
-6. **Access authenticates; `config/roles.yml` authorizes.** An authenticated
+6. **Access authenticates; `users.yml` authorizes.** An authenticated
    address the file does not list gets a 403, never an implicit editor role.
    Anything malformed in that file — unknown role, missing file, wrong shape —
    denies. Revision listing and restore are admin-only, and CSRF-protected.
@@ -136,7 +136,7 @@ src/          Cms Admin Auth Components Content Fields Form Lang Locks Media
               R2 Submissions
               Cloudflare AccessDeniedException StaleContentException
               bootstrap.php — process-level error handlers, not a class
-config/       roles.yml — email -> admin|editor, committed, no secrets
+users.yml     email -> admin|editor, committed, no secrets
 theme/        everything site-facing: layout.twig, bare.twig (no header/
               footer; `layout: bare`), 404.twig, 500.twig, picture.twig,
               video_facade.twig, components/<name>/ (schema.yml + <name>.twig

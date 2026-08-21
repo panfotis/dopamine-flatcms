@@ -404,9 +404,9 @@ contains($html, 'Νέος υπότιτλος', 'edited copy is live');
 // question Phase 3 added — "this address authenticated, but may it be here?" —
 // only has an honest answer on the path a real request takes.
 
-$ADMIN   = 'admin@example-domain.com';   // config/roles.yml: admin
-$EDITOR  = 'editor@example-domain.com';    // config/roles.yml: editor
-$UNKNOWN = 'kanenas@example.gr';    // not in config/roles.yml at all
+$ADMIN   = 'admin@example-domain.com';   // users.yml: admin
+$EDITOR  = 'editor@example-domain.com';    // users.yml: editor
+$UNKNOWN = 'kanenas@example.gr';    // not in users.yml at all
 
 /** The forged save an editor would send to change an editable:admin field. */
 $forgeEmail = static fn (string $value): array => [
@@ -425,11 +425,11 @@ $emailOf = static function () use ($file, $blockNo): string {
 
 section('An authenticated address is not automatically a user');
 $stranger = as_user($UNKNOWN, 'GET', ['action' => 'edit', 'page' => 'home']);
-ok($stranger->getStatusCode() === 403, 'an email absent from roles.yml is refused, not made an implicit editor');
+ok($stranger->getStatusCode() === 403, 'an email absent from users.yml is refused, not made an implicit editor');
 missing((string) $stranger->getContent(), 'name="blocks[hero][heading]"', 'and sees no edit form');
 missing((string) $stranger->getContent(), 'Cloudflare Access', 'the refusal does not tell them to log in again — they already did');
 // This is the one panel page a refused client ever sees, and the person seeing
-// it is usually a real editor nobody added to roles.yml, not an intruder.
+// it is usually a real editor nobody added to users.yml, not an intruder.
 contains((string) $stranger->getContent(), '<!DOCTYPE html>', 'the 403 is a whole page, not a bare fragment');
 contains((string) $stranger->getContent(), 'Demo Πελάτη', 'rendered through the panel layout, so it looks refused rather than broken');
 

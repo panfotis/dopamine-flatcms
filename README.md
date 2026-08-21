@@ -54,9 +54,9 @@ unaffected.
 - Strongly recommended: the two cache rules from [4. Cache](#4-cache). The
   engine is designed for full-page edge caching — every save purges its own
   tags, so the cache is never stale.
-- Optional: an R2 bucket. Without it uploads land in `content/uploads/` and are
-  committed to git with the rest of the content — deliberate for small sites
-  (immutable hash-named files, one `git clone` restores the site whole). Flip
+- Optional: an R2 bucket. Without it uploads land in `content/uploads/`, beside
+  the pages they appear on — deliberate for small sites (immutable hash-named
+  files, and a content backup carries pages and images together). Flip
   `R2_ENABLED=1` when a site outgrows that (a gallery, or a few hundred MB) —
   see [Safety net](#safety-net).
 
@@ -265,7 +265,7 @@ which takes three values:
 | `false` | sees, locked | sees, locked |
 
 Anything else is treated as `false` — a typo in a schema must cost a field, not
-hand one over. Who is an admin is `config/roles.yml`; Cloudflare Access decides
+hand one over. Who is an admin is `users.yml`; Cloudflare Access decides
 who gets as far as the panel, that file decides what they may do once there, and
 an authenticated address it does not list is refused outright.
 
@@ -276,9 +276,47 @@ cannot carry styling into the page.
 
 ## Deploying on a server
 
-Production is an **atomic-release layout**. `current` is a symlink to a release
-directory holding code and vendor only; everything a client owns lives outside
-it and survives every deploy and every rollback.
+A site is a PHP project with its docroot at `public/` — `config.php`, `content/`,
+`src/` and `vendor/` sit above it and are never reachable over HTTP. Point a vhost
+at `public/` (start from `nginx.conf.example` or `apache.conf.example` — written
+for the atomic layout below, so on a simple site replace `current/public` with the
+project's `public/` and the uploads alias with `<project>/content/uploads`), and a
+deploy is:
+
+```bash
+git pull && composer install --no-dev -o && php bin/doctor
+```
+
+That is the whole procedure for a site you update a few times a year. The panel
+is a moment mid-pull from serving mixed old/new code; if a client's site cannot
+afford even that, use [atomic releases](#atomic-releases--for-zero-downtime).
+
+### Where content lives
+
+`content/` — pages, uploads, revisions — stays inside the project directory and
+is **ignored by the site's code repository** (the skeleton ships that ignore).
+The two possible defaults fail differently: tracked content on a site where the
+client edits means a `git pull` overwrites their pages — data loss; ignored
+content on a site where only you edit means a fresh clone has no pages until you
+copy them down — an inconvenience. The default takes the harmless failure.
+
+Backing it up is the server's job by default. A site that wants the hourly
+off-box recovery point instead runs `git init` *inside* `content/` — the parent
+repository ignores the directory, so the nested repository is invisible to it —
+adds a private remote, and schedules `bin/backup` with
+`CONTENT_PATH=<project>/content` (see [Cron](#cron)). One clone of that
+repository restores pages and images together.
+
+`CONTENT_PATH`, `VAR_PATH` and `USERS_FILE` pointing outside the project belong
+to atomic releases only, where each deploy is a fresh clone and an in-project
+content directory would simply be absent from it.
+
+### Atomic releases — for zero downtime
+
+For sites deployed often, or where a broken deploy must be reversible in one
+command: `current` is a symlink to a release directory holding code and vendor
+only; everything a client owns lives outside it and survives every deploy and
+every rollback.
 
 ```
 /var/www/example-domain/
@@ -292,7 +330,7 @@ it and survives every deploy and every rollback.
     │   ├── .revisions/     per-save snapshots, also tracked
     │   └── redirects.yml
     ├── var/                cache, locks, submissions — never deployed
-    ├── roles.yml
+    ├── users.yml
     └── .env                secrets — never deployed, never committed
 ```
 
@@ -355,6 +393,10 @@ stops the deploy instead of the site.
 
 ### Cron
 
+The paths below assume the atomic layout; on a simple site the project directory
+stands in for both `current` and `shared`, and only the backup entries require a
+content repository at all.
+
 ```cron
 # Content backup. The recovery point is at most one hour, not "whenever
 # someone remembered". Holds the site-wide content lock, so it can never
@@ -398,8 +440,10 @@ site: a scaffolder that copied `src/` into each client produced a fork per
 client that could never take a Composer update, which is the problem packaging
 the engine solved.
 
-Copy `.env.example` to `/var/www/example-domain/shared/.env`, fill it, make it readable
-only by the deploy/PHP-FPM users, and point the FPM pool at that one file
+Copy `.env.example` to `.env`, fill it, and make it readable only by the
+deploy/PHP-FPM users. On a simple site it lives in the project root and that is
+the whole step. On the atomic layout it is `shared/.env`, shared by every
+release; point the FPM pool at that one file
 (`/etc/php/8.4/fpm/pool.d/example-domain.conf`):
 
 ```ini
@@ -431,6 +475,9 @@ domain into `CF_ACCESS_TEAM_DOMAIN`.
 Free for up to 50 users. That is the whole auth layer — `src/Auth.php` only
 verifies the JWT signature so nobody can reach the origin directly and bypass
 Access. There are no passwords stored anywhere in this codebase.
+
+Step by step, with the current dashboard paths:
+`dopamine-flatcms-cloudflare-access.md`.
 
 ### 2. R2 — media storage
 
@@ -570,7 +617,7 @@ only symptom of getting it wrong is months of nothing being indexed.
 
 - Adding, removing or reordering components from the panel
 - A user-management UI — Cloudflare Access decides who gets in, a committed
-  `config/roles.yml` decides who is admin and who is editor
+  `users.yml` decides who is admin and who is editor
 - Draft / publish workflow — saving publishes
 - A media library — `image` fields upload and replace in place
 
@@ -586,12 +633,15 @@ re-sanitised on the way back in — never a `cp`).
 Page writes are atomic (temp file + rename), so an interrupted save cannot
 leave a half-written page live.
 
-`shared/content/` **is** a git repository — pages, revisions and uploads
-together — pushed hourly by `bin/backup` under the site-wide content lock, so a
-commit can never catch a half-applied save. `bin/restore-drill` clones that
-remote weekly, checks every image a page references is actually in it, and runs
-`bin/doctor` against the result. A green backup cron proves a push happened; the
-drill is what proves the push is a site.
+Server backups cover the content directory by default. A site that wants the
+hourly off-box recovery point makes `content/` a git repository of its own —
+pages, revisions and uploads together, see [Where content
+lives](#where-content-lives) — pushed hourly by `bin/backup` under the
+site-wide content lock, so a commit can never catch a half-applied save.
+`bin/restore-drill` clones that remote weekly, checks every image a page
+references is actually in it, and runs `bin/doctor` against the result. A green
+backup cron proves a push happened; the drill is what proves the push is a
+site.
 
 That is one mechanism and one restore: `git clone`, and the site is whole,
 pictures included. It stops being right at a gallery site or past a few hundred

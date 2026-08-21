@@ -168,8 +168,8 @@ if ($config['auth']['mode'] === 'none') {
 if ($config['auth']['dev_bypass'] === true) {
     $warn('AUTH_DEV_BYPASS=1 — authentication is skipped entirely on this box');
 }
-if (!is_file((string) $config['auth']['roles_file'])) {
-    $fail('roles file missing: ' . $config['auth']['roles_file'] . ' — every address would be refused');
+if (!is_file((string) $config['auth']['users_file'])) {
+    $fail('users file missing: ' . $config['auth']['users_file'] . ' — every address would be refused');
 }
 
 // ── Components ──────────────────────────────────────────────────────────────

@@ -6,19 +6,22 @@
 *.tmp
 var/locks/
 
-# Visitor PII. This must never reach a git remote: the content repository is
-# pushed hourly, and a name, an email and a message replicated to a remote with
-# no retention limit and no erasure path is the GDPR problem this whole
-# directory layout exists to avoid. Backed up separately, encrypted, 30 days.
+# Visitor PII. This must never reach a git remote: a name, an email and a
+# message replicated to a remote with no retention limit and no erasure path is
+# the GDPR problem this directory layout exists to avoid. Backed up separately,
+# encrypted, 30 days.
 var/submissions/
 
-# content/ is deliberately NOT ignored — not uploads, not revisions.
+# content/ — pages, uploads, revisions — is the client's data, not the site's
+# code, and the two change at different rhythms once a site is live. Tracked
+# here, a `git pull` over a live site overwrites what the client saved — data
+# loss; ignored, a fresh clone merely has no pages until they are copied down.
+# The default takes the harmless failure.
 #
-# They used to be. public/uploads/ was gitignored and nothing copied it
-# anywhere, so a lost box restored every page perfectly with every image on it
-# broken. Uploads are hash-suffixed, so replacing an image writes a new blob
-# instead of rewriting an old one, which is the usual reason binaries in git go
-# bad. Thirty to eighty images at store_max_edge is 25–100 MB: nothing.
-#
-# This stops being right at a gallery site or past a few hundred MB. That site
-# sets R2_ENABLED=1 and the paths stop being local; see README "The ceiling".
+# Backing content up is the server's job by default. For an hourly off-box
+# recovery point instead, run `git init` *inside* content/ (this ignore makes
+# the nested repository invisible to the code repo), add a private remote, and
+# schedule bin/backup — pages and uploads commit together, so one clone of that
+# repository restores the site whole, images included. See the engine README,
+# "Where content lives".
+/content/

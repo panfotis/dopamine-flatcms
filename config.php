@@ -192,7 +192,7 @@ $config = [
         // without it, so a prod box can never come up with "everyone is an
         // admin" as the implicit default — and Auth denies any authenticated
         // address the file does not list.
-        'roles_file' => env('ROLES_FILE', __DIR__ . '/config/roles.yml'),
+        'users_file' => env('USERS_FILE', __DIR__ . '/users.yml'),
     ],
 
     'r2' => [
@@ -411,8 +411,8 @@ if (env('APP_ENV', 'dev') === 'prod') {
     if ($config['auth']['aud'] === '') {
         $problems[] = 'CF_ACCESS_AUD is empty — any Access token from the account would be accepted';
     }
-    if (!is_file((string) $config['auth']['roles_file'])) {
-        $problems[] = 'roles file missing: ' . $config['auth']['roles_file'];
+    if (!is_file((string) $config['auth']['users_file'])) {
+        $problems[] = 'users file missing: ' . $config['auth']['users_file'];
     }
 
     if ($problems !== []) {

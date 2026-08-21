@@ -14,7 +14,7 @@ them without passing it is a vulnerability.
    signature against the team's published keys and checks the audience and
    issuer itself (`src/Auth.php`) — the origin does not trust the network
    path, a header, or a source address.
-2. **`config/roles.yml` authorizes.** An authenticated address the file does
+2. **`users.yml` authorizes.** An authenticated address the file does
    not list gets a 403, never an implicit role. Anything malformed in that
    file — unknown role, missing file, wrong shape — denies.
 3. **The component schema bounds the write.** A save reads the page's blocks

@@ -31,8 +31,8 @@
 # A row whose role is neither of those is ignored rather than guessed at: a
 # typo here must cost somebody their access, never grant it.
 #
-# No secrets. Safe to commit. In production this file lives in shared/ and is
-# pointed at by ROLES_FILE, so it survives a deploy and APP_ENV=prod refuses to
-# boot without it — see tests/fixtures/production.env.
+# No secrets. Safe to commit. APP_ENV=prod refuses to boot without this file.
+# On an atomic-release site it lives in shared/ and is pointed at by
+# USERS_FILE, so it survives a deploy — see tests/fixtures/production.env.
 - { email: admin@example-domain.com, role: admin }
 - { email: editor@example-domain.com,  role: editor }
