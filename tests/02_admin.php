@@ -114,6 +114,10 @@ contains($edit, 'type="hidden" name="seo[noindex]" value="0"',
 $_SESSION['csrf'] = 'the-real-token';
 $seoFile = dirname(__DIR__) . '/content/pages/el/home.yml';
 copy($seoFile, $seoFile . '.seo.bak');
+// Post back exactly what the file holds: this case is "the client opened the
+// form and saved without touching the seo card", so a hardcoded sentence here
+// would only ever test that someone kept two copies of it in step.
+$storedSeo = cms()->content->load('home')['seo'] ?? [];
 
 $ignored = admin_post([
     'action'   => 'save',
@@ -123,7 +127,7 @@ $ignored = admin_post([
     'title'    => 'Αρχική',
     'seo'      => [
         'title'       => '',
-        'description' => 'Δείγμα σελίδας για το FlatCMS.',
+        'description' => $storedSeo['description'] ?? '',
         'og_image'    => ['src' => '', 'alt' => ''],
         'noindex'     => '0',
         'canonical'   => '',

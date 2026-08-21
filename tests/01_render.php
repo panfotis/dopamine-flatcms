@@ -27,9 +27,22 @@ section('Page rendering');
 $page = $cms->content->findBySlug('/');
 ok($page !== null, 'home page resolved from slug /');
 $html = $cms->renderPage($page);
-contains($html, '<title>Αρχική — Demo Πελάτη</title>', 'title rendered');
-contains($html, 'Μικρά site, χωρίς βαρύ CMS', 'hero heading rendered');
-contains($html, '<strong>schema.yml</strong>', 'richtext HTML survives rendering');
+contains($html, '<title>Αρχική - Demo Πελάτη</title>', 'title rendered');
+// Read off the page, never hardcoded. What is under test is that the value
+// reaches the markup - tying that to a particular sentence of demo copy means
+// every edit from the panel is a failing suite.
+contains($html, $page['blocks'][0]['fields']['heading'], 'hero heading rendered');
+$richField = '';
+foreach ($page['blocks'] as $block) {
+    foreach ($block['fields'] as $value) {
+        if (is_string($value) && preg_match('#<strong>.*?</strong>#u', $value, $m) === 1) {
+            $richField = $m[0];
+            break 2;
+        }
+    }
+}
+ok($richField !== '', 'the demo page carries a richtext field with markup in it');
+contains($html, $richField, 'richtext HTML survives rendering');
 contains($html, 'hello@example.gr', 'contact component rendered');
 ok(substr_count($html, '<section') === count($page['blocks']), 'every block rendered as a section');
 
@@ -66,8 +79,9 @@ section('SEO: the seo block reaches the head, and falls back where it is empty')
 $base = rtrim((string) $cms->config['site']['base_url'], '/');
 $homeSeo = $cms->seo($cms->content->load('home'));
 ok($homeSeo['title'] === 'Αρχική', 'a page with no seo.title falls back to its page title');
-contains($html, '<title>Αρχική — Demo Πελάτη</title>', 'and the head is unchanged by the fallback');
-contains($html, '<meta name="description" content="Δείγμα σελίδας για το FlatCMS.">', 'the description is rendered');
+contains($html, '<title>Αρχική - Demo Πελάτη</title>', 'and the head is unchanged by the fallback');
+contains($html, '<meta name="description" content="'
+    . htmlspecialchars($homeSeo['description'], ENT_QUOTES | ENT_SUBSTITUTE) . '">', 'the description is rendered');
 contains($html, '<meta property="og:title" content="Αρχική">', 'og:title uses the same resolved title');
 contains($html, '<meta property="og:url" content="' . $base . '/">', 'og:url is absolute, since a scraper does not resolve a relative one');
 missing($html, '<meta name="robots"', 'a page that is not noindex says nothing about robots');
@@ -117,7 +131,7 @@ ok($derived['og_image']['src'] === $base . $home['blocks'][0]['fields']['image']
 // the file would look filled in from the panel, so nobody would ever replace it
 // with a real one, and it would go stale the moment the copy above it changed.
 ok(!array_key_exists('seo', $bare), 'and nothing is written back onto the page — the fallback is a render-time answer');
-ok(($cms->content->load('home')['seo']['description'] ?? '') === 'Δείγμα σελίδας για το FlatCMS.',
+ok(($cms->content->load('home')['seo']['description'] ?? '') === ($home['seo']['description'] ?? ''),
     'the file still holds only what the client actually typed');
 
 // Richtext is HTML, and a snippet reading "drag &amp;amp; drop" is worse than none.
@@ -300,12 +314,13 @@ $withGlobals = cms()->renderPage(cms()->content->findBySlug('/'));
 contains($withGlobals, '<header>', 'the layout renders a header landmark');
 contains($withGlobals, 'aria-label="Κύρια πλοήγηση"', 'and the menu comes from the site_header component inside it');
 contains($withGlobals, '<footer>', 'a footer landmark too');
-contains($withGlobals, 'Θεσσαλονίκη, Ελλάδα', 'carrying what _footer.yml actually says');
+$footerNote = cms()->content->load('_footer')['blocks'][0]['fields']['note'];
+contains($withGlobals, $footerNote, 'carrying what _footer.yml actually says');
 contains($withGlobals, '© ' . date('Y'), 'and a copyright year the client never has to retype');
 
 // The same blocks on a different page, unchanged — that is the whole feature.
 $second = cms()->renderPage(cms()->content->findBySlug('/epikoinonia'));
-contains($second, 'Θεσσαλονίκη, Ελλάδα', 'the footer is on the second page as well');
+contains($second, $footerNote, 'the footer is on the second page as well');
 // `page` reaches a global's blocks as the page being rendered, not as the file
 // the block was read from, which is what lets the menu mark where you are.
 contains($second, 'href="/epikoinonia" aria-current="page"', 'and the menu marks the current page, from `page` shared into the region');
@@ -313,7 +328,7 @@ contains($second, 'href="/epikoinonia" aria-current="page"', 'and the menu marks
 // A global's blocks are not the page's, so nothing in the header or the footer
 // can become a page's meta description or its share image.
 $footerSeo = cms()->seo(cms()->content->load('epikoinonia'));
-ok(!str_contains($footerSeo['description'], 'Θεσσαλονίκη, Ελλάδα'),
+ok(!str_contains($footerSeo['description'], $footerNote),
     'a footer sentence never becomes a page description: ' . $footerSeo['description']);
 
 section('A page may name its own layout');
@@ -326,7 +341,7 @@ $bare = $cms->renderPage($landing);
 contains($bare, 'Προσφορά', 'the page renders');
 missing($bare, '<header>', 'with no header');
 missing($bare, '<footer>', 'and no footer — that is the whole difference');
-contains($bare, '<title>L — Demo Πελάτη</title>', 'while the head is still built from page.seo');
+contains($bare, '<title>L - Demo Πελάτη</title>', 'while the head is still built from page.seo');
 
 // Developer-owned, and it names a *template*: a value from a request would be a
 // file-read primitive. A name that does not resolve falls back rather than
@@ -481,12 +496,13 @@ section('A missing global renders an empty region, never a fatal');
 // A site whose developer has not written a _footer.yml yet must still serve
 // every page. bin/doctor is where that omission is reported, not a 500.
 $moved = cms()->content->pagesDir() . '/_footer.yml';
+$homeHeading = cms()->content->findBySlug('/')['blocks'][0]['fields']['heading'];
 rename($moved, $moved . '.gone');
 try {
     $without = cms()->renderPage(cms()->content->findBySlug('/'));
     contains($without, '<header>', 'the header still renders');
     missing($without, '<footer>', 'the footer landmark is absent rather than empty');
-    contains($without, 'Μικρά site, χωρίς βαρύ CMS', 'and the page itself is served as normal');
+    contains($without, $homeHeading, 'and the page itself is served as normal');
 } finally {
     rename($moved . '.gone', $moved);
 }

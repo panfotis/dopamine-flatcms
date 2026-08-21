@@ -49,7 +49,7 @@ blocks:
     type: text_image
     fields:
       heading: 'Ο πελάτης αλλάζει μόνο κείμενα'
-      body: '<p>Δεν υπάρχει κουμπί «προσθήκη ενότητας». Δεν υπάρχει drag &amp; drop. Ο πελάτης βλέπει τα πεδία που του δίνεις — τίποτα άλλο.</p>'
+      body: '<p>Δεν υπάρχει κουμπί «προσθήκη ενότητας». Δεν υπάρχει drag &amp; drop. Ο πελάτης βλέπει τα πεδία που του δίνεις - τίποτα άλλο.</p>'
       image:
         src: ''
         alt: ''
@@ -83,7 +83,7 @@ blocks:
     id: gallery
     type: gallery
     fields:
-      heading: 'Δουλειές μας'
+      heading: 'Γκαλερί'
       photos:
         -
           src: /uploads/2026/08/pexels-willianjusten-30929497.jpg
@@ -99,7 +99,7 @@ blocks:
     id: video
     type: video
     fields:
-      heading: 'Δείτε πώς δουλεύει'
+      heading: 'Το component βίντεο'
       embed:
         provider: youtube
         id: dQw4w9WgXcQ

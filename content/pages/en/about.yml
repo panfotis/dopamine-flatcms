@@ -1,0 +1,57 @@
+# Managed by Dopamine FlatCMS. Structure is edited here, content in /admin.
+title: About
+slug: /about
+nav:
+  label: About
+  order: 30
+seo:
+  title: ''
+  description: 'Who makes Dopamine FlatCMS, and why.'
+  og_image:
+    src: ''
+    alt: ''
+    width: 0
+    height: 0
+  noindex: false
+  canonical: ''
+blocks:
+  -
+    id: hero
+    type: hero
+    fields:
+      heading: 'About'
+      subheading: 'Who makes this, and why.'
+      lede: ''
+      image:
+        src: ''
+        alt: ''
+        width: 0
+        height: 0
+      cta_label: ''
+      cta_url: ''
+      cta2_label: ''
+      cta2_url: ''
+      align: start
+  -
+    id: story
+    type: prose
+    fields:
+      body: '<p>Dopamine FlatCMS is built and maintained by <strong>Fotis Panokis</strong>, a developer in Athens. It came out of a pattern that kept repeating: a five-page client site carrying a database, a plugin stack and an update schedule it never needed - and a client who only ever wanted to change a sentence and a photo.</p><p>This is the version without all that. The rule the whole thing hangs on: <strong>structure is developer-owned and lives in files; content is client-owned and edited in the panel.</strong> Everything else follows from it.</p>'
+  -
+    id: fluid
+    type: text_image
+    fields:
+      heading: 'The Dopamine family'
+      body: '<p>The look of this demo comes from <a href="https://panfotis.github.io/dopamine-fluid-css/">Dopamine Fluid</a> - a fluid CSS utility library by the same author. Class name equals spec: typography, spacing and grids that scale smoothly from mobile to ultrawide, with zero runtime.</p>'
+      image:
+        src: /uploads/2026/08/pexels-willianjusten-30929497.jpg
+        alt: 'Person by a lake under dramatic clouds'
+        width: 3859
+        height: 2573
+      media_side: start
+  -
+    id: license
+    type: callout
+    fields:
+      title: 'MIT licensed. Use it, fork it, ship with it.'
+      body: 'The engine is dopamine/flatcms on Packagist; this theme is a starting point, not a dependency. If it saves you a maintenance contract, it did its job.'
