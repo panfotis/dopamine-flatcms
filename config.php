@@ -210,7 +210,7 @@ $config = [
     'images' => [
         // Cloudflare image transformations. Free plan: 5.000 unique
         // transformations/month. The zone serving /cdn-cgi/image must be
-        // proxied through Cloudflare with Image Resizing enabled.
+        // proxied through Cloudflare with Transformations enabled (Images → Transformations).
         'transform'   => env_bool('CF_IMAGES_ENABLED'),
         'quality'     => 82,
         'max_upload'  => env_int('IMAGE_MAX_UPLOAD', 12 * 1024 * 1024), // 12 MB

@@ -501,8 +501,8 @@ outside it 404s before a byte of the source is read, so an anonymous GET cannot
 fill the disk with attacker-chosen variants. `img()` returns an empty string for
 one, so it never reaches the markup either.
 
-Cloudflare's own transformations remain available: Speed → Optimization → Image
-Resizing → enable for the zone, then `CF_IMAGES_ENABLED=1`, and `img()` builds
+Cloudflare's own transformations remain available: Images → Transformations →
+enable for the zone, then `CF_IMAGES_ENABLED=1`, and `img()` builds
 `/cdn-cgi/image/…` URLs instead. The width allowlist applies to that path too,
 so both backends serve the same finite set of variants.
 
