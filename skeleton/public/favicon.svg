@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Dopamine FlatCMS">
+  <!-- The theme's own two colours, and a D drawn as a path rather than set in
+       Archivo: a favicon has no webfont to load, so the letterform has to be
+       geometry or it renders in whatever the system offers. -->
+  <rect width="100" height="100" rx="18" fill="#C8F04F"/>
+  <path fill="#0D0D0D" fill-rule="evenodd"
+        d="M26 22h24a28 28 0 0 1 0 56H26zm16 14v28h8a14 14 0 0 0 0-28z"/>
+</svg>

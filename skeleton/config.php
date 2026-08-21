@@ -109,7 +109,12 @@ $config = [
         // Site-level media, used by the layout and by Phase 6's Open Graph
         // tags. Per-page values override them; these are what a page that has
         // said nothing falls back to, so no page ships without either.
-        'favicon'    => env('SITE_FAVICON', ''),
+        // Defaulted rather than left to the environment: public/favicon.svg
+        // ships with the skeleton, so a new site has an icon from the first
+        // minute. Without a link tag the browser asks for /favicon.ico on its
+        // own and takes a 404 for it. Replace the file, or point this at your
+        // own with SITE_FAVICON.
+        'favicon'    => env('SITE_FAVICON', '/favicon.svg'),
         'og_default' => env('SITE_OG_DEFAULT', ''),
     ],
 

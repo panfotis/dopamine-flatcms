@@ -259,7 +259,15 @@ unlink($bomb);
 
 section('The encoder produces real derivatives, once, atomically');
 
+// The repository's own uploads, not this process's content copy - and this is
+// the one section that has to be. What follows fetches the same file back over
+// HTTPS to exercise the R2 adapter, and the web server resolves /uploads/
+// against the repository. So point this Cms at the same directory the fixture
+// is written into, or the local encoder looks somewhere the file is not.
 $uploads = $root . '/content/uploads';
+$mediaCfg = $cms->config;
+$mediaCfg['paths']['uploads'] = $uploads;
+$cms = new Cms($mediaCfg);
 @mkdir($uploads, 0775, true);
 
 // content/uploads/ is tracked in git now, so a run that dies half way through
