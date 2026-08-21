@@ -45,7 +45,7 @@ contains($edit, 'name="blocks[faq][open_first]" value="1"', 'the boolean is a ch
 contains($edit, 'type="hidden" name="blocks[faq][open_first]" value="0"', 'with a hidden partner, so unchecking really posts');
 
 $_SESSION['csrf'] = 'the-real-token';
-$faqFile = dirname(__DIR__) . '/content/pages/el/home.yml';
+$faqFile = content_root() . '/pages/el/home.yml';
 copy($faqFile, $faqFile . '.admin.bak');
 
 $roundTrip = admin_post([
@@ -77,7 +77,7 @@ contains($rendered, "<strong>απ' ό,τι νομίζετε</strong>", 'with its
 missing($rendered, '<details open>', 'open_first: false leaves the first row closed');
 
 rename($faqFile . '.admin.bak', $faqFile);
-array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/home.*.yml') ?: []);
+array_map('unlink', glob(content_root() . '/.revisions/el/home.*.yml') ?: []);
 
 section('SEO is a collapsed card an editor can ignore entirely');
 // Collapsed matters: it is the one card on the form that is optional from top
@@ -112,7 +112,7 @@ contains($edit, 'type="hidden" name="seo[noindex]" value="0"',
 // must go through. The og_image posts as an empty map, and alt is required only
 // when src is set — an unconditional rule would make every page unsaveable.
 $_SESSION['csrf'] = 'the-real-token';
-$seoFile = dirname(__DIR__) . '/content/pages/el/home.yml';
+$seoFile = content_root() . '/pages/el/home.yml';
 copy($seoFile, $seoFile . '.seo.bak');
 // Post back exactly what the file holds: this case is "the client opened the
 // form and saved without touching the seo card", so a hardcoded sentence here
@@ -160,7 +160,7 @@ ok(\Symfony\Component\Yaml\Yaml::parseFile($seoFile)['seo']['description'] === '
     'the block is adopted on the first save rather than needing a migration');
 
 rename($seoFile . '.seo.bak', $seoFile);
-array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/home.*.yml') ?: []);
+array_map('unlink', glob(content_root() . '/.revisions/el/home.*.yml') ?: []);
 
 section('No structural controls exist in the UI');
 missing($edit, 'Προσθήκη ενότητας', 'no "add component" button');
@@ -263,7 +263,7 @@ file_put_contents($fixtureDir . '/components/locked_rows/schema.yml', \Symfony\C
     ]],
 ], 6, 2));
 
-$lockedPage = dirname(__DIR__) . '/content/pages/el/tmp-locked-rows.yml';
+$lockedPage = content_root() . '/pages/el/tmp-locked-rows.yml';
 file_put_contents($lockedPage, \Symfony\Component\Yaml\Yaml::dump([
     'title'  => 'Κλειδωμένες γραμμές',
     'slug'   => '/tmp-locked-rows',
@@ -273,7 +273,7 @@ file_put_contents($lockedPage, \Symfony\Component\Yaml\Yaml::dump([
     ]],
 ], 6, 2));
 
-$lockedCfg = require dirname(__DIR__) . '/config.php';
+$lockedCfg = test_config();
 // First theme layer wins, exactly as a site overrides a starter component.
 $lockedCfg['paths']['theme'] = array_merge([$fixtureDir], (array) $lockedCfg['paths']['theme']);
 $lockedForm = (string) admin_get(['action' => 'edit', 'page' => 'tmp-locked-rows'], $lockedCfg)->getContent();
@@ -336,7 +336,7 @@ $onDisk = static fn (string $u): string
 
 $served = $onDisk($url);
 ok(is_file($served), 'and the bytes are on disk at exactly the URL it returned: ' . $url);
-ok(str_starts_with($served, dirname(__DIR__) . '/content/'), 'inside the content repository, not under public/');
+ok(str_starts_with($served, content_root() . '/'), 'inside the content repository, not under public/');
 ok(str_starts_with($url, '/uploads/'), 'which is under /uploads/, so config.media_bases accepts it on save');
 ok(\Dopamine\FlatCms\Fields::mediaPath($url, cms()->fieldContext()['media_bases']) === $url,
     'and the src survives the save-time media guard rather than being blanked');
@@ -423,7 +423,7 @@ section('A refused save comes back as the form, with the message on the field');
 // pass, at every depth, so fixing one does not reveal the next on the save
 // after that.
 $_SESSION['csrf'] = 'the-real-token';
-$badFile = dirname(__DIR__) . '/content/pages/el/home.yml';
+$badFile = content_root() . '/pages/el/home.yml';
 copy($badFile, $badFile . '.err.bak');
 $beforeBad = (string) file_get_contents($badFile);
 
@@ -449,7 +449,7 @@ $body = (string) $refused->getContent();
 
 ok($refused->getStatusCode() === 422, 'the save is refused');
 ok((string) file_get_contents($badFile) === $beforeBad, 'and not one field of it reached the file');
-ok(glob(dirname(__DIR__) . '/content/.revisions/el/home.*.yml') === [],
+ok(glob(content_root() . '/.revisions/el/home.*.yml') === [],
     'nor did it burn a revision — the history keeps the last version that was real');
 
 contains($body, 'name="blocks[hero][heading]"', 'the client gets the form back, not an error page');
@@ -513,7 +513,7 @@ missing($headerForm, 'Προβολή σελίδας', 'nor a link to a page that
 missing($headerForm, 'Προσθήκη ενότητας', 'no "add component" button on a global either');
 missing($headerForm, 'name="blocks[header][type]"', 'nor a way to retype its block');
 
-$footerFile = dirname(__DIR__) . '/content/pages/el/_footer.yml';
+$footerFile = content_root() . '/pages/el/_footer.yml';
 $footerBackup = $footerFile . '.globals.bak';
 copy($footerFile, $footerBackup);
 
@@ -537,7 +537,7 @@ ok(!array_key_exists('seo', $storedFooter),
 ok($storedFooter['title'] === 'Υποσέλιδο', 'and its title is not a client-editable field');
 
 rename($footerBackup, $footerFile);
-array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/_footer.*.yml') ?: []);
+array_map('unlink', glob(content_root() . '/.revisions/el/_footer.*.yml') ?: []);
 
 section('A gallery is a grid, not thirty stacked cards');
 $galleryForm = render(['action' => 'edit', 'page' => 'home']);
@@ -589,7 +589,7 @@ ok($hugeUp->getStatusCode() === 400, 'and one over the 10 MB cap is refused');
 contains((string) $hugeUp->getContent(), '10 MB', 'with a message that names the limit');
 
 array_map('unlink', array_filter([$mp4, $fake, $huge], 'is_file'));
-array_map('unlink', glob(dirname(__DIR__) . '/content/uploads/*/*/clip-*.mp4') ?: []);
+array_map('unlink', glob(content_root() . '/uploads/*/*/clip-*.mp4') ?: []);
 
 section('The panel speaks its own language, chosen per site');
 // English is the *source* language and the default: a distributable package
@@ -643,8 +643,8 @@ contains($enEdit, 'href="/en/contact"', 'with a preview link at the prefixed URL
 
 // The forged case: the field decides where the write goes, so it has to be the
 // field the form actually posts and not a guess made from the id.
-$enFile = dirname(__DIR__) . '/content/pages/en/epikoinonia.yml';
-$elFile = dirname(__DIR__) . '/content/pages/el/epikoinonia.yml';
+$enFile = content_root() . '/pages/en/epikoinonia.yml';
+$elFile = content_root() . '/pages/el/epikoinonia.yml';
 copy($enFile, $enFile . '.i18n.bak');
 $elBefore = (string) file_get_contents($elFile);
 
@@ -661,10 +661,10 @@ ok((string) file_get_contents($elFile) === $elBefore, 'while the Greek file is u
 contains((string) $enSave->headers->get('Location'), 'locale=en', 'and the redirect keeps the editor in that language');
 
 rename($enFile . '.i18n.bak', $enFile);
-array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/en/epikoinonia.*.yml') ?: []);
+array_map('unlink', glob(content_root() . '/.revisions/en/epikoinonia.*.yml') ?: []);
 
 section('The panel says which pages are not translated yet');
-$orphanFile = dirname(__DIR__) . '/content/pages/el/tmp-untranslated.yml';
+$orphanFile = content_root() . '/pages/el/tmp-untranslated.yml';
 file_put_contents($orphanFile, \Symfony\Component\Yaml\Yaml::dump([
     'title' => 'Χωρίς μετάφραση', 'slug' => '/xoris', 'blocks' => [],
 ], 6, 2));

@@ -10,7 +10,7 @@ private: true
 # key entirely and the page stays reachable but unlisted.
 nav:
   label: Επικοινωνία
-  order: 40
+  order: 20
 seo:
   title: ''
   description: 'Στοιχεία επικοινωνίας.'
@@ -44,7 +44,7 @@ blocks:
       phone: '+30 210 0000000'
       email: hello@example.gr
       address: |-
-        Αθήνα
+        Θεσσαλονίκη
         Ελλάδα
   -
     id: form

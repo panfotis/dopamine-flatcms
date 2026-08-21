@@ -1,0 +1,44 @@
+# Managed by Dopamine FlatCMS. Structure is edited here, content in /admin.
+title: About
+slug: /about
+private: true
+nav:
+  label: About
+  order: 30
+seo:
+  title: ''
+  description: About
+  og_image:
+    src: ''
+    alt: ''
+    width: 0
+    height: 0
+  noindex: false
+  canonical: ''
+blocks:
+  -
+    id: abount-hero
+    type: hero
+    fields:
+      heading: 'About me'
+      subheading: 'Λιγα λόγια για μένα'
+      image:
+        src: ''
+        alt: ''
+        width: 0
+        height: 0
+      cta_label: ''
+      cta_url: ''
+      align: center
+  -
+    id: intro
+    type: text_image
+    fields:
+      heading: ''
+      body: ''
+      image:
+        src: ''
+        alt: ''
+        width: 0
+        height: 0
+      media_side: end

@@ -48,7 +48,7 @@ ok(array_column($nav, 'order') === array_values(array_column($nav, 'order')), 't
 // Content::list() sorts by slug, so "/" precedes "/epikoinonia" by accident.
 // Give the contact page a lower order and the menu must follow the key, not
 // the accident — otherwise nothing here proves anything.
-$contact = $root . '/content/pages/el/epikoinonia.yml';
+$contact = content_root() . '/pages/el/epikoinonia.yml';
 copy($contact, $contact . '.nav.bak');
 $page = Yaml::parseFile($contact);
 $page['nav'] = ['label' => 'Πρώτο', 'order' => 1];
@@ -114,6 +114,10 @@ mkdir($broken, 0775, true);
 file_put_contents($broken . '/schema.yml', "label: Broken\nfields: {}\n");
 file_put_contents($broken . '/_broken.twig', '{{ no_such_twig_function() }}');
 
+// The real content/, not this process's copy: what follows is an HTTP request
+// to the running site, and the web server reads the repository's own content.
+// Safe to write here because it only adds a uniquely-named temp page and
+// removes it again - unlike the hostile-save cases, it never edits a real one.
 $victim = $root . '/content/pages/el/tmp-broken.yml';
 file_put_contents($victim, Yaml::dump([
     'title'  => 'Broken',
@@ -235,6 +239,7 @@ if ($liveHttp) {
 // Nothing caches the sitemap on this side of the edge, so a page added right
 // now is in it on the next request. Everything after that is Cloudflare's, and
 // the `site` tag above is what makes the purge reach it.
+// Also the real content/, for the same reason: the sitemap is fetched over HTTP.
 $newPage = $root . '/content/pages/el/tmp-sitemap.yml';
 register_shutdown_function(static fn (): bool => @unlink($newPage));
 file_put_contents($newPage, Yaml::dump([

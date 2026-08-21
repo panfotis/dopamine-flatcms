@@ -19,7 +19,7 @@ putenv('AUTH_DEV_BYPASS=1');   // explicit, exactly as .ddev/config.yaml does it
 $_SESSION['csrf'] = 'test-token';
 $hostile = require __DIR__ . '/fixtures/hostile_save.php';
 
-$file   = dirname(__DIR__) . '/content/pages/el/home.yml';
+$file   = content_root() . '/pages/el/home.yml';
 $backup = $file . '.bak';
 copy($file, $backup);
 
@@ -333,7 +333,7 @@ admin_post($linkTo(['page' => 'epikoinonia', 'evil' => 'x']));
 ok(!array_key_exists('evil', $linkOf()), 'an undeclared sub-key is dropped, exactly as inside an image');
 
 // The whole point of storing the id: the href follows the slug wherever it goes.
-$other = dirname(__DIR__) . '/content/pages/el/epikoinonia.yml';
+$other = content_root() . '/pages/el/epikoinonia.yml';
 copy($other, $other . '.bak');
 
 $renamed = cms();
@@ -370,7 +370,7 @@ contains(
 // Byte-for-byte, comments included: save() rewrites the file, and a suite run
 // must not quietly edit the developer's own content.
 rename($other . '.bak', $other);
-array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/epikoinonia.*.yml') ?: []);
+array_map('unlink', glob(content_root() . '/.revisions/el/epikoinonia.*.yml') ?: []);
 
 // An id that no longer resolves must not become a dead href.
 admin_post($toPage('deleted-page'));
@@ -391,7 +391,7 @@ contains($intro['body'], '<a href="https://example.gr" target="_blank" rel="noop
 missing($intro['body'], '&nbsp;</p>', 'empty paragraph dropped');
 
 section('Revisions');
-$revs = glob(dirname(__DIR__) . '/content/.revisions/el/home.*.yml') ?: [];
+$revs = glob(content_root() . '/.revisions/el/home.*.yml') ?: [];
 ok(count($revs) >= 1, 'a revision snapshot was written before saving');
 
 section('Page still renders after a hostile save');
@@ -413,7 +413,7 @@ $forgeEmail = static fn (string $value): array => [
     'action'   => 'save',
     'csrf'     => 'test-token',
     'page'     => 'home',
-    'baseline' => (string) hash_file('sha256', dirname(__DIR__) . '/content/pages/el/home.yml'),
+    'baseline' => (string) hash_file('sha256', content_root() . '/pages/el/home.yml'),
     'blocks'   => ['contact' => ['email' => $value, 'heading' => 'Πείτε μας τι χρειάζεστε']],
 ];
 
@@ -539,7 +539,7 @@ section('Restore re-runs the sanitiser instead of copying the file back');
 // A revision written *before* the allowlist tightened: hostile HTML sitting on
 // disk in a file the panel is about to put back. copy() would land it verbatim,
 // and text_image renders body with |raw.
-$revDir = dirname(__DIR__) . '/content/.revisions/el';
+$revDir = content_root() . '/.revisions/el';
 $poisoned = Yaml::parseFile($file);
 $poisoned['title'] = 'Παλιός <b>τίτλος</b>';
 $poisoned['slug'] = '/hijacked';
@@ -721,7 +721,7 @@ section('An editor cannot flip the Turnstile toggle, or redirect the leads');
 // Phase 3, and for the same reason: a spam control the client can switch off is
 // not a spam control, and a recipient the client can retype is a lead redirect.
 // Both are refused on save, not merely locked in the form.
-$contactFile = dirname(__DIR__) . '/content/pages/el/epikoinonia.yml';
+$contactFile = content_root() . '/pages/el/epikoinonia.yml';
 copy($contactFile, $contactFile . '.form.bak');
 
 $formBlock = static function () use ($contactFile, $blockNo): array {
@@ -763,13 +763,13 @@ contains($editorForm, 'name="blocks[form][turnstile]"', 'the toggle is rendered 
 contains($editorForm, cms()->lang->t('edit.admin_only'), 'marked admin-only');
 
 rename($contactFile . '.form.bak', $contactFile);
-array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/epikoinonia.*.yml') ?: []);
+array_map('unlink', glob(content_root() . '/.revisions/el/epikoinonia.*.yml') ?: []);
 
 section('A global is locked down exactly like a page');
 // The header and the footer are page files that render on every page. The
 // rule does not relax because the file is shared — this is the same hostile
 // save, aimed at `_header`.
-$headerFile = dirname(__DIR__) . '/content/pages/el/_header.yml';
+$headerFile = content_root() . '/pages/el/_header.yml';
 $headerBackup = $headerFile . '.lockdown.bak';
 copy($headerFile, $headerBackup);
 
@@ -813,11 +813,11 @@ ok(Yaml::parseFile($headerFile)['blocks'][0]['fields']['logo']['src'] === '',
     'but the src is refused — a global is not a hole in the open-proxy guard');
 
 rename($headerBackup, $headerFile);
-array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/_header.*.yml') ?: []);
+array_map('unlink', glob(content_root() . '/.revisions/el/_header.*.yml') ?: []);
 
 // restore
 rename($backup, $file);
 // Scoped to the fixture page: a suite run must never wipe real revision history.
-array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/home.*.yml') ?: []);
+array_map('unlink', glob(content_root() . '/.revisions/el/home.*.yml') ?: []);
 
 summary();

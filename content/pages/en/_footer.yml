@@ -1,12 +1,12 @@
 # Managed by Dopamine FlatCMS. Structure is edited here, content in /admin.
 title: Footer
 blocks:
-  -
-    id: footer
-    type: site_footer
-    fields:
-      note: 'Thessaloniki, Greece'
-      links:
-        -
-          label: Contact
-          url: /en/contact
+- id: footer
+  type: site_footer
+  fields:
+    note: Created and maintained by Fotis Panokis.
+    links:
+    - label: GitHub
+      url: https://github.com/panfotis/dopamine-flatcms
+    - label: Packagist
+      url: https://packagist.org/packages/dopamine/flatcms

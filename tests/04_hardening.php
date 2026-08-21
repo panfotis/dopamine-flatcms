@@ -220,7 +220,7 @@ $out = $cms->withDefaults($schema, ['heading' => 'ok', 'removed_unsafe_field' =>
 ok(!array_key_exists('removed_unsafe_field', $out), 'a key no longer in schema.yml is not exposed as fields.*');
 
 section('Orphaned keys are dropped from disk on save');
-$file = dirname(__DIR__) . '/content/pages/el/home.yml';
+$file = content_root() . '/pages/el/home.yml';
 $backup = $file . '.hardening.bak';
 copy($file, $backup);
 
@@ -230,7 +230,7 @@ file_put_contents($file, Yaml::dump($raw, 6, 2));
 
 // With the panel's catalogue, as Cms builds it. Without one a message
 // falls back to its key, which is checked below.
-$content = new Content(dirname(__DIR__) . '/content', 'el', cms()->lang);
+$content = new Content(content_root() . '', 'el', cms()->lang);
 admin_post($hostile('test-token', (string) hash_file('sha256', $file)));
 $after = Yaml::parseFile($file);
 ok(!array_key_exists('ghost_field', $after['blocks'][0]['fields']), 'undeclared key removed from the file on the next save');
@@ -250,7 +250,7 @@ contains($threw, cms()->lang->t('err.stale'), 'a save carrying a stale baseline 
 // says so in keys. A missing translation must never be a missing guard.
 $mute = '';
 try {
-    (new Content(dirname(__DIR__) . '/content', 'el'))->transaction('home', $stale, static fn (array $p): array => $p);
+    (new Content(content_root() . '', 'el'))->transaction('home', $stale, static fn (array $p): array => $p);
 } catch (Throwable $e) {
     $mute = $e->getMessage();
 }
@@ -266,17 +266,17 @@ ok($ran, 'a save carrying the current baseline goes through');
 
 section('Revision snapshots do not collide within one second');
 // Scoped to the fixture page: a suite run must never wipe real revision history.
-array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/home.*.yml') ?: []);
+array_map('unlink', glob(content_root() . '/.revisions/el/home.*.yml') ?: []);
 for ($i = 0; $i < 3; $i++) {
     $content->snapshot('home');
 }
-ok(count(glob(dirname(__DIR__) . '/content/.revisions/el/home.*.yml') ?: []) === 3, 'three snapshots in the same second produce three files');
+ok(count(glob(content_root() . '/.revisions/el/home.*.yml') ?: []) === 3, 'three snapshots in the same second produce three files');
 
 // Pruning sorts by name, and a name only carries seconds — so inside one second
 // the order is the random suffix, and the snapshot just taken could sort lowest
 // and be deleted by its own prune. That made exactly one save in a burst the
 // one that could not be undone.
-$revsOf = static fn (): array => glob(dirname(__DIR__) . '/content/.revisions/el/home.*.yml') ?: [];
+$revsOf = static fn (): array => glob(content_root() . '/.revisions/el/home.*.yml') ?: [];
 $kept = true;
 for ($i = 0; $i < 12; $i++) {
     $was = $revsOf();
@@ -289,7 +289,7 @@ ok(count($revsOf()) === 5, 'while the keep limit still holds (' . count($revsOf(
 // restore
 rename($backup, $file);
 // Scoped to the fixture page: a suite run must never wipe real revision history.
-array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/home.*.yml') ?: []);
+array_map('unlink', glob(content_root() . '/.revisions/el/home.*.yml') ?: []);
 
 section('Admin errors do not leak filesystem paths');
 $error = admin_post([
@@ -422,7 +422,7 @@ section('A crafted locale segment cannot escape content/pages/');
 // a directory name.
 ok($refused(static fn () => $globalCms->useLocale('../../etc')), 'an unconfigured locale is refused by the map');
 ok($refused(static fn () => $globalCms->useLocale('EL')), 'and the match is exact, not merely case-insensitive-ish');
-ok($refused(static fn () => new Content(dirname(__DIR__) . '/content', '../el')),
+ok($refused(static fn () => new Content(content_root() . '', '../el')),
     'and a traversal in a locale is refused by Content itself, whatever called it');
 
 $localeCms = cms();

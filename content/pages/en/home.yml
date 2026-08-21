@@ -1,6 +1,4 @@
 # Managed by Dopamine FlatCMS. Structure is edited here, content in /admin.
-# The filename is the translation identity: this is el/home.yml in English,
-# with its own slug. Nothing inside the file says so, and nothing needs to.
 title: Home
 slug: /
 nav:
@@ -8,7 +6,7 @@ nav:
   order: 10
 seo:
   title: ''
-  description: 'A sample page for FlatCMS.'
+  description: 'Dopamine FlatCMS - just files, just works.'
   og_image:
     src: ''
     alt: ''
@@ -21,27 +19,98 @@ blocks:
     id: hero
     type: hero
     fields:
-      heading: 'Small sites, without a heavy CMS'
-      subheading: 'Static speed, flat files, and a panel the client cannot break.'
-      image:
-        src: /uploads/2026/08/pexels-willianjusten-30929497.jpg
-        alt: ''
-        width: 3859
-        height: 2573
-      cta_label: Contact
-      cta_url: epikoinonia
-      align: center
-  -
-    id: intro
-    type: text_image
-    fields:
-      heading: 'What it does differently'
-      body: '<p>Every section is a folder with a <strong>schema.yml</strong> and a template. The panel builds itself from the schema.</p><ul><li>No database</li><li>No build step</li><li>Changes are live in seconds</li></ul>'
+      heading: 'Dopamine FlatCMS'
+      subheading: 'Just files. Just works.'
+      lede: 'No database. No build step. No setup. A page is a file, a section is a folder - and the panel builds itself.'
       image:
         src: ''
         alt: ''
         width: 0
         height: 0
+      cta_label: 'Get started'
+      cta_url:
+        page: epikoinonia
+        url: ''
+        target: _self
+      cta2_label: GitHub
+      cta2_url:
+        page: ''
+        url: 'https://github.com/panfotis/dopamine-flatcms'
+        target: _blank
+      align: start
+  -
+    id: intro
+    type: prose
+    fields:
+      body: "<p>Write a YAML file. Get a page. That's it. Copy a folder, get a component. The admin panel reads your schema and builds itself - nothing to configure, nothing to install, nothing to update at 2am.</p><p><strong>Structure is yours. Content is theirs. Nothing breaks.</strong></p>"
+  -
+    id: scope
+    type: callout
+    fields:
+      title: 'All the CMS your client needs. None of the bloat.'
+      body: 'They edit text, images and content in a clean panel - you skip the database, the plugins and the update treadmill. Built for small sites, 3 to 15 pages: brochure sites, portfolios, landing pages.'
+  -
+    id: features
+    type: feature_grid
+    fields:
+      heading: 'What you get'
+      cards:
+        -
+          title: 'No database'
+          body: 'One page = one file, versioned in Git.'
+          chips: 'yaml, git'
+          color: lilac
+        -
+          title: 'Schema-driven panel'
+          body: 'The admin builds itself from each component schema.'
+          chips: schema.yml
+          color: sky
+        -
+          title: Components
+          body: 'Copy a folder, get a section. No registration step.'
+          chips: 'schema + twig'
+          color: peach
+        -
+          title: 'Cloudflare Access'
+          body: 'No passwords to lose - log in with your team email.'
+          chips: zero-trust
+          color: mint
+        -
+          title: 'Media in git - or R2'
+          body: 'Uploads are versioned in git with your content and served as responsive WebP. Media-heavy site? One flag moves them to Cloudflare R2.'
+          chips: 'git, r2, webp'
+          color: lemon
+        -
+          title: Revisions
+          body: 'Every save keeps a version you can restore.'
+          chips: restore
+          color: rose
+        -
+          title: Forms
+          body: 'CSRF, honeypot, optional Turnstile. Stored and mailed.'
+          chips: honeypot
+          color: lime
+        -
+          title: Multilingual
+          body: 'Per-language slugs: /contact and /el/epikoinonia.'
+          chips: 'el, en'
+          color: lilac
+        -
+          title: 'Fast by default'
+          body: 'No database, no queries. Every page ships ready for full-page edge caching, with tags that purge themselves on every save.'
+          chips: 'no build'
+          color: sky
+  -
+    id: client
+    type: text_image
+    fields:
+      heading: 'The client edits only text'
+      body: '<p>There is no "add section" button. No drag &amp; drop. The client sees the fields you give them - nothing else. The page you designed stays the page you designed.</p>'
+      image:
+        src: /uploads/2026/08/pexels-zetong-li-880728-13724339.jpg
+        alt: 'Mountain landscape at dusk'
+        width: 1920
+        height: 1440
       media_side: end
   -
     id: faq
@@ -56,6 +125,51 @@ blocks:
         -
           question: 'Does it need a database?'
           answer: '<p>No. Every page is one YAML file.</p>'
+        -
+          question: 'Are the forms spam-protected?'
+          answer: '<p>Yes - CSRF token, honeypot and optional Cloudflare Turnstile. Submissions are stored and mailed to you.</p>'
+        -
+          question: 'What if the client deletes something by mistake?'
+          answer: '<p>Every save keeps a revision you can restore, and the content lives in Git.</p>'
+        -
+          question: 'Multiple languages?'
+          answer: '<p>Yes, with per-language slugs - this site serves /contact in English and /el/epikoinonia in Greek.</p>'
+  -
+    id: gallery
+    type: gallery
+    fields:
+      heading: Gallery
+      photos:
+        -
+          src: /uploads/2026/08/pexels-willianjusten-30929497.jpg
+          alt: 'Person by a lake under dramatic clouds'
+          width: 3859
+          height: 2573
+        -
+          src: /uploads/2026/08/pexels-zetong-li-880728-13724339.jpg
+          alt: 'Aerial view of a snowy landscape with golden vegetation'
+          width: 1920
+          height: 1440
+  -
+    id: video
+    type: video
+    fields:
+      heading: 'The video component'
+      embed:
+        provider: youtube
+        id: dQw4w9WgXcQ
+      poster:
+        src: /uploads/2026/08/pexels-zetong-li-880728-13724339.jpg
+        alt: 'Still frame from the video'
+        width: 1920
+        height: 1440
+      loop:
+        src: /uploads/2026/08/284683363-mexican-food-fiesta-family-and-259948.mp4
+        poster:
+          src: ''
+          alt: ''
+          width: 0
+          height: 0
   -
     id: contact
     type: contact_cta
@@ -64,5 +178,5 @@ blocks:
       phone: '+30 210 0000000'
       email: hello@example.gr
       address: |-
-        Thessaloniki
+        Athens
         Greece

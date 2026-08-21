@@ -6,7 +6,7 @@ nav:
   order: 10
 seo:
   title: ''
-  description: 'Δείγμα σελίδας για το FlatCMS.'
+  description: 'Dopamine FlatCMS - σκέτα αρχεία, που απλώς δουλεύουν.'
   og_image:
     src: ''
     alt: ''
@@ -19,43 +19,99 @@ blocks:
     id: hero
     type: hero
     fields:
-      heading: 'Μικρά site, χωρίς βαρύ CMS'
-      subheading: 'Στατική ταχύτητα, flat αρχεία, και ένα panel που ο πελάτης δεν μπορεί να χαλάσει.'
+      heading: 'Dopamine FlatCMS'
+      subheading: 'Just files. Just works.'
+      lede: 'Ούτε βάση δεδομένων, ούτε build step, ούτε στήσιμο. Κάθε σελίδα είναι ένα αρχείο, κάθε ενότητα ένας φάκελος - και το panel στήνεται μόνο του.'
       image:
-        src: /uploads/2026/08/pexels-willianjusten-30929497.jpg
+        src: ''
         alt: ''
-        width: 3859
-        height: 2573
-      cta_label: Επικοινωνία
+        width: 0
+        height: 0
+      cta_label: 'Ξεκίνα'
       cta_url:
         page: epikoinonia
         url: ''
         target: _self
-      align: center
+      cta2_label: 'GitHub'
+      cta2_url:
+        page: ''
+        url: 'https://github.com/panfotis/dopamine-flatcms'
+        target: _blank
+      align: start
   -
     id: intro
-    type: text_image
+    type: prose
     fields:
-      heading: 'Τι κάνει διαφορετικά'
-      body: '<p>Κάθε ενότητα είναι ένας φάκελος με ένα <strong>schema.yml</strong> και ένα template. Το panel φτιάχνεται μόνο του από το schema.</p><ul><li>Χωρίς βάση δεδομένων</li><li>Χωρίς build step</li><li>Οι αλλαγές είναι live σε δευτερόλεπτα</li></ul>'
-      image:
-        src: ''
-        alt: ''
-        width: 0
-        height: 0
-      media_side: end
+      body: '<p>Γράφεις ένα YAML, έχεις σελίδα. Τόσο απλά. Αντιγράφεις έναν φάκελο, έχεις component. Το panel διαβάζει το schema σου και φτιάχνει μόνο του τη φόρμα - δεν ρυθμίζεις τίποτα, δεν εγκαθιστάς τίποτα, δεν ξενυχτάς για κανένα update.</p><p><strong>Η δομή είναι δική σου. Το περιεχόμενο δικό τους. Και τίποτα δεν σπάει.</strong></p>'
   -
-    id: second
+    id: scope
+    type: callout
+    fields:
+      title: 'Όλο το CMS που χρειάζεται ο πελάτης. Τίποτα παραπάνω.'
+      body: 'Ο πελάτης αλλάζει κείμενα και εικόνες σε ένα καθαρό panel - εσύ γλιτώνεις τη βάση, τα plugins και τα ατέλειωτα updates. Φτιαγμένο για μικρά site, 3 με 15 σελίδες: εταιρικά, portfolio, παρουσιάσεις.'
+  -
+    id: features
+    type: feature_grid
+    fields:
+      heading: 'Τι παίρνεις'
+      cards:
+        -
+          title: 'Χωρίς βάση δεδομένων'
+          body: 'Κάθε σελίδα είναι ένα αρχείο, με πλήρες ιστορικό στο Git.'
+          chips: 'yaml, git'
+          color: lilac
+        -
+          title: 'Panel από το schema'
+          body: 'Το admin φτιάχνεται μόνο του από το schema κάθε component.'
+          chips: 'schema.yml'
+          color: sky
+        -
+          title: 'Components'
+          body: 'Ένας φάκελος = μια ενότητα. Χωρίς κανένα registration.'
+          chips: 'schema + twig'
+          color: peach
+        -
+          title: 'Cloudflare Access'
+          body: 'Κανένας κωδικός για να χαθεί - μπαίνεις με το email της ομάδας σου.'
+          chips: 'zero-trust'
+          color: mint
+        -
+          title: 'Media στο git - ή σε R2'
+          body: 'Οι εικόνες μπαίνουν στο git μαζί με το περιεχόμενο και σερβίρονται ως responsive WebP. Πολλά media; Ένα flag τα στέλνει στο Cloudflare R2.'
+          chips: 'git, r2, webp'
+          color: lemon
+        -
+          title: 'Revisions'
+          body: 'Κάθε αποθήκευση κρατά αντίγραφο που επαναφέρεις με ένα κλικ.'
+          chips: 'restore'
+          color: rose
+        -
+          title: 'Φόρμες'
+          body: 'CSRF, honeypot, προαιρετικό Turnstile. Κάθε μήνυμα αποθηκεύεται και έρχεται στο email σου.'
+          chips: 'honeypot'
+          color: lime
+        -
+          title: 'Πολυγλωσσικό'
+          body: 'Ξεχωριστό slug ανά γλώσσα: /contact και /el/epikoinonia.'
+          chips: 'el, en'
+          color: lilac
+        -
+          title: 'Γρήγορο εξαρχής'
+          body: 'Καμία βάση, κανένα query. Κάθε σελίδα βγαίνει έτοιμη για full-page cache στο edge, με tags που καθαρίζουν μόνα τους σε κάθε αποθήκευση.'
+          chips: 'no build'
+          color: sky
+  -
+    id: client
     type: text_image
     fields:
       heading: 'Ο πελάτης αλλάζει μόνο κείμενα'
-      body: '<p>Δεν υπάρχει κουμπί «προσθήκη ενότητας». Δεν υπάρχει drag &amp; drop. Ο πελάτης βλέπει τα πεδία που του δίνεις - τίποτα άλλο.</p>'
+      body: '<p>Δεν υπάρχει κουμπί «προσθήκη ενότητας», δεν υπάρχει drag &amp; drop. Ο πελάτης βλέπει μόνο τα πεδία που του έδωσες - τίποτα άλλο. Η σελίδα που σχεδίασες μένει όπως τη σχεδίασες.</p>'
       image:
-        src: ''
-        alt: ''
-        width: 0
-        height: 0
-      media_side: start
+        src: /uploads/2026/08/pexels-zetong-li-880728-13724339.jpg
+        alt: 'Ορεινό τοπίο το σούρουπο'
+        width: 1920
+        height: 1440
+      media_side: end
   -
     id: faq
     type: faq
@@ -65,25 +121,24 @@ blocks:
       questions:
         -
           question: 'Μπορεί ο πελάτης να χαλάσει τη σελίδα;'
-          answer: '<p>Όχι. Αλλάζει μόνο κείμενα και εικόνες μέσα στα πεδία που του δίνετε.</p>'
+          answer: '<p>Όχι. Πειράζει μόνο τα κείμενα και τις εικόνες μέσα στα πεδία που του έχεις δώσει.</p>'
         -
           question: 'Χρειάζεται βάση δεδομένων;'
           answer: '<p>Όχι. Κάθε σελίδα είναι ένα αρχείο YAML.</p>'
-  -
-    id: contact
-    type: contact_cta
-    fields:
-      heading: 'Πείτε μας τι χρειάζεστε'
-      phone: '+30 210 0000000'
-      email: hello@example.gr
-      address: |-
-        Θεσσαλονίκη
-        Ελλάδα
+        -
+          question: 'Οι φόρμες έχουν προστασία από spam;'
+          answer: '<p>Ναι - CSRF token, honeypot και προαιρετικό Cloudflare Turnstile. Τα μηνύματα αποθηκεύονται και έρχονται στο email σου.</p>'
+        -
+          question: 'Κι αν ο πελάτης σβήσει κάτι κατά λάθος;'
+          answer: '<p>Κάθε αποθήκευση κρατά revision που επαναφέρεται με ένα κλικ - και το περιεχόμενο ζει στο Git.</p>'
+        -
+          question: 'Πολλές γλώσσες;'
+          answer: '<p>Ναι, με δικό της slug η κάθε γλώσσα - αυτό το site σερβίρει /contact στα αγγλικά και /el/epikoinonia στα ελληνικά.</p>'
   -
     id: gallery
     type: gallery
     fields:
-      heading: 'Γκαλερί'
+      heading: Γκαλερί
       photos:
         -
           src: /uploads/2026/08/pexels-willianjusten-30929497.jpg
@@ -115,3 +170,13 @@ blocks:
           alt: ''
           width: 0
           height: 0
+  -
+    id: contact
+    type: contact_cta
+    fields:
+      heading: 'Πείτε μας τι χρειάζεστε'
+      phone: '+30 210 0000000'
+      email: hello@example.gr
+      address: |-
+        Αθήνα
+        Ελλάδα

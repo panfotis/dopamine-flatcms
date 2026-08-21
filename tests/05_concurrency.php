@@ -19,7 +19,7 @@ putenv('AUTH_DEV_BYPASS=1');
 require dirname(__DIR__) . '/config.php';
 
 $cms   = cms();
-$file  = dirname(__DIR__) . '/content/pages/el/home.yml';
+$file  = content_root() . '/pages/el/home.yml';
 $backup = $file . '.concurrency.bak';
 copy($file, $backup);
 
@@ -98,7 +98,7 @@ ok($locks->heldByOther('home', 'editor@example-domain.com') === null, 'a marker 
 section('A global rides the same transaction as a page');
 // It is a page file, so lock, baseline and snapshot are not reimplemented for
 // it — this is the proof rather than an assumption.
-$headerFile = dirname(__DIR__) . '/content/pages/el/_header.yml';
+$headerFile = content_root() . '/pages/el/_header.yml';
 $headerBackup = $headerFile . '.concurrency.bak';
 copy($headerFile, $headerBackup);
 
@@ -126,10 +126,10 @@ $cms->content->transaction('_header', '', static function (array $p): array {
 ok($cms->content->revisions('_header') !== [], 'a global is snapshotted before it is overwritten, like any page');
 
 rename($headerBackup, $headerFile);
-array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/_header.*.yml') ?: []);
+array_map('unlink', glob(content_root() . '/.revisions/el/_header.*.yml') ?: []);
 
 rename($backup, $file);
 // Scoped to the fixture page: a suite run must never wipe real revision history.
-array_map('unlink', glob(dirname(__DIR__) . '/content/.revisions/el/home.*.yml') ?: []);
+array_map('unlink', glob(content_root() . '/.revisions/el/home.*.yml') ?: []);
 
 summary();

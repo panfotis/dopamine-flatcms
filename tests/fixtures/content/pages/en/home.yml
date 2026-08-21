@@ -1,0 +1,68 @@
+# Managed by Dopamine FlatCMS. Structure is edited here, content in /admin.
+# The filename is the translation identity: this is el/home.yml in English,
+# with its own slug. Nothing inside the file says so, and nothing needs to.
+title: Home
+slug: /
+nav:
+  label: Home
+  order: 10
+seo:
+  title: ''
+  description: 'A sample page for FlatCMS.'
+  og_image:
+    src: ''
+    alt: ''
+    width: 0
+    height: 0
+  noindex: false
+  canonical: ''
+blocks:
+  -
+    id: hero
+    type: hero
+    fields:
+      heading: 'Small sites, without a heavy CMS'
+      subheading: 'Static speed, flat files, and a panel the client cannot break.'
+      image:
+        src: /uploads/2026/08/pexels-willianjusten-30929497.jpg
+        alt: ''
+        width: 3859
+        height: 2573
+      cta_label: Contact
+      cta_url: epikoinonia
+      align: center
+  -
+    id: intro
+    type: text_image
+    fields:
+      heading: 'What it does differently'
+      body: '<p>Every section is a folder with a <strong>schema.yml</strong> and a template. The panel builds itself from the schema.</p><ul><li>No database</li><li>No build step</li><li>Changes are live in seconds</li></ul>'
+      image:
+        src: ''
+        alt: ''
+        width: 0
+        height: 0
+      media_side: end
+  -
+    id: faq
+    type: faq
+    fields:
+      heading: 'Frequently asked'
+      open_first: true
+      questions:
+        -
+          question: 'Can the client break the page?'
+          answer: '<p>No. They change only the text and images inside the fields you give them.</p>'
+        -
+          question: 'Does it need a database?'
+          answer: '<p>No. Every page is one YAML file.</p>'
+  -
+    id: contact
+    type: contact_cta
+    fields:
+      heading: 'Tell us what you need'
+      phone: '+30 210 0000000'
+      email: hello@example.gr
+      address: |-
+        Thessaloniki
+        Greece

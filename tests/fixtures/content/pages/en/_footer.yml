@@ -1,0 +1,12 @@
+# Managed by Dopamine FlatCMS. Structure is edited here, content in /admin.
+title: Footer
+blocks:
+  -
+    id: footer
+    type: site_footer
+    fields:
+      note: 'Thessaloniki, Greece'
+      links:
+        -
+          label: Contact
+          url: /en/contact

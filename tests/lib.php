@@ -53,9 +53,52 @@ function summary(): void
     exit($f === 0 ? 0 : 1);
 }
 
+/**
+ * A private copy of tests/fixtures/content/, made once per process.
+ *
+ * The suite saves hostile input, restores revisions and forces stale-baseline
+ * conflicts - all of which write. Pointed at the repository's own content/ it
+ * corrupted real files whenever a test failed before its restore ran, and the
+ * revisions it wrote accumulated as untracked files in a tracked directory.
+ * A per-process copy under var/cache/ cannot do either.
+ */
+function content_root(): string
+{
+    static $dir = null;
+    if ($dir !== null) {
+        return $dir;
+    }
+
+    $dir = dirname(__DIR__) . '/var/cache/content-' . getmypid();
+    exec('rm -rf ' . escapeshellarg($dir));
+    mkdir($dir, 0775, true);
+    exec('cp -R ' . escapeshellarg(__DIR__ . '/fixtures/content/pages') . ' ' . escapeshellarg($dir . '/pages'));
+    copy(__DIR__ . '/fixtures/content/redirects.yml', $dir . '/redirects.yml');
+    mkdir($dir . '/uploads', 0775, true);
+    register_shutdown_function(static function () use ($dir): void {
+        exec('rm -rf ' . escapeshellarg($dir));
+    });
+
+    return $dir;
+}
+
+/**
+ * The engine config, pointed at this process's content copy.
+ *
+ * @return array<string, mixed>
+ */
+function test_config(): array
+{
+    $config = require dirname(__DIR__) . '/config.php';
+    $config['paths']['content'] = content_root();
+    $config['paths']['uploads'] = content_root() . '/uploads';
+
+    return $config;
+}
+
 function cms(): Cms
 {
-    return new Cms(require dirname(__DIR__) . '/config.php');
+    return new Cms(test_config());
 }
 
 /**
@@ -73,7 +116,7 @@ function cms(): Cms
  */
 function admin(Request $request, ?array $config = null): Response
 {
-    return (new Admin(new Cms($config ?? require dirname(__DIR__) . '/config.php')))->handle($request);
+    return (new Admin(new Cms($config ?? test_config())))->handle($request);
 }
 
 /**
@@ -134,7 +177,7 @@ function access(): array
         'e'   => $b64($rsa['e']),
     ]]], JSON_THROW_ON_ERROR));
 
-    $config = require dirname(__DIR__) . '/config.php';
+    $config = test_config();
     $config['auth']['mode']        = 'cf_access';
     $config['auth']['dev_bypass']  = false;          // the production setting
     $config['auth']['aud']         = str_repeat('a', 64);

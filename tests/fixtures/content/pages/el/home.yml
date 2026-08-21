@@ -1,0 +1,117 @@
+# Managed by Dopamine FlatCMS. Structure is edited here, content in /admin.
+title: Αρχική
+slug: /
+nav:
+  label: Αρχική
+  order: 10
+seo:
+  title: ''
+  description: 'Δείγμα σελίδας για το FlatCMS.'
+  og_image:
+    src: ''
+    alt: ''
+    width: 0
+    height: 0
+  noindex: false
+  canonical: ''
+blocks:
+  -
+    id: hero
+    type: hero
+    fields:
+      heading: 'Μικρά site, χωρίς βαρύ CMS'
+      subheading: 'Στατική ταχύτητα, flat αρχεία, και ένα panel που ο πελάτης δεν μπορεί να χαλάσει.'
+      image:
+        src: /uploads/2026/08/pexels-willianjusten-30929497.jpg
+        alt: ''
+        width: 3859
+        height: 2573
+      cta_label: Επικοινωνία
+      cta_url:
+        page: epikoinonia
+        url: ''
+        target: _self
+      align: center
+  -
+    id: intro
+    type: text_image
+    fields:
+      heading: 'Τι κάνει διαφορετικά'
+      body: '<p>Κάθε ενότητα είναι ένας φάκελος με ένα <strong>schema.yml</strong> και ένα template. Το panel φτιάχνεται μόνο του από το schema.</p><ul><li>Χωρίς βάση δεδομένων</li><li>Χωρίς build step</li><li>Οι αλλαγές είναι live σε δευτερόλεπτα</li></ul>'
+      image:
+        src: ''
+        alt: ''
+        width: 0
+        height: 0
+      media_side: end
+  -
+    id: second
+    type: text_image
+    fields:
+      heading: 'Ο πελάτης αλλάζει μόνο κείμενα'
+      body: '<p>Δεν υπάρχει κουμπί «προσθήκη ενότητας». Δεν υπάρχει drag &amp; drop. Ο πελάτης βλέπει τα πεδία που του δίνεις - τίποτα άλλο.</p>'
+      image:
+        src: ''
+        alt: ''
+        width: 0
+        height: 0
+      media_side: start
+  -
+    id: faq
+    type: faq
+    fields:
+      heading: 'Συχνές ερωτήσεις'
+      open_first: true
+      questions:
+        -
+          question: 'Μπορεί ο πελάτης να χαλάσει τη σελίδα;'
+          answer: '<p>Όχι. Αλλάζει μόνο κείμενα και εικόνες μέσα στα πεδία που του δίνετε.</p>'
+        -
+          question: 'Χρειάζεται βάση δεδομένων;'
+          answer: '<p>Όχι. Κάθε σελίδα είναι ένα αρχείο YAML.</p>'
+  -
+    id: contact
+    type: contact_cta
+    fields:
+      heading: 'Πείτε μας τι χρειάζεστε'
+      phone: '+30 210 0000000'
+      email: hello@example.gr
+      address: |-
+        Θεσσαλονίκη
+        Ελλάδα
+  -
+    id: gallery
+    type: gallery
+    fields:
+      heading: 'Γκαλερί'
+      photos:
+        -
+          src: /uploads/2026/08/pexels-willianjusten-30929497.jpg
+          alt: 'Άνθρωπος μπροστά σε λίμνη κάτω από εντυπωσιακά σύννεφα'
+          width: 3859
+          height: 2573
+        -
+          src: /uploads/2026/08/pexels-zetong-li-880728-13724339.jpg
+          alt: 'Αεροφωτογραφία χιονισμένου τοπίου με χρυσαφί βλάστηση'
+          width: 1920
+          height: 1440
+  -
+    id: video
+    type: video
+    fields:
+      heading: 'Το component βίντεο'
+      embed:
+        provider: youtube
+        id: dQw4w9WgXcQ
+      poster:
+        src: /uploads/2026/08/pexels-zetong-li-880728-13724339.jpg
+        alt: 'Στιγμιότυπο από το βίντεο'
+        width: 1920
+        height: 1440
+      loop:
+        src: /uploads/2026/08/284683363-mexican-food-fiesta-family-and-259948.mp4
+        poster:
+          src: ''
+          alt: ''
+          width: 0
+          height: 0

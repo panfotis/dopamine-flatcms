@@ -1,0 +1,14 @@
+# Old URL -> where it should go now. Checked before the 404, so the client's
+# search rankings survive replacing their previous site.
+#
+# The target may be:
+#   a path        /nea-selida
+#   a page id     epikoinonia      <- follows the slug if it is ever renamed
+#   an absolute   https://…        <- for a domain that moved
+#
+# One hop only: a chain is a configuration mistake, and `bin/doctor` refuses a
+# loop, a target that does not resolve, or a `from` that is a live page.
+
+/contact.html: epikoinonia
+/epikoinwnia: epikoinonia
+/index.html: /
