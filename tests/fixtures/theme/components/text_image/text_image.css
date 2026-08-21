@@ -1,7 +1,7 @@
 .text-image{padding:72px 0}
 .text-image .grid{display:grid;gap:44px;align-items:center}
 .text-image .media{margin:0}
-.text-image .media img{border-radius:12px}
+.text-image .media img{border-radius:10px}
 @media (min-width:820px){
   .text-image .grid{grid-template-columns:1fr 1fr}
   .text-image .media{order:var(--order,2)}

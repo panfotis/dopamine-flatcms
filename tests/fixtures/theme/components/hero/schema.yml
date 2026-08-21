@@ -14,6 +14,12 @@ fields:
     max: 180
     hint: One or two sentences. Keep it short.
 
+  lede:
+    type: textarea
+    label: Lede
+    max: 260
+    hint: The longer line under the subheading. Optional.
+
   # It sits behind the heading, carries no information of its own, and alt=""
   # is the correct markup for it. Declared here because whether an image is
   # meaningful or decorative is a design decision — the client cannot know it,
@@ -33,6 +39,16 @@ fields:
     type: link
     label: Button link
     placeholder: /contact
+
+  cta2_label:
+    type: text
+    label: Second button text
+    max: 30
+
+  cta2_url:
+    type: link
+    label: Second button link
+    placeholder: https://github.com/…
 
   # The client picks copy, not layout. Flip `editable` to true if you ever
   # want to hand a specific site's alignment over to them.

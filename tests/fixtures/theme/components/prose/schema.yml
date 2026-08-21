@@ -1,0 +1,8 @@
+label: Prose
+description: A centered column of text — an intro paragraph or a statement.
+
+fields:
+  body:
+    type: richtext
+    label: Text
+    hint: Bold, italics, lists and links are allowed.

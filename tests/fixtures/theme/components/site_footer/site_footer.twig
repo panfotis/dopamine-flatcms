@@ -2,7 +2,8 @@
 
    The year is computed, not typed. A client asked to maintain "© 2026" updates
    it in March of the year after, or never. #}
-<div class="site-foot wrap">
+<div class="site-foot">
+<div class="wrap">
   <p class="copy">© {{ "now"|date("Y") }} {{ site('name') }}</p>
   {% if fields.note %}<p class="note">{{ fields.note|nl2br }}</p>{% endif %}
 
@@ -16,4 +17,5 @@
       {% endfor %}
     </ul>
   {% endif %}
+</div>
 </div>

@@ -1,0 +1,23 @@
+{# Component: feature_grid #}
+<section class="feature-grid">
+  <div class="wrap">
+    {% if fields.heading %}<h2>{{ fields.heading }}</h2>{% endif %}
+    <div class="grid">
+      {% for card in fields.cards %}
+        <div class="card" style="--card:var(--{{ card.color|default('lilac') }})">
+          <div>
+            <h3>{{ card.title }}</h3>
+            {% if card.body %}<p>{{ card.body }}</p>{% endif %}
+          </div>
+          {% if card.chips|default('') %}
+            <ul class="chips">
+              {% for chip in card.chips|split(',') %}
+                {% if chip|trim %}<li>{{ chip|trim }}</li>{% endif %}
+              {% endfor %}
+            </ul>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>

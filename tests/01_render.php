@@ -9,14 +9,15 @@ $cms = cms();
 section('Components load from disk');
 $types = array_keys($cms->components->all());
 sort($types);
-// Two roots, and the union of both: nine from tests/fixtures/theme, which this
-// suite owns, plus the three demo_* placeholders the package ships as its
-// first-run page. Discovery merging the roots rather than stopping at the first
-// is the property under test here.
-ok($types === ['contact_cta', 'contact_form', 'demo_footer', 'demo_header',
-               'demo_home_content', 'faq', 'gallery', 'hero',
-               'site_footer', 'site_header', 'text_image', 'video'],
-    'twelve components discovered across both theme roots: ' . implode(', ', $types));
+// Two roots, and the union of both: twelve from tests/fixtures/theme — a
+// frozen snapshot of the demo theme, see its README — plus the three demo_*
+// placeholders the package ships as its first-run page. Discovery merging the
+// roots rather than stopping at the first is the property under test here.
+ok($types === ['callout', 'contact_cta', 'contact_form', 'demo_footer',
+               'demo_header', 'demo_home_content', 'faq', 'feature_grid',
+               'gallery', 'hero', 'prose', 'site_footer', 'site_header',
+               'text_image', 'video'],
+    'fifteen components discovered across both theme roots: ' . implode(', ', $types));
 ok($cms->components->get('hero')['fields']['heading']['max'] === 70, 'hero.heading max parsed from schema.yml');
 ok($cms->components->get('hero')['fields']['align']['editable'] === false, 'hero.align is marked non-editable');
 ok(!array_key_exists('align', $cms->components->editableFields('hero')), 'non-editable field excluded from editable set');

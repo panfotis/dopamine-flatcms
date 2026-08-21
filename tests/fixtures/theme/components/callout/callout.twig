@@ -1,0 +1,9 @@
+{# Component: callout #}
+<section class="callout">
+  <div class="wrap">
+    <div class="callout-box">
+      <p class="callout-title">{{ fields.title }}</p>
+      {% if fields.body %}<p class="callout-body">{{ fields.body|nl2br }}</p>{% endif %}
+    </div>
+  </div>
+</section>

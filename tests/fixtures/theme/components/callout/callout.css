@@ -1,0 +1,6 @@
+.callout{padding:8px 0 40px}
+.callout-box{max-width:760px;margin:0 auto;background:var(--ink);border-radius:10px;
+  padding:28px 32px;display:grid;gap:10px}
+.callout-title{margin:0;font-family:var(--font-mono);font-weight:700;font-size:15px;
+  letter-spacing:.04em;text-transform:uppercase;color:var(--lime)}
+.callout-body{margin:0;font-family:var(--font-mono);font-size:13px;line-height:1.6;color:#d8dce0}

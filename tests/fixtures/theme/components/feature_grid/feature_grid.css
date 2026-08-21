@@ -1,0 +1,11 @@
+.feature-grid{padding:48px 0 80px}
+.feature-grid .grid{display:grid;gap:20px;grid-template-columns:1fr}
+@media (min-width:640px){.feature-grid .grid{grid-template-columns:1fr 1fr}}
+@media (min-width:960px){.feature-grid .grid{grid-template-columns:1fr 1fr 1fr}}
+.feature-grid .card{background:var(--card);border-radius:10px;padding:24px;min-height:176px;
+  display:flex;flex-direction:column;justify-content:space-between;gap:16px}
+.feature-grid h3{font-size:16px;letter-spacing:.03em;margin:0 0 8px}
+.feature-grid .card p{margin:0;font-size:13.5px;line-height:1.5}
+.feature-grid .chips{list-style:none;padding:0;margin:0;display:flex;gap:6px;flex-wrap:wrap}
+.feature-grid .chips li{background:var(--ink);color:#fff;font-family:var(--font-mono);
+  font-size:11px;font-weight:500;padding:5px 9px;border-radius:4px}

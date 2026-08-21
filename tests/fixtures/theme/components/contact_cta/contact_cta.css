@@ -1,5 +1,7 @@
-.contact-cta{padding:64px 0;background:#f6f7f9;border-top:1px solid #e4e7eb}
-.contact-cta ul{list-style:none;padding:0;margin:0;display:grid;gap:22px}
-.contact-cta li span{display:block;font-size:12px;text-transform:uppercase;
-  letter-spacing:.07em;color:#5c6470;margin-bottom:3px}
+.contact-cta{padding:72px 0;background:var(--lime)}
+.contact-cta ul{list-style:none;padding:0;margin:0;display:grid;gap:26px}
+.contact-cta li span{display:block;font-family:var(--font-mono);font-size:11px;
+  text-transform:uppercase;letter-spacing:.14em;margin-bottom:5px}
+.contact-cta li{font-weight:700;font-size:18px}
+.contact-cta a{color:var(--ink)}
 @media (min-width:700px){.contact-cta ul{grid-template-columns:repeat(3,1fr)}}

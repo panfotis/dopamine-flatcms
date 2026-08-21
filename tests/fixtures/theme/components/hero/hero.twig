@@ -16,17 +16,28 @@
 
   <div class="wrap hero-body">
     <h1>{{ fields.heading }}</h1>
-    {% if fields.subheading %}<p class="lede">{{ fields.subheading|nl2br }}</p>{% endif %}
-    {% if fields.cta_label %}
-      {# An id that no longer resolves renders as plain text, never as a dead
-         href. The panel flags it separately so it can actually be fixed. #}
-      {% set href = page_url(fields.cta_url) %}
-      {# rel travels with target and never without it — opening a new tab
-         without noopener hands the opener over to the other page. #}
-      {% set target = fields.cta_url.target|default('_self') %}
-      <p>{% if href %}<a class="btn" href="{{ href }}"
-           {%- if target != '_self' %} target="{{ target }}" rel="noopener noreferrer"{% endif %}>{{ fields.cta_label }}</a>
-         {%- else %}<span class="btn is-dead">{{ fields.cta_label }}</span>{% endif %}</p>
+    {% if fields.subheading %}<p class="tagline">{{ fields.subheading|nl2br }}</p>{% endif %}
+    {% if fields.lede|default('') %}<p class="lede">{{ fields.lede|nl2br }}</p>{% endif %}
+
+    {% if fields.cta_label or fields.cta2_label|default('') %}
+      <p class="hero-ctas">
+        {# An id that no longer resolves renders as plain text, never as a dead
+           href. rel travels with target and never without it. #}
+        {% if fields.cta_label %}
+          {% set href = page_url(fields.cta_url) %}
+          {% set target = fields.cta_url.target|default('_self') %}
+          {% if href %}<a class="btn" href="{{ href }}"
+               {%- if target != '_self' %} target="{{ target }}" rel="noopener noreferrer"{% endif %}>{{ fields.cta_label }}</a>
+          {%- else %}<span class="btn is-dead">{{ fields.cta_label }}</span>{% endif %}
+        {% endif %}
+        {% if fields.cta2_label|default('') %}
+          {% set href2 = page_url(fields.cta2_url|default(null)) %}
+          {% set target2 = fields.cta2_url.target|default('_self') %}
+          {% if href2 %}<a class="btn btn-outline" href="{{ href2 }}"
+               {%- if target2 != '_self' %} target="{{ target2 }}" rel="noopener noreferrer"{% endif %}>{{ fields.cta2_label }}</a>
+          {%- else %}<span class="btn btn-outline is-dead">{{ fields.cta2_label }}</span>{% endif %}
+        {% endif %}
+      </p>
     {% endif %}
   </div>
 </section>

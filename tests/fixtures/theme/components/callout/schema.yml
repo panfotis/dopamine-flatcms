@@ -1,0 +1,14 @@
+label: Callout
+description: A dark terminal-style box with a short statement.
+
+fields:
+  title:
+    type: text
+    label: Title
+    max: 80
+    required: true
+
+  body:
+    type: textarea
+    label: Text
+    max: 400

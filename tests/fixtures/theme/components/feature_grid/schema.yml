@@ -1,0 +1,43 @@
+label: Feature grid
+description: Pastel cards in a grid — a title, a line of text and small tags.
+
+fields:
+  heading:
+    type: text
+    label: Heading
+    max: 60
+
+  cards:
+    type: list
+    label: Cards
+    max: 12
+    item_label: title
+    fields:
+      title:
+        type: text
+        label: Title
+        max: 40
+        required: true
+      body:
+        type: textarea
+        label: Text
+        max: 160
+      # Comma-separated on purpose: a nested list inside a list row is more
+      # panel than these tags deserve.
+      chips:
+        type: text
+        label: Tags
+        max: 60
+        hint: Comma-separated, e.g. yaml, git
+      color:
+        type: select
+        label: Color
+        options:
+          lilac: Lilac
+          sky: Sky
+          peach: Peach
+          mint: Mint
+          lemon: Lemon
+          rose: Rose
+          lime: Lime
+        default: lilac
