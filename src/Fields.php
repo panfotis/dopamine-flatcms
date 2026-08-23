@@ -218,6 +218,7 @@ final class Fields
     public static function map(array $fields, array $in, array $stored, array $context): array
     {
         $out = [];
+        $refused = [];
 
         foreach ($fields as $name => $def) {
             $current = $stored[$name] ?? $def['default'] ?? self::blank((string) ($def['type'] ?? 'text'));
@@ -235,13 +236,20 @@ final class Fields
             // Whatever depth the refusal came from, this frame knows one more
             // segment of the path to the input that caused it — which is what
             // lets the panel put the message beside the box instead of on an
-            // error page with the form gone.
+            // error page with the form gone. The walk carries on past a
+            // refusal so every empty required field is marked in one round
+            // trip; nothing is written anyway while a single one stands.
             try {
                 $out[$name] = self::sanitise($def, $in[$name], ['stored' => $current] + $context);
                 self::demand($def, $out[$name], $context);
             } catch (ValidationException $e) {
-                throw $e->under($name);
+                $refused[] = $e->under($name);
+                $out[$name] = $current;
             }
+        }
+
+        if ($refused !== []) {
+            throw ValidationException::merge($refused);
         }
 
         return $out;
@@ -583,6 +591,7 @@ final class Fields
         // before trusting it, so a reordered list degrades to "unknown", never
         // to "wrong".
         $out = [];
+        $refused = [];
         foreach ($rows as $i => $row) {
             try {
                 $out[] = self::map(
@@ -594,8 +603,13 @@ final class Fields
             } catch (ValidationException $e) {
                 // The row index is part of the input's name, so it is part of
                 // the path — otherwise every row's error points at the first.
-                throw $e->under((string) $i);
+                $refused[] = $e->under((string) $i);
+                $out[] = is_array($stored[$i] ?? null) ? $stored[$i] : [];
             }
+        }
+
+        if ($refused !== []) {
+            throw ValidationException::merge($refused);
         }
 
         return $out;

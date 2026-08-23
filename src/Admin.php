@@ -449,12 +449,10 @@ final class Admin
 
         // Field name -> message, filled in by the walk below and handed to the
         // form so the message lands beside the box that caused it. Every block
-        // is walked even after one refuses, because an editor who fixes one
-        // missing alt and is only then told about a second has been made to
-        // save twice to learn what was wrong once. Within a block it is still
-        // the first refusal — Fields::map() throws — which is one message per
-        // card rather than all of them; worth revisiting only if a component
-        // ever declares enough required fields for that to bite.
+        // is walked even after one refuses, and Fields::map() collects every
+        // refusal within a block too, because an editor who fixes one missing
+        // alt and is only then told about a second has been made to save twice
+        // to learn what was wrong once.
         $errors = [];
 
         // The whole read-modify-write runs under an exclusive lock on the page
@@ -486,7 +484,7 @@ final class Admin
                                 $user['role']
                             );
                         } catch (ValidationException $e) {
-                            $errors[$e->field('blocks[' . $block['id'] . ']')] = $e->getMessage();
+                            $errors += $e->fields('blocks[' . $block['id'] . ']');
                         }
                     }
 
@@ -509,7 +507,7 @@ final class Admin
                                 $user['role']
                             );
                         } catch (ValidationException $e) {
-                            $errors[$e->field('seo')] = $e->getMessage();
+                            $errors += $e->fields('seo');
                         }
                     }
 
@@ -1182,21 +1180,7 @@ final class Admin
     private function csrf(Request $request): string
     {
         if (session_status() !== PHP_SESSION_ACTIVE) {
-            session_start([
-                'cookie_httponly' => true,
-                'cookie_samesite' => 'Lax',
-                // PHP's session cache limiter emits its own Cache-Control. Now
-                // that the Response carries one, that is a second, different
-                // value on the same header — leave the policy in one place.
-                'cache_limiter'   => '',
-                // The panel is only ever reached over HTTPS in production;
-                // locally there is no session worth stealing. X-Forwarded-Proto
-                // is read explicitly rather than through isSecure(), which
-                // ignores it until trusted proxies are configured — and behind
-                // cloudflared that header is the only signal there is.
-                'cookie_secure'   => $request->isSecure()
-                    || $request->headers->get('X-Forwarded-Proto') === 'https',
-            ]);
+            session_start(Cms::sessionOptions($request));
         }
         return $_SESSION['csrf'] ??= bin2hex(random_bytes(16));
     }

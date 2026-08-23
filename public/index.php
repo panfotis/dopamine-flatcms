@@ -96,13 +96,7 @@ if ($feed !== null) {
         $extra = [];
 
         if ($form->blockOn($page) !== null) {
-            session_start([
-                'cookie_httponly' => true,
-                'cookie_samesite' => 'Lax',
-                'cache_limiter'   => '',
-                'cookie_secure'   => $request->isSecure()
-                    || $request->headers->get('X-Forwarded-Proto') === 'https',
-            ]);
+            session_start(Dopamine\FlatCms\Cms::sessionOptions($request));
 
             $result = ['ok' => false, 'errors' => [], 'values' => []];
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Dopamine\FlatCms;
 
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Yaml\Yaml;
 use Twig\Environment;
 use Twig\Loader\FilesystemLoader;
@@ -171,6 +172,31 @@ final class Cms
         // arbitrary strings `is_safe: html` is an XSS primitive waiting for
         // someone to reach for it; richtext is already sanitised on save and
         // templates use `|raw` explicitly so the trust decision stays visible.
+    }
+
+    /**
+     * The one copy of the secure-session policy, used by the panel's CSRF
+     * session and the public form session alike.
+     *
+     * `cache_limiter` is '' because PHP's session cache limiter emits its own
+     * Cache-Control; now that the Response carries one, that would be a second,
+     * different value on the same header — the policy stays in one place.
+     *
+     * X-Forwarded-Proto is read explicitly rather than through isSecure()
+     * alone, which ignores it until trusted proxies are configured — and
+     * behind cloudflared that header is the only signal there is.
+     *
+     * @return array<string, mixed>
+     */
+    public static function sessionOptions(Request $request): array
+    {
+        return [
+            'cookie_httponly' => true,
+            'cookie_samesite' => 'Lax',
+            'cache_limiter'   => '',
+            'cookie_secure'   => $request->isSecure()
+                || $request->headers->get('X-Forwarded-Proto') === 'https',
+        ];
     }
 
     /**

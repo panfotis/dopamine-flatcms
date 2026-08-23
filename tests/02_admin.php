@@ -473,6 +473,40 @@ ok($field('blocks[faq][questions][1][question]'), 'and a field inside the *secon
 
 rename($badFile . '.err.bak', $badFile);
 
+section('Several refusals inside one block are all reported at once');
+// The walk keeps going past a refused field, so two empty questions in the
+// same list surface together — not one per save, a row at a time.
+copy($badFile, $badFile . '.err.bak');
+$beforeBad = (string) file_get_contents($badFile);
+
+$refused = admin_post([
+    'action'   => 'save',
+    'csrf'     => 'the-real-token',
+    'page'     => 'home',
+    'baseline' => (string) hash_file('sha256', $badFile),
+    'blocks'   => [
+        'faq' => ['questions' => [
+            ['question' => '', 'answer' => '<p>Χωρίς ερώτηση.</p>'],
+            ['question' => '   ', 'answer' => '<p>Ούτε εδώ.</p>'],
+        ]],
+    ],
+]);
+$body = (string) $refused->getContent();
+
+ok($refused->getStatusCode() === 422, 'the save is refused');
+ok((string) file_get_contents($badFile) === $beforeBad, 'and the file is untouched');
+ok(substr_count($body, 'class="err"') === 2, 'both rows carry an inline message in the same response');
+contains($body, cms()->lang->t('flash.fields_need_filling_plural', 2), 'and the flash counts both');
+
+$field = static fn (string $name): bool => (bool) preg_match(
+    '/name="' . preg_quote($name, '/') . '"[^>]*>\s*<p class="err"/',
+    $body
+);
+ok($field('blocks[faq][questions][0][question]'), 'the first empty question is marked');
+ok($field('blocks[faq][questions][1][question]'), 'and so is the second, in the same pass');
+
+rename($badFile . '.err.bak', $badFile);
+
 section('Auth blocks unauthenticated access when dev bypass is off');
 // A production auth setup, built here rather than in a child process: the
 // bypass off, cf_access on, and no Access JWT anywhere on the request.

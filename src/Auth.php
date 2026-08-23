@@ -213,6 +213,10 @@ final class Auth
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT        => 10,
+            // Same posture as Media::fetch(): these are the JWT signing keys,
+            // nothing about this request may leave https or follow a redirect.
+            CURLOPT_PROTOCOLS_STR  => 'https',
+            CURLOPT_FOLLOWLOCATION => false,
         ]);
         $body = curl_exec($ch);
         curl_close($ch);
