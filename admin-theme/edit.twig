@@ -227,6 +227,10 @@
               <div class="field{{ error ? ' has-error' : '' }}">
                 <label for="{{ id }}">
                   {{ t(def.label) }}
+                  {# The input already says `required` to assistive tech; the
+                     asterisk is the same fact for the eye, so it is hidden
+                     from screen readers rather than read out as "star". #}
+                  {% if demand %}<span class="req" aria-hidden="true">*</span>{% endif %}
                   {% if locked %}<span class="pill" style="margin-inline-start:6px">{{ t('edit.locked') }}</span>{% endif %}
                   {% if def.editable is same as('admin') %}<span class="pill" style="margin-inline-start:6px">{{ t('edit.admin_only') }}</span>{% endif %}
                   {% if def.max is defined and not locked %}
@@ -261,6 +265,7 @@
   <div class="field">
     <label>
       {{ t(def.label) }}
+      {% if def.required|default(false) and not locked %}<span class="req" aria-hidden="true">*</span>{% endif %}
       {% if locked %}<span class="pill" style="margin-inline-start:6px">{{ t('edit.locked') }}</span>{% endif %}
       <span class="pill" style="margin-inline-start:6px">{{ t('edit.up_to', def.max) }}</span>
     </label>

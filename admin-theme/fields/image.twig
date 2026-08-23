@@ -23,7 +23,11 @@
 {% if not def.decorative %}
   {% set altError = errors[fname ~ '[alt]']|default(null) %}
   <div class="field{{ altError ? ' has-error' : '' }}" style="margin-top:12px">
-    <label for="{{ id }}-alt">{{ t(def.fields.alt.label) }}</label>
+    {# Alt is required exactly when there is an image, and editor.js flips the
+       input's `required` as images come and go — so the asterisk follows the
+       attribute via CSS (`data-auto`) instead of a second copy of the rule. #}
+    <label for="{{ id }}-alt">{{ t(def.fields.alt.label) }}
+      <span class="req" data-auto aria-hidden="true">*</span></label>
     {# The same rule the save path applies, stated to the
        browser: required exactly when there is an image. No
        validation library — the round trip is the fallback,

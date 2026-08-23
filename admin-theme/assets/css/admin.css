@@ -75,6 +75,11 @@
   label{display:block;font-weight:500;font-size:13px;margin-bottom:4px}
   .counter{float:inline-end;font-weight:400;font-size:12px;color:#94a3b8}
   .counter.over{color:var(--danger)}
+  .req{color:var(--danger)}
+  /* The alt asterisk follows the input's live `required` attribute, which
+     editor.js flips as images come and go. */
+  .req[data-auto]{display:none}
+  .field:has(input:required) label .req[data-auto]{display:inline}
   input[type=text],input[type=url],textarea,select,.rt{
     width:100%;padding:8px 12px;border:1px solid #6b7280;border-radius:var(--radius-sm);background:#fff;
     font:inherit;color:inherit}
