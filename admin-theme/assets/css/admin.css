@@ -13,7 +13,7 @@
   a{color:var(--accent-ink)}
 
   .topbar{background:var(--bar-bg);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:40;height:var(--bar)}
-  .topbar .inner{padding:0 40px;height:100%;display:flex;align-items:center;gap:16px}
+  .topbar .inner{padding:0 24px;height:100%;display:flex;align-items:center;gap:16px}
   /* The topbar's gap already spaces it from the name, so the link is exactly
      the mark and nothing around it — no padding to click into by accident. */
   .topbar .mark{display:flex;flex:0 0 auto;border-radius:7px}
