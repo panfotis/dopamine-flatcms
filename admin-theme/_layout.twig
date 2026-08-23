@@ -9,8 +9,26 @@
 </head>
 <body>
 <div class="topbar"><div class="inner">
+  {# The mark, inline rather than <img src="{{ site('favicon') }}">: that path is
+     the *site's* icon, it is configurable, and it is routinely a file nobody has
+     put there yet — a broken image in the panel is worse than none. This is the
+     panel's own identity and cannot 404. Absolute href and a new tab, like the
+     savebar's "view page": leaving the panel mid-edit would lose the form. #}
+  <a class="mark" href="{{ site('base_url') }}" target="_blank" rel="noopener"
+     title="{{ site('name') }}">
+    <svg viewBox="0 0 100 100" role="img" aria-label="{{ site('name') }}">
+      <rect width="100" height="100" rx="18" fill="#C8F04F"/>
+      <path fill="#0D0D0D" fill-rule="evenodd"
+            d="M26 22h24a28 28 0 0 1 0 56H26zm16 14v28h8a14 14 0 0 0 0-28z"/>
+    </svg>
+  </a>
   <div class="brand"><a href="?" style="text-decoration:none;color:inherit">{{ site('name') }}</a> <span>· {{ t('admin') }}</span></div>
-  <div class="who">{{ user.email }}{% if user.role %} <span class="pill">{{ user.role }}</span>{% endif %}</div>
+  {# Logout lives here and not in the rail: the edit screen replaces the rail
+     with its block index, and the denied page has no rail at all — which is
+     precisely the screen where "sign out and try another account" is the only
+     useful action. The topbar is on every screen by construction. #}
+  <div class="who">{{ user.email }}{% if user.role %} <span class="pill">{{ user.role }}</span>{% endif %}
+    <a class="logout" href="{{ logout_url() }}">{{ t('nav.logout') }}</a></div>
 </div></div>
 
 <div class="shell">

@@ -103,6 +103,10 @@ full in §10 of the build plan.
   key resolves. `bin/doctor` reports a translation that has fallen behind.
   Two catalogues: `$cms->lang` is the panel's, `$cms->siteLang()` is the
   language of the page a visitor is reading — form refusals use the second.
+  `paths.lang` takes a list and merges it, site last, so a site adds a string
+  for its own component with a one-entry file. The catalogue is `require`d, so
+  that path is developer-owned like every other in `paths` and must never point
+  anywhere a request can write.
 
 ## Dependencies
 
@@ -119,7 +123,7 @@ that happens, or every portrait on the site is sideways. `bin/doctor` checks the
 same list against the *running* interpreter, since Composer resolves under the
 CLI php and the site runs under php-fpm.
 
-Test suite: 1,098 checks across ten files. Run all of them, not just the new ones.
+Test suite: 1,133 checks across ten files. Run all of them, not just the new ones.
 
 **Do not add anything else without asking.** Explicitly rejected, with reasons:
 
@@ -137,8 +141,13 @@ src/          Cms Admin Auth Components Content Fields Form Lang Locks Media
               Cloudflare AccessDeniedException StaleContentException
               bootstrap.php — process-level error handlers, not a class
 users.yml     email -> admin|editor, committed, no secrets
-theme/        everything site-facing: layout.twig, bare.twig (no header/
-              footer; `layout: bare`), 404.twig, 500.twig, picture.twig,
+theme/        everything site-facing: head.twig (the whole <head>, included by
+              every layout — a tag added once reaches every page, including the
+              bare landing pages where a forgotten tracking script reports
+              nothing; `include`, not inheritance, so no layout can override
+              part of it), layout.twig, bare.twig (no header/footer;
+              `layout: bare`), 404.twig, 500.twig (both standalone, with their
+              own minimal heads), picture.twig,
               video_facade.twig, components/<name>/ (schema.yml + <name>.twig
               + optional <name>.css / <name>.js — the file beside the template
               is the whole declaration), theme.yml (global CSS/JS, local paths
@@ -161,11 +170,19 @@ content/      pages/<locale>/*.yml, uploads/, .revisions/, redirects.yml
               resolves a second one beside it rather than migrating.
 bin/          doctor deploy.sh rollback.sh release.sh backup restore-drill
               mail-retry prune-submissions
-lang/         en.php (source) + el.php — panel and engine strings
+lang/         en.php (source) + el.php — panel and engine strings. Layered like
+              the theme roots, site first, but **merged key by key** rather than
+              first-file-wins: a site's lang/el.php carries only what it adds or
+              rewords and everything else resolves from the engine, including
+              keys a later release adds. That is what makes a translatable label
+              for a site's own component possible without editing vendor/.
 admin-theme/  the panel: _layout.twig, edit.twig, fields/*.twig, theme.yml,
-              assets/ (admin.css, editor.js). Its own @admin Twig namespace,
-              so a site theme can never shadow a panel template. Branding via
-              assets is supported; overriding its templates is not.
+              assets/ (admin.css, editor.js). Its own @admin Twig namespace, so
+              nothing in a site's theme/ can reach a panel template. A site's
+              own admin-theme/ does layer over the engine's, first wins — that
+              is discouraged, not prevented, and bin/doctor warns rather than
+              fails. Branding via assets is the supported surface; overriding
+              panel templates tracks engine internals and is not.
               Every image on the site renders through theme/picture.twig. A
               component that writes its own <img> is caught by 01_render.php.
 public/       docroot: index.php, admin.php, img.php, router.php

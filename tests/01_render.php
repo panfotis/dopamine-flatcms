@@ -351,20 +351,23 @@ foreach (['nope', '../../etc/passwd', 'admin/edit', ''] as $bad) {
     contains($fellBack, '<footer>', var_export($bad, true) . ' falls back to layout.twig rather than fatalling');
 }
 
-// The two heads must not diverge quietly: a change to the SEO block that
-// reaches one layout and not the other is invisible until a client shares a
-// link and gets the wrong card.
-$headOf = static function (string $file): array {
-    preg_match('#<head>(.*?)</head>#s', (string) file_get_contents(dirname(__DIR__) . '/theme/' . $file), $m);
-    preg_match_all('#page\.seo\.[a-z_.]+#', $m[1] ?? '', $keys);
+// No layout may publish a different head from any other: a tracking tag or an
+// og: tag that reaches one and not the other is invisible until a campaign
+// reports nothing, or a client shares a link and gets the wrong card. One
+// head.twig, included by both, makes that true by construction — and this
+// asserts the property on rendered output rather than by comparing two files,
+// so it keeps meaning something wherever the head lives next.
+$headTagsOf = static function (string $html): array {
+    preg_match('#<head>(.*?)</head>#s', $html, $m);
+    preg_match_all('#<(?:meta|title|link)\b[^>]*>#', $m[1] ?? '', $tags);
 
-    return array_unique($keys[0]);
+    return $tags[0];
 };
-$a = $headOf('layout.twig');
-$b = $headOf('bare.twig');
-sort($a);
-sort($b);
-ok($a === $b, 'both layouts publish the same seo keys: ' . implode(', ', $a));
+$sharedHead = ['id' => 'sh', 'title' => 'SH', 'slug' => '/sh', 'blocks' => []];
+$viaLayout = $headTagsOf($cms->renderPage($sharedHead));
+$viaBare   = $headTagsOf($cms->renderPage(['layout' => 'bare'] + $sharedHead));
+ok($viaLayout === $viaBare && $viaLayout !== [],
+    'every layout publishes the identical head (' . count($viaLayout) . ' tags)');
 
 section('A gallery renders through the same partial as every other image');
 $galleryPage = $cms->renderPage($cms->content->load('home'));

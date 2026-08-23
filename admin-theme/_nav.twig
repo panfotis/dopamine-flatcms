@@ -17,7 +17,5 @@
     <a href="?action=settings" class="{{ active == 'settings' ? 'on' : '' }}">{{ t('nav.settings') }}</a>
   {% endif %}
 </nav>
-<div class="side-foot">
-  {# Access owns the session, so signing out is its endpoint, not ours. #}
-  <a href="/cdn-cgi/access/logout">{{ t('nav.logout') }}</a>
-</div>
+{# Logout is in the topbar (_layout.twig), so it survives on the screens that
+   replace or drop this rail — the editor's block index, the denied page. #}

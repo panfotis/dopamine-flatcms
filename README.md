@@ -274,6 +274,35 @@ cannot carry styling into the page.
 
 ---
 
+## Interface strings
+
+Every string the engine shows — the panel, the 404, the contact form's labels
+and refusals — lives in `lang/<locale>.php`, a flat PHP array. `ADMIN_LOCALE`
+picks the panel's language; a visitor gets the language of the page they are on,
+so a Greek page refuses a bad email in Greek while the panel stays English.
+
+An unknown key renders as **itself**, which is what lets a component write
+`label: Επιλέξτε αυτοκίνητο` straight into its `schema.yml` and skip the
+catalogue entirely. Use a key only when the string must exist in more than one
+language.
+
+`paths.lang` takes a list and **merges it, site last**. A site adds
+`lang/el.php` containing only the keys it adds or rewords; everything else
+resolves from the engine, including keys a later release adds. That is the
+difference between a one-entry file and a copy of ninety strings that silently
+falls behind — and it is what makes a translatable label for a component the
+site wrote possible without editing `vendor/`.
+
+A public language is two things: an entry in `locales`, *and* a catalogue.
+With only the first, the pages are translated and the engine's own strings are
+not. `bin/doctor` reports a catalogue that has fallen behind the source.
+
+The catalogue is `require`d, so that path is executed — it is developer-owned
+like every other entry in `paths` and must never point anywhere a request can
+write.
+
+---
+
 ## Deploying on a server
 
 A site is a PHP project with its docroot at `public/` — `config.php`, `content/`,

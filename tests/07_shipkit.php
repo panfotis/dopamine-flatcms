@@ -558,6 +558,33 @@ contains($o, 'site.base_url is http://localhost:8080', '...naming the value that
 [$s, $o] = $doctor(['pages/el/home.yml' => $goodPage('/')], ['SITE_BASE_URL' => 'https://example-domain.com']);
 missing($o, 'base_url', 'a real domain says nothing at all');
 
+// head.twig resolves like any other template, so nothing else would object to a
+// page naming it — and the result is a bare <head> fragment with no document
+// around it. Same class of mistake as naming picture.twig, caught in the same
+// place.
+[$s, $o] = $doctor(['pages/el/home.yml' => Yaml::dump([
+    'title' => 'T', 'slug' => '/', 'layout' => 'head',
+    'blocks' => [['id' => 'hero', 'type' => 'hero', 'fields' => []]],
+], 6, 2)]);
+ok($s === 0, 'naming the shared head as a layout is a warning, not a refusal');
+contains($o, 'names a partial, not a layout', '...and says which mistake it is');
+
+// Form::turnstile() treats an empty secret as "off" and accepts the submission,
+// which is the right call at request time — refusing a client's leads over our
+// own configuration mistake is the worse failure. But it means a page can
+// advertise a challenge and have none, with nothing anywhere saying so.
+$challengePage = Yaml::dump([
+    'title' => 'T', 'slug' => '/', 'private' => true,
+    'blocks' => [['id' => 'form', 'type' => 'contact_form', 'fields' => ['turnstile' => true]]],
+], 6, 2);
+
+[$s, $o] = $doctor(['pages/el/home.yml' => $challengePage], ['TURNSTILE_SECRET' => '']);
+ok($s === 0, 'an inert Turnstile toggle is a warning, not a refusal');
+contains($o, 'the challenge is inert', '...and says the submissions are all being accepted');
+
+[$s, $o] = $doctor(['pages/el/home.yml' => $challengePage], ['TURNSTILE_SECRET' => str_repeat('s', 32)]);
+missing($o, 'challenge is inert', 'a configured secret says nothing at all');
+
 // A missing users file denies every address, so a box in that state serves a
 // panel nobody can get into — and says nothing about why.
 [$s, $o] = $doctor(['pages/el/home.yml' => $goodPage('/')], ['USERS_FILE' => $sandbox . '/nope.yml']);

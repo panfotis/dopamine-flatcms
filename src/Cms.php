@@ -90,11 +90,14 @@ final class Cms
         $this->locks      = new Locks(dirname($paths['cache']) . '/locks');
 
         // Site theme first, engine theme after — same precedence as component
-        // discovery. The panel lives in its own @admin namespace so a site's
-        // edit.twig can never shadow the panel's, and each layer also gets a
-        // @theme<i> namespace so a component's template is bound to the layer
-        // its schema won (see Components::all()): schema, template and assets
-        // come from the same folder or none do.
+        // discovery. The panel lives in its own @admin namespace, so nothing in
+        // a site's theme/ can reach it: a theme/edit.twig is simply a different
+        // template. A site's own admin-theme/, however, is registered into
+        // @admin *first* and does override the engine's — that is discouraged,
+        // not prevented, and bin/doctor warns on it rather than failing.
+        // Each layer also gets a @theme<i> namespace so a component's template
+        // is bound to the layer its schema won (see Components::all()): schema,
+        // template and assets come from the same folder or none do.
         $loader = new FilesystemLoader($this->themeDirs);
         foreach ($this->themeDirs as $i => $dir) {
             $loader->addPath($dir, 'theme' . $i);
@@ -136,6 +139,24 @@ final class Cms
         $this->twig->addFunction(new TwigFunction('theme_foot',
             fn (): string => $this->assets?->foot() ?? '', ['is_safe' => ['html']]));
         $this->twig->addFunction(new TwigFunction('theme_attach', $this->themeAttach(...)));
+
+        // Access owns the session, so signing out is its endpoint, not ours.
+        // Through the *team* domain, because that is the form that honours
+        // returnTo — the bare app path leaves the person on an Access
+        // "signed out" page with no way back to the site they were editing.
+        // Off cf_access mode — or under the dev bypass, where no Access session
+        // exists and team_domain is routinely still the shipped placeholder —
+        // the bare path stays: inert on a dev box, exactly as before.
+        $this->twig->addFunction(new TwigFunction('logout_url', function () use ($config): string {
+            $team = trim((string) ($config['auth']['team_domain'] ?? ''), '/');
+            if (($config['auth']['mode'] ?? '') !== 'cf_access' || $team === ''
+                || ($config['auth']['dev_bypass'] ?? false) === true) {
+                return '/cdn-cgi/access/logout';
+            }
+
+            return 'https://' . $team . '/cdn-cgi/access/logout?returnTo='
+                . rawurlencode((string) ($config['site']['base_url'] ?: '/'));
+        }));
 
         // The contact form's CSRF and honeypot inputs, emitted from PHP so a
         // rewritten form template cannot silently drop them — Form::guards()
@@ -254,7 +275,7 @@ final class Cms
     public function siteLang(): Lang
     {
         return $this->siteLangs[$this->locale] ??= new Lang(
-            (string) ($this->config['paths']['lang'] ?? __DIR__ . '/../lang'),
+            $this->config['paths']['lang'] ?? __DIR__ . '/../lang',
             $this->locale
         );
     }

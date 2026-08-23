@@ -469,7 +469,6 @@ foreach ($localCss as [$who, $file]) {
 
 // A site layer that overrides a panel template tracks engine internals it
 // cannot see change. Assets are the supported branding surface.
-$engineAdmin = $adminDirs !== [] ? $adminDirs[count($adminDirs) - 1] : null;
 foreach (array_slice($adminDirs, 0, -1) as $dir) {
     foreach (glob($dir . '/{,fields/}*.twig', GLOB_BRACE) ?: [] as $file) {
         $warn(sprintf('admin-theme override %s: panel templates change shape between engine versions — brand via assets/ instead', substr($file, strlen($dir) + 1)));
@@ -482,17 +481,23 @@ foreach (array_slice($adminDirs, 0, -1) as $dir) {
 // spacing inside the call does not matter.
 $pipelined = ['layout.twig', 'bare.twig', '404.twig'];
 $checkPipelined = static function () use (&$pipelined, $cms, $fail, $warn): void {
-    foreach ($pipelined as $template) {
+    // head.twig owns the <head> half and is checked with them; the rest own
+    // <body>, which is the only place theme_foot() can go.
+    foreach ([...$pipelined, 'head.twig'] as $template) {
         try {
             $source   = $cms->twig->getLoader()->getSourceContext($template);
             $compiled = $cms->twig->compileSource($source);
         } catch (Throwable) {
             continue; // missing or broken templates are reported above
         }
-        if (!str_contains($compiled, 'theme_head')) {
+        // Either the layout calls it, or it includes the shared head that does.
+        // compileSource() does not follow an include, but the included name is
+        // in the compiled output, and head.twig is checked on its own below —
+        // so a layout cannot pass by including something that skips the call.
+        if (!str_contains($compiled, 'theme_head') && !str_contains($compiled, 'head.twig')) {
             $fail(sprintf('%s never calls theme_head() — every page it renders ships without CSS', $template));
         }
-        if (!str_contains($compiled, 'theme_foot')) {
+        if ($template !== 'head.twig' && !str_contains($compiled, 'theme_foot')) {
             $warn(sprintf('%s never calls theme_foot() — no JS will load on it', $template));
         }
     }
@@ -629,6 +634,21 @@ foreach (glob($pagesDir . '/*.yml') ?: [] as $file) {
             $fail(sprintf('page "%s": block "%s" is type "%s", which has no component', $id, $blockId, $type));
         } elseif ((array) ($loaded[$type]['form'] ?? []) !== []) {
             $formBlocks++;
+
+            // Form::turnstile() treats a missing secret as "off" and accepts
+            // the submission, so a page can advertise a challenge and have
+            // none. That is the right runtime behaviour — refusing leads over
+            // our own configuration mistake is worse — but it is invisible,
+            // and invisible is what doctor exists for.
+            if (($block['fields']['turnstile'] ?? false) === true
+                && (string) ($config['turnstile']['secret'] ?? '') === '') {
+                $warn(sprintf(
+                    'page "%s": block "%s" switches on Turnstile but TURNSTILE_SECRET is empty — '
+                    . 'the challenge is inert and every submission is accepted',
+                    $id,
+                    $blockId
+                ));
+            }
         }
     }
 
@@ -650,7 +670,10 @@ foreach (glob($pagesDir . '/*.yml') ?: [] as $file) {
             break;
         }
     }
-    if (in_array($layout, ['picture', 'video_facade'], true)) {
+    // `head` is here for the same reason picture and video_facade are: it
+    // resolves, so nothing else would object, and the page would render as a
+    // bare <head> fragment with no document around it.
+    if (in_array($layout, ['picture', 'video_facade', 'head'], true)) {
         $warn(sprintf('page "%s": layout "%s" names a partial, not a layout', $id, $layout));
     }
     if ($layout !== '' && !$layoutExists) {

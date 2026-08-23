@@ -1,0 +1,182 @@
+# Managed by Dopamine FlatCMS. Structure is edited here, content in /admin.
+title: Αρχική
+slug: /
+nav:
+  label: Αρχική
+  order: 10
+seo:
+  title: ''
+  description: 'Dopamine FlatCMS - σκέτα αρχεία, που απλώς δουλεύουν.'
+  og_image:
+    src: ''
+    alt: ''
+    width: 0
+    height: 0
+  noindex: false
+  canonical: ''
+blocks:
+  -
+    id: hero
+    type: hero
+    fields:
+      heading: 'Dopamine FlatCMS'
+      subheading: 'Just files. Just works.'
+      lede: 'Ούτε βάση δεδομένων, ούτε build step, ούτε στήσιμο. Κάθε σελίδα είναι ένα αρχείο, κάθε ενότητα ένας φάκελος - και το panel στήνεται μόνο του.'
+      image:
+        src: ''
+        alt: ''
+        width: 0
+        height: 0
+      cta_label: 'Ξεκίνα'
+      cta_url:
+        page: epikoinonia
+        url: ''
+        target: _self
+      cta2_label: 'GitHub'
+      cta2_url:
+        page: ''
+        url: 'https://github.com/panfotis/dopamine-flatcms'
+        target: _blank
+      align: start
+  -
+    id: intro
+    type: prose
+    fields:
+      body: '<p>Γράφεις ένα YAML, έχεις σελίδα. Τόσο απλά. Αντιγράφεις έναν φάκελο, έχεις component. Το panel διαβάζει το schema σου και φτιάχνει μόνο του τη φόρμα - δεν ρυθμίζεις τίποτα, δεν εγκαθιστάς τίποτα, δεν ξενυχτάς για κανένα update.</p><p><strong>Η δομή είναι δική σου. Το περιεχόμενο δικό τους. Και τίποτα δεν σπάει.</strong></p>'
+  -
+    id: scope
+    type: callout
+    fields:
+      title: 'Όλο το CMS που χρειάζεται ο πελάτης. Τίποτα παραπάνω.'
+      body: 'Ο πελάτης αλλάζει κείμενα και εικόνες σε ένα καθαρό panel - εσύ γλιτώνεις τη βάση, τα plugins και τα ατέλειωτα updates. Φτιαγμένο για μικρά site, 3 με 15 σελίδες: εταιρικά, portfolio, παρουσιάσεις.'
+  -
+    id: features
+    type: feature_grid
+    fields:
+      heading: 'Τι παίρνεις'
+      cards:
+        -
+          title: 'Χωρίς βάση δεδομένων'
+          body: 'Κάθε σελίδα είναι ένα αρχείο, με πλήρες ιστορικό στο Git.'
+          chips: 'yaml, git'
+          color: lilac
+        -
+          title: 'Panel από το schema'
+          body: 'Το admin φτιάχνεται μόνο του από το schema κάθε component.'
+          chips: 'schema.yml'
+          color: sky
+        -
+          title: 'Components'
+          body: 'Ένας φάκελος = μια ενότητα. Χωρίς κανένα registration.'
+          chips: 'schema + twig'
+          color: peach
+        -
+          title: 'Cloudflare Access'
+          body: 'Κανένας κωδικός για να χαθεί - μπαίνεις με το email της ομάδας σου.'
+          chips: 'zero-trust'
+          color: mint
+        -
+          title: 'Media στο git - ή σε R2'
+          body: 'Οι εικόνες μπαίνουν στο git μαζί με το περιεχόμενο και σερβίρονται ως responsive WebP. Πολλά media; Ένα flag τα στέλνει στο Cloudflare R2.'
+          chips: 'git, r2, webp'
+          color: lemon
+        -
+          title: 'Revisions'
+          body: 'Κάθε αποθήκευση κρατά αντίγραφο που επαναφέρεις με ένα κλικ.'
+          chips: 'restore'
+          color: rose
+        -
+          title: 'Φόρμες'
+          body: 'CSRF, honeypot, προαιρετικό Turnstile. Κάθε μήνυμα αποθηκεύεται και έρχεται στο email σου.'
+          chips: 'honeypot'
+          color: lime
+        -
+          title: 'Πολυγλωσσικό'
+          body: 'Ξεχωριστό slug ανά γλώσσα: /contact και /el/epikoinonia.'
+          chips: 'el, en'
+          color: lilac
+        -
+          title: 'Γρήγορο εξαρχής'
+          body: 'Καμία βάση, κανένα query. Κάθε σελίδα βγαίνει έτοιμη για full-page cache στο edge, με tags που καθαρίζουν μόνα τους σε κάθε αποθήκευση.'
+          chips: 'no build'
+          color: sky
+  -
+    id: client
+    type: text_image
+    fields:
+      heading: 'Ο πελάτης αλλάζει μόνο κείμενα'
+      body: '<p>Δεν υπάρχει κουμπί «προσθήκη ενότητας», δεν υπάρχει drag &amp; drop. Ο πελάτης βλέπει μόνο τα πεδία που του έδωσες - τίποτα άλλο. Η σελίδα που σχεδίασες μένει όπως τη σχεδίασες.</p>'
+      image:
+        src: /uploads/2026/08/pexels-zetong-li-880728-13724339.jpg
+        alt: 'Ορεινό τοπίο το σούρουπο'
+        width: 1920
+        height: 1440
+      media_side: end
+  -
+    id: faq
+    type: faq
+    fields:
+      heading: 'Συχνές ερωτήσεις'
+      open_first: true
+      questions:
+        -
+          question: 'Μπορεί ο πελάτης να χαλάσει τη σελίδα;'
+          answer: '<p>Όχι. Πειράζει μόνο τα κείμενα και τις εικόνες μέσα στα πεδία που του έχεις δώσει.</p>'
+        -
+          question: 'Χρειάζεται βάση δεδομένων;'
+          answer: '<p>Όχι. Κάθε σελίδα είναι ένα αρχείο YAML.</p>'
+        -
+          question: 'Οι φόρμες έχουν προστασία από spam;'
+          answer: '<p>Ναι - CSRF token, honeypot και προαιρετικό Cloudflare Turnstile. Τα μηνύματα αποθηκεύονται και έρχονται στο email σου.</p>'
+        -
+          question: 'Κι αν ο πελάτης σβήσει κάτι κατά λάθος;'
+          answer: '<p>Κάθε αποθήκευση κρατά revision που επαναφέρεται με ένα κλικ - και το περιεχόμενο ζει στο Git.</p>'
+        -
+          question: 'Πολλές γλώσσες;'
+          answer: '<p>Ναι, με δικό της slug η κάθε γλώσσα - αυτό το site σερβίρει /contact στα αγγλικά και /el/epikoinonia στα ελληνικά.</p>'
+  -
+    id: gallery
+    type: gallery
+    fields:
+      heading: Γκαλερί
+      photos:
+        -
+          src: /uploads/2026/08/pexels-willianjusten-30929497.jpg
+          alt: 'Άνθρωπος μπροστά σε λίμνη κάτω από εντυπωσιακά σύννεφα'
+          width: 3859
+          height: 2573
+        -
+          src: /uploads/2026/08/pexels-zetong-li-880728-13724339.jpg
+          alt: 'Αεροφωτογραφία χιονισμένου τοπίου με χρυσαφί βλάστηση'
+          width: 1920
+          height: 1440
+  -
+    id: video
+    type: video
+    fields:
+      heading: 'Το component βίντεο'
+      embed:
+        provider: youtube
+        id: dQw4w9WgXcQ
+      poster:
+        src: /uploads/2026/08/pexels-zetong-li-880728-13724339.jpg
+        alt: 'Στιγμιότυπο από το βίντεο'
+        width: 1920
+        height: 1440
+      loop:
+        src: /uploads/2026/08/284683363-mexican-food-fiesta-family-and-259948.mp4
+        poster:
+          src: ''
+          alt: ''
+          width: 0
+          height: 0
+  -
+    id: contact
+    type: contact_cta
+    fields:
+      heading: 'Πείτε μας τι χρειάζεστε'
+      phone: '+30 210 0000000'
+      email: hello@example.gr
+      address: |-
+        Αθήνα
+        Ελλάδα

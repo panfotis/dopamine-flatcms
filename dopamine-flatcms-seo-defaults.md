@@ -289,11 +289,15 @@ which is the payoff of the file being data-attribute driven.
 the site field set and the current values, and render the `ok`/`warn` flash the
 redirect carries back.
 
-### 6. Head tags — **both** layouts
+### 6. Head tags — one file now
 
-[layout.twig:15-24](templates/layout.twig#L15) and the byte-identical block in
-[bare.twig:13-32](templates/bare.twig#L13). `tests/01_render.php` asserts the two
-stay in step, so both take the same edit:
+> **Updated:** the head was extracted from the two layouts into
+> [theme/head.twig](theme/head.twig), which both include. This edit lands there
+> once, not in `layout.twig` and `bare.twig` — neither of which contains a head
+> any more. `tests/01_render.php` now asserts on rendered output that every
+> layout publishes the identical head, rather than comparing the two files.
+
+The edit itself is unchanged:
 
 ```twig
 <meta property="og:site_name" content="{{ site('name') }}">

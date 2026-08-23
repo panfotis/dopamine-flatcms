@@ -268,7 +268,12 @@
   }, true);
 
   form.addEventListener('input', touch);
-  form.addEventListener('submit', () => { dirty = false; });
+  // A preview submits the same form into the dialog's iframe, but nothing was
+  // saved — the changes are exactly as unsaved as before the click, and the
+  // beforeunload warning must survive it.
+  form.addEventListener('submit', (e) => {
+    if (e.submitter?.value !== 'preview') { dirty = false; }
+  });
   window.addEventListener('beforeunload', e => {
     if (dirty) { e.preventDefault(); e.returnValue = ''; }
   });

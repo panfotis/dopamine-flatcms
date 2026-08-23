@@ -21,6 +21,7 @@ The engine lives in `vendor/dopamine/flatcms`. Site-owned files live here:
 - `admin-theme/` brands the panel — `assets/css/admin.css` is the supported
   surface; overriding panel templates tracks engine internals.
 - `content/` contains pages, globals, revisions, and uploads.
+- `lang/` holds interface strings — see below. Absent until you need it.
 - `config.php` and `.env` configure this installation.
 
 A new site opens on the engine theme's **first-run page** — a placeholder that
@@ -35,6 +36,41 @@ template → change the template. Nothing here receives engine updates, because
 nothing here comes from the engine.
 
 Never edit files in `vendor/`; Composer updates replace them.
+
+## Interface strings and languages
+
+Every string the engine shows — the panel, the 404, the contact form's labels
+and refusals — comes from a catalogue keyed by language. `ADMIN_LOCALE` picks
+the panel's; a visitor gets the language of the page they are on.
+
+**To reword one of them, or add a string of your own, create `lang/<locale>.php`
+here with only the keys you care about:**
+
+```php
+<?php
+
+return [
+    'edit.save' => 'Καταχώρηση',            // reword one the engine ships
+    'car.label' => 'Επιλέξτε αυτοκίνητο',   // add one for your own component
+];
+```
+
+Your file is merged over the engine's, key by key. Everything you do not
+mention still resolves from the engine — including keys a later release adds —
+so there is nothing to keep in sync and no reason to copy the whole catalogue.
+
+A component's own labels need no catalogue at all: an unknown key renders as
+itself, so `label: Επιλέξτε αυτοκίνητο` straight in `schema.yml` just works.
+Use a key only when the string has to exist in more than one language, and
+prefix your keys (`car.label`, not `form.car`) so a future engine string cannot
+collide with yours.
+
+**A public language is two things**, not one: an entry in `config.php`'s
+`locales`, *and* a `lang/<locale>.php`. With only the first, the pages are
+translated but the engine's own strings — the send button, validation messages,
+the 404 — stay English.
+
+`bin/doctor` reports a catalogue that has fallen behind the source language.
 
 ## Production requirements
 

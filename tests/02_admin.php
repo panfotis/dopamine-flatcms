@@ -624,6 +624,84 @@ $el = new \Dopamine\FlatCms\Lang(dirname(__DIR__) . '/lang', 'el');
 ok($el->missing() === [], 'the Greek catalogue translates every key: ' . implode(', ', $el->missing()));
 ok($el->t('no.such.key') === 'no.such.key', 'and an unknown key renders as itself rather than blank');
 
+// A site adds a string for a component it wrote, or rewords one the engine
+// ships, by dropping a catalogue in its own root with *only* those keys in it.
+// First-file-wins would mean copying ~90 strings and then maintaining them —
+// which nobody does, and the copy silently misses every key a later engine
+// release adds. So the layers merge, key by key, site last.
+$siteLang = sys_get_temp_dir() . '/flatcms-lang-' . bin2hex(random_bytes(4));
+mkdir($siteLang, 0775, true);
+file_put_contents(
+    $siteLang . '/el.php',
+    "<?php\n\nreturn [\n    'edit.save' => 'Καταχώρηση',\n    'car.label' => 'Επιλέξτε αυτοκίνητο',\n];\n"
+);
+
+$layered = new \Dopamine\FlatCms\Lang([$siteLang, dirname(__DIR__) . '/lang'], 'el');
+ok($layered->t('edit.save') === 'Καταχώρηση', 'a site catalogue rewords one engine string');
+ok($layered->t('car.label') === 'Επιλέξτε αυτοκίνητο', 'and adds one of its own');
+ok($layered->t('edit.revisions') === $el->t('edit.revisions'),
+    'while every key it does not mention still comes from the engine');
+ok($layered->missing() === [], 'so the catalogue is not reported as fallen behind');
+
+// The engine layer alone must be unaffected — the static cache is keyed by the
+// roots as well as the language, or one instance would serve another's merge.
+ok($el->t('edit.save') !== 'Καταχώρηση', 'and the engine catalogue is not polluted by it');
+
+unlink($siteLang . '/el.php');
+rmdir($siteLang);
+
+section('Preview renders the form without saving it');
+// What someone wants before pressing Save is "what will this look like", and
+// the honest answer is the real page built from the real values — through the
+// same walk the save path uses, so nothing can be previewed that a save would
+// have refused.
+$_SESSION['csrf'] = 'the-real-token';
+$homeFile = content_root() . '/pages/el/home.yml';
+$before = (string) file_get_contents($homeFile);
+
+$previewForm = render(['action' => 'edit', 'page' => 'home']);
+contains($previewForm, 'value="preview"', 'the edit screen offers a preview button');
+contains($previewForm, 'formtarget="previewframe"', '...which posts into the dialog rather than navigating away');
+
+// The action rides on the submitter and only there. A hidden action input
+// alongside the buttons is not a style choice: both values then land in the
+// payload in tree order and PHP keeps the last, which was the hidden input's —
+// so the preview button performed a real save and the dialog showed the 303's
+// edit screen. Found by hand, because a test that posts `action` as a plain
+// param cannot produce the duplicate.
+missing($previewForm, '<input type="hidden" name="action"', 'no hidden action input to outvote the submitter');
+contains($previewForm, 'name="action" value="save"', 'the save button carries its own action instead');
+
+$previewed = admin_post([
+    'action' => 'preview',
+    'csrf'   => 'the-real-token',
+    'page'   => 'home',
+    'blocks' => ['hero' => ['heading' => 'Δεν σώθηκε ποτέ']],
+]);
+ok($previewed->getStatusCode() === 200, 'a preview renders');
+$previewHtml = (string) $previewed->getContent();
+contains($previewHtml, 'Δεν σώθηκε ποτέ', 'showing the value that was typed, not the one on disk');
+contains($previewHtml, '<footer>', 'as the whole page, header and footer included');
+ok((string) file_get_contents($homeFile) === $before, 'and the file on disk is untouched');
+
+// The same walk means the same refusals. Richtext is sanitised by the
+// allowlist here exactly as it is on the way to disk.
+$hostilePreview = (string) admin_post([
+    'action' => 'preview',
+    'csrf'   => 'the-real-token',
+    'page'   => 'home',
+    'blocks' => ['intro' => ['body' => '<p>Καλό</p><script>alert(1)</script>']],
+])->getContent();
+contains($hostilePreview, 'Καλό', 'a richtext value previews');
+missing($hostilePreview, '<script>alert(1)</script>', '...with the script stripped by the same sanitiser as a save');
+
+// A global renders inside every page and has none of its own, so there is
+// nothing to point a preview at. Refused rather than rendered blank.
+ok(admin_post(['action' => 'preview', 'csrf' => 'the-real-token', 'page' => '_header'])
+    ->getStatusCode() === 400, 'a global has no page of its own to preview');
+$headerForm2 = render(['action' => 'edit', 'page' => '_header']);
+missing($headerForm2, 'value="preview"', '...so the button is not offered for one');
+
 section('The panel edits one language at a time');
 $greek = render([]);
 contains($greek, 'Ελληνικά', 'the page list offers the configured languages');

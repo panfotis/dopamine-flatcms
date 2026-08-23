@@ -358,16 +358,18 @@ final class Form
     }
 
     /**
-     * Turnstile, **fail open**.
+     * Turnstile: **fail open on our problems, closed on theirs.**
      *
-     * If siteverify is unreachable the submission is accepted. The rate limit,
-     * the honeypot and the minimum time-to-submit have all already run, so a
-     * Cloudflare outage degrades one layer of four rather than silently eating
-     * a client's leads for an afternoon — and losing a lead is the worse
-     * outcome, which is the same judgement the mail path makes below.
+     * If siteverify is unreachable, or no secret is configured, the submission
+     * is accepted. The rate limit, the honeypot and the minimum time-to-submit
+     * have all already run, so a Cloudflare outage degrades one layer of four
+     * rather than silently eating a client's leads for an afternoon — and
+     * losing a lead is the worse outcome, which is the same judgement the mail
+     * path makes below. Every fail-open is logged, so a sustained one is
+     * visible rather than inferred from a quiet week.
      *
-     * Every fail-open is logged, so a sustained one is visible rather than
-     * inferred from a quiet week.
+     * A token that verifies but was solved on another host is the opposite
+     * case and is refused: nothing is broken, the token simply is not ours.
      */
     private function turnstile(Request $request): bool
     {
@@ -402,7 +404,49 @@ final class Form
             return true;
         }
 
-        return (json_decode($body, true)['success'] ?? false) === true;
+        $result = (array) (json_decode($body, true) ?? []);
+
+        if (($result['success'] ?? false) !== true) {
+            return false;
+        }
+
+        // The site key is public — it is printed in the page. Without this, a
+        // token solved on someone else's site against our key verifies here
+        // just as well as one solved on ours, which makes the challenge a bot
+        // filter rather than a gate. `hostname` is where the widget was
+        // actually solved; siteverify returns it for exactly this check.
+        //
+        // Fail *closed*, unlike the two cases above: a mismatch is not an
+        // outage or a missing key, it is a token that came from somewhere else.
+        $expected = self::bareHost((string) parse_url(
+            (string) $this->cms->config['site']['base_url'],
+            PHP_URL_HOST
+        ));
+        $solvedOn = self::bareHost((string) ($result['hostname'] ?? ''));
+
+        if ($expected !== '' && $solvedOn !== $expected) {
+            error_log('[dopamine-flatcms] turnstile token solved on ' . $solvedOn
+                . ', expected ' . $expected . ' — refused');
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * A host with `www.` removed, for comparing two spellings of one site.
+     *
+     * A site reachable at both the apex and www would otherwise refuse every
+     * submission made on whichever one `site.base_url` does not name — a
+     * fail-closed bug on the client's lead form, which is the one place this
+     * codebase is least willing to have one.
+     */
+    private static function bareHost(string $host): string
+    {
+        $host = strtolower(trim($host));
+
+        return str_starts_with($host, 'www.') ? substr($host, 4) : $host;
     }
 
     /**

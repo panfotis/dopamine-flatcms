@@ -765,6 +765,51 @@ contains($editorForm, cms()->lang->t('edit.admin_only'), 'marked admin-only');
 rename($contactFile . '.form.bak', $contactFile);
 array_map('unlink', glob(content_root() . '/.revisions/el/epikoinonia.*.yml') ?: []);
 
+section('Preview is a render, and obeys every rule a save does');
+// A new endpoint that takes a request body and returns HTML earns the same
+// cases as the one that writes it. Preview writes nothing — which is exactly
+// why it must not become a way to render what a save would refuse.
+$previewFile = content_root() . '/pages/el/epikoinonia.yml';
+$previewBefore = (string) file_get_contents($previewFile);
+
+$noToken = admin_post(['action' => 'preview', 'page' => 'home', 'csrf' => 'wrong-token']);
+ok($noToken->getStatusCode() === 400, 'a preview without the session token is refused');
+
+// `recipient` is `editable: admin`. An editor forging it must see the stored
+// address rendered back, not their own — a preview that showed the forged
+// value would be a way to confirm a change the save is about to drop.
+$editorPreview = (string) as_user($EDITOR, 'POST', [
+    'action' => 'preview',
+    'csrf'   => 'test-token',
+    'page'   => 'epikoinonia',
+    'blocks' => ['form' => [
+        'heading'   => 'Δικό μου κείμενο',
+        'recipient' => 'attacker@evil.gr',
+    ]],
+])->getContent();
+contains($editorPreview, 'Δικό μου κείμενο', "an editor's own field previews");
+missing($editorPreview, 'attacker@evil.gr', '...while a field they may not edit keeps the stored value');
+
+// Undeclared keys are dropped by the same walk, so there is nothing for one to
+// reach: a value the schema never named cannot appear in the render. The marker
+// is deliberately unlike anything else on the page — an earlier case in this
+// file stores `alert(1)` as legitimate *text* on home (:65), and a preview that
+// renders it is the sanitiser working, not failing.
+$undeclaredPreview = (string) admin_post([
+    'action' => 'preview',
+    'csrf'   => 'test-token',
+    'page'   => 'home',
+    'blocks' => ['hero' => [
+        'heading' => 'Τίτλος',
+        'onclick' => 'UNDECLARED-9f2c',
+    ]],
+])->getContent();
+contains($undeclaredPreview, 'Τίτλος', 'a declared field previews');
+missing($undeclaredPreview, 'UNDECLARED-9f2c', '...and an undeclared one is dropped, exactly as on save');
+
+ok((string) file_get_contents($previewFile) === $previewBefore,
+    'and after all of that, nothing was written to disk');
+
 section('A global is locked down exactly like a page');
 // The header and the footer are page files that render on every page. The
 // rule does not relax because the file is shared — this is the same hostile

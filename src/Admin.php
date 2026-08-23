@@ -147,6 +147,7 @@ final class Admin
         return match ($action) {
             'edit'      => $this->edit($request, $user, (string) $request->query->get('page', '')),
             'save'      => $this->save($request, $user),
+            'preview'   => $this->preview($request, $user),
             'upload'    => $this->upload($request),
             'revisions' => $this->revisions($request, $user),
             'restore'   => $this->restore($request, $user),
@@ -571,6 +572,79 @@ final class Admin
         return new RedirectResponse('?action=edit&page=' . urlencode($id) . $this->localeQuery()
             . ($purge['ok'] ? '&ok=' . urlencode($this->cms->lang->t('flash.saved'))
                             : '&warn=' . urlencode($purge['message'])), 303);
+    }
+
+    /**
+     * The page as it would render if this form were saved — without saving it.
+     *
+     * The same walk save() runs, minus the transaction: values come off the
+     * request, go through Fields::map() exactly as they would on the way to
+     * disk, and are handed to renderPage(). That equivalence is the whole
+     * safety argument — richtext is sanitised by the same allowlist, a field
+     * the role may not edit keeps its stored value, and an undeclared key is
+     * dropped. There is no way to paint something a save would have refused.
+     *
+     * **Not in MUTATIONS, deliberately.** It writes nothing, takes no content
+     * lock and snapshots nothing. A read-only render holding the site-wide lock
+     * would block the hourly backup for as long as someone had a preview open.
+     *
+     * `enforceRequired: false`, because half a page is exactly what someone
+     * wants to look at before deciding whether to finish it.
+     *
+     * @param array{email: string, role: string} $user
+     */
+    private function preview(Request $request, array $user): Response
+    {
+        $this->checkCsrf($request);
+
+        $id = (string) $request->request->get('page', '');
+        $page = $this->cms->content->load($id);
+        if ($page === null) {
+            throw new RuntimeException($this->cms->lang->t('err.page_missing'));
+        }
+
+        // A global has no address and no document of its own — it renders
+        // inside every page. Previewing one means rendering some other page
+        // with it, which is a different feature; the button is not offered.
+        if (Content::isGlobal($id)) {
+            throw new RuntimeException($this->cms->lang->t('err.preview_global'));
+        }
+
+        $posted = (array) $request->request->all('blocks');
+        $context = $this->context();
+
+        foreach ($page['blocks'] as $i => $block) {
+            $schema = $this->cms->components->get((string) $block['type']);
+            if ($schema === null) {
+                continue;
+            }
+
+            $page['blocks'][$i]['fields'] = $this->cleanValues(
+                $schema,
+                (array) ($block['fields'] ?? []),
+                (array) ($posted[$block['id']] ?? []),
+                $context,
+                $user['role'],
+                false
+            );
+        }
+
+        // The head is part of what someone is previewing — a changed title or
+        // description shows up in the tab and in the share card.
+        $page['seo'] = $this->cleanValues(
+            $this->seoSchema(),
+            (array) ($page['seo'] ?? []),
+            (array) $request->request->all('seo'),
+            $context,
+            $user['role'],
+            false
+        );
+
+        if ($request->request->has('title')) {
+            $page['title'] = Fields::sanitise(['type' => 'text', 'max' => 120], $request->request->get('title'));
+        }
+
+        return $this->html($this->cms->renderPage($page));
     }
 
     /**

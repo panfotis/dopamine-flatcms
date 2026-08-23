@@ -150,7 +150,13 @@ $config = [
     // resolver change rather than a migration run against twenty live sites.
     'paths' => [
         'content'    => $contentPath,
-        'lang'       => $enginePath . '/lang',
+        // Site catalogue first, engine's after. Unlike the theme roots these
+        // are *merged* key by key rather than first-file-wins, so `lang/el.php`
+        // here needs only the keys you are adding or rewording — a label for a
+        // component you wrote, or one engine string a client wants said
+        // differently. Everything else still comes from the engine, including
+        // keys added by a later release.
+        'lang'       => [__DIR__ . '/lang', $enginePath . '/lang'],
         // First match wins: add a local component/template to override a
         // starter without ever editing vendor/.
         // Site theme first, engine theme after: any file dropped here —

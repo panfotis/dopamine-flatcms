@@ -45,7 +45,22 @@
     {% if not global %}
       <a class="btn ghost" href="{{ locales[locale].prefix }}{{ page.slug }}" target="_blank" rel="noopener">{{ t('edit.view_page') }}</a>
     {% endif %}
-    <button class="btn" type="submit" form="editor">{{ t('edit.save') }}</button>
+    {# The action rides on the submitter and ONLY on the submitter. A hidden
+       action input alongside these buttons is how preview once performed a
+       real save: both values land in the payload in tree order, and PHP keeps
+       the last one — which was the hidden input's. Save first in the DOM, so
+       Enter in a text field still means save, never preview. #}
+    <button class="btn" type="submit" form="editor" name="action" value="save">{{ t('edit.save') }}</button>
+    {# Posts the form into the dialog's iframe instead of navigating, so the
+       editing state is never disturbed — no back button, nothing to restore.
+       formnovalidate because half a page is exactly what someone wants to look
+       at before deciding whether to finish it. A global has no page of its own
+       to render, so it is not offered one. #}
+    {% if not global %}
+      <button class="btn ghost" type="submit" form="editor" name="action" value="preview"
+              formtarget="previewframe" formnovalidate
+              onclick="previewbox.showModal()">{{ t('edit.preview') }}</button>
+    {% endif %}
   </div></div>
 {% endblock %}
 
@@ -83,7 +98,8 @@
   {% endif %}
 
   <form method="post" id="editor" enctype="multipart/form-data">
-    <input type="hidden" name="action" value="save">
+    {# No hidden action input — the submit buttons in the savebar carry it.
+       See the comment there before putting one back. #}
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <input type="hidden" name="page" value="{{ page.id }}">
     {# Which language this form is editing. Without it a save from the English
@@ -171,6 +187,24 @@
       </details>
     {% endif %}
   </form>
+
+  {# The preview target. An iframe rather than markup swapped into this page:
+     the site's stylesheet and the panel's would otherwise style each other, and
+     inside a frame the media queries resolve against the frame's own width —
+     which is why the dialog is near full-screen rather than a centred box. At
+     700px wide it would faithfully show the client their mobile layout and let
+     them believe it was the desktop one.
+
+     `method="dialog"` closes it with no JavaScript; Escape does too. #}
+  {% if not global %}
+    <dialog id="previewbox" class="previewbox">
+      <form method="dialog" class="previewbar">
+        <span>{{ page.title }}</span>
+        <button class="btn ghost">{{ t('edit.preview_close') }}</button>
+      </form>
+      <iframe name="previewframe" title="{{ t('edit.preview') }}"></iframe>
+    </dialog>
+  {% endif %}
 {% endblock %}
 
 {#
