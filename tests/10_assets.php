@@ -30,7 +30,15 @@ ok(substr_count($two, '.hero{') === 1, 'a page with two heroes still inlines it 
 
 $none = $cms->renderPage(['id' => 'a3', 'title' => 'A', 'slug' => '/a3', 'blocks' => []]);
 missing($none, '.hero{', 'a page with no hero does not carry its CSS at all');
-ok(substr_count($none, '--wrap:1120px') === 1, 'while the engine theme globals are on every page');
+// The engine declares no globals: its placeholder styling rides with the
+// welcome components, so a built site never ships a byte of it.
+missing($none, '--wrap:1120px', 'the engine placeholder CSS is not on an ordinary page');
+ok(substr_count($none, '.fixmark{color:green}') === 1, 'while a lower layer\'s manifest globals are on every page');
+
+$welcome = $cms->renderPage(['id' => 'a3w', 'title' => 'A', 'slug' => '/a3w', 'blocks' => [
+    ['id' => 'w1', 'type' => 'demo_header', 'fields' => []],
+]]);
+ok(substr_count($welcome, '--wrap:1120px') === 1, 'the placeholder base styles arrive with demo_header, once');
 
 // The same Cms just rendered a hero page; a leaked collector is exactly the
 // bug this asserts against.
@@ -38,7 +46,7 @@ missing($none, '.video-facade{', 'a second render on the same Cms does not inher
 
 $bare = $cms->renderPage(['id' => 'a4', 'title' => 'A', 'slug' => '/a4', 'layout' => 'bare',
     'blocks' => [$hero('h1')]]);
-contains($bare, '--wrap:1120px', 'layout: bare carries the theme globals too');
+contains($bare, '.fixmark{color:green}', 'layout: bare carries the theme globals too');
 contains($bare, '.hero{', 'and its components\' CSS');
 
 section('Local JS is wrapped, per file, after the DOM exists');
@@ -62,7 +70,14 @@ register_shutdown_function(static function () use ($siteDir): void {
     exec('rm -rf ' . escapeshellarg($siteDir));
 });
 
-file_put_contents($siteDir . '/assets/css/site.css', ".sitemark{color:red}\n");
+// Comment, loose whitespace, a two-space string and a calc(): what the
+// minifier must strip and what it must not touch.
+// The two comments carry one apostrophe each: read as string delimiters they
+// would pair across the first comment's terminator and the rule between the
+// comments would be swallowed with it. Regression for exactly that bug.
+file_put_contents($siteDir . '/assets/css/site.css',
+    "/* strip me — it's a comment */\n.sitemark{color:red}\n/* and it's another */\n"
+    . ".q::before{ content: \"a  b\" ;\n  width: calc(100% - 2rem) }\n");
 file_put_contents($siteDir . '/theme.yml', Yaml::dump([
     'css' => [
         'assets/css/site.css',
@@ -96,16 +111,16 @@ contains($html, '.site-hero{font-size:9rem}', 'with the site layer\'s hero CSS')
 missing($html, '.hero{', 'and none of the engine hero\'s CSS — the folder wins whole, no half-merge');
 contains($html, '<p class="plain">γειά</p>', 'a component with no .css beside it renders fine');
 
-section('Emission order: externals, engine globals, components, site globals');
+section('Emission order: externals, lower-layer globals, components, site globals');
 
 $linkPos   = strpos($html, '<link rel="stylesheet"');
-$enginePos = strpos($html, '--wrap:1120px');
+$enginePos = strpos($html, '.fixmark{');
 $heroPos   = strpos($html, '.site-hero{');
 $sitePos   = strpos($html, '.sitemark{');
 ok($linkPos !== false && $enginePos !== false && $heroPos !== false && $sitePos !== false,
     'all four tiers are present');
 ok($linkPos < $enginePos && $enginePos < $heroPos && $heroPos < $sitePos,
-    'and in tier order — external < engine globals < component < site globals');
+    'and in tier order — external < lower-layer globals < component < site globals');
 ok(substr_count($html, '<link rel="preconnect" href="https://cdn.example.com"') === 1,
     'one preconnect per external host, not one per asset');
 contains($html, 'integrity="sha384-AAA" crossorigin="anonymous"',
@@ -114,6 +129,12 @@ missing($html, 'sha384-AAA"></style>', 'external entries are tags, never inlined
 contains($html, '<script src="https://cdn.example.com/lib.js" defer integrity="sha384-BBB"',
     'external JS is deferred, which is what lets wrapped local code rely on it');
 ok(substr_count($html, '<style>') >= 3, 'one <style> per contributing file, not one concatenated block');
+
+section('Inlined CSS is minified; the file on disk stays the readable copy');
+
+missing($html, 'strip me', 'comments are stripped');
+contains($html, '.sitemark{color:red}.q::before{content: "a  b";width: calc(100% - 2rem)}',
+    'whitespace collapses, while quoted strings and calc() operator spacing survive byte-for-byte');
 
 section('A manifest cannot read outside its own theme root');
 
@@ -139,7 +160,7 @@ missing($html, 'TOPSECRET-DO-NOT-INLINE', 'a ../ entry is rejected, not inlined 
 section('The 404 is branded; the 500 depends on nothing');
 
 $notFound = $cms->renderTemplate('404.twig', ['slug' => '/nope', 'locale' => 'el', 'home_url' => '/']);
-contains($notFound, '--wrap:1120px', 'the 404 carries the theme globals — renderTemplate gives it the pipeline');
+contains($notFound, '.fixmark{', 'the 404 carries the theme globals — renderTemplate gives it the pipeline');
 
 file_put_contents($siteDir . '/404.twig', '<!DOCTYPE html><title>SITE-404</title>{{ theme_head() }}');
 $layered2 = new Cms($cfg);
@@ -154,7 +175,7 @@ $html = $broken->renderPage(['id' => 'c2', 'title' => 'C', 'slug' => '/c2', 'blo
 contains($html, '<main>', 'a page still renders with a corrupt theme.yml — fail soft, doctor is where it gets loud');
 $fiveHundred = $broken->twig->render('500.twig', ['locale' => 'el', 'home_url' => '/']);
 contains($fiveHundred, '500', 'and 500.twig renders with no Assets instance at all');
-missing($fiveHundred, '--wrap:1120px', 'carrying no pipeline output — it is deliberately self-contained');
+missing($fiveHundred, '.fixmark{', 'carrying no pipeline output — it is deliberately self-contained');
 
 // ── The admin theme ─────────────────────────────────────────────────────────
 

@@ -1,0 +1,3 @@
+# Fixture globals — gives the non-site manifest tier content to assert on.
+css:
+  - assets/css/fixture.css

@@ -16,10 +16,12 @@ use Symfony\Component\Yaml\Yaml;
  *
  * Local files are inlined — measured at ~3 KB a page, cheaper than the request
  * that would fetch them — and external URLs become real <link>/<script> tags,
- * so nothing static is ever served from this origin. Emission order is four
- * tiers: external tags, the engine layer's globals, component assets in render
- * order, the site layer's globals. Site last is what lets a site restyle any
- * component from its own site.css without forking the component.
+ * so nothing static is ever served from this origin. CSS is minified on the
+ * way in; the file on disk stays the readable copy. Emission order is four
+ * tiers: external tags, lower layers' globals (the engine itself ships none —
+ * its placeholder styling rides with the welcome components), component assets
+ * in render order, the site layer's globals. Site last is what lets a site
+ * restyle any component from its own site.css without forking the component.
  *
  * One <style>/<script> per file rather than one concatenated block: a syntax
  * error, an uncaught exception or a top-of-file @import then breaks only the
@@ -129,7 +131,7 @@ final class Assets
             $out[] = '<link rel="stylesheet" href="' . htmlspecialchars($url) . '"' . $this->attrs($attrs) . '>';
         }
         foreach ([...$this->cssPre, ...array_values($this->cssComponent), ...$this->cssPost] as $file) {
-            $content = $this->read($file);
+            $content = self::minifyCss($this->read($file));
             if ($content !== '') {
                 $out[] = "<style>\n" . $content . "\n</style>";
             }
@@ -279,6 +281,42 @@ final class Assets
         }
 
         return trim($content);
+    }
+
+    /**
+     * Whitespace and comments out of inlined CSS; the file on disk stays the
+     * readable copy. Deliberately conservative: quoted strings are carried
+     * through untouched, and spaces around operators are kept because
+     * `calc(100% - 2rem)` and descendant combinators need them. JS is never
+     * minified — without a real parser that corrupts regex literals and
+     * ASI-dependent code, and the files are a few KB at most.
+     */
+    private static function minifyCss(string $css): string
+    {
+        // Comments and strings in ONE alternation — leftmost match wins, so an
+        // apostrophe inside a comment can never open a string and a "/*"
+        // inside a string can never open a comment. Two separate passes get
+        // exactly that wrong. Comments drop; strings park verbatim behind
+        // placeholders so nothing below can touch `content: "a  b"`.
+        $strings = [];
+        $css = (string) preg_replace_callback(
+            '#/\*.*?\*/|"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'#s',
+            static function (array $m) use (&$strings): string {
+                if (str_starts_with($m[0], '/*')) {
+                    return '';
+                }
+                $strings[] = $m[0];
+
+                return "\x01" . (count($strings) - 1) . "\x01";
+            }, $css);
+        $css = (string) preg_replace('/\s+/', ' ', $css);
+        // Only around punctuation that never needs a space. Not after ':' —
+        // `.a :hover` and `.a:hover` are different selectors.
+        $css = (string) preg_replace('/ ?([{};,]) ?/', '$1', $css);
+        $css = str_replace(';}', '}', $css);
+
+        return trim((string) preg_replace_callback('/\x01(\d+)\x01/',
+            static fn (array $m): string => $strings[(int) $m[1]], $css));
     }
 
     /** @param array<string, mixed> $attrs */

@@ -1,0 +1,3 @@
+/* Fixture-layer globals: exist so the tests can see the lower-layer manifest
+   tier (tier 2) with content the engine no longer provides. */
+.fixmark{color:green}
