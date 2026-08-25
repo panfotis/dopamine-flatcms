@@ -1,7 +1,0 @@
-# The engine declares no global assets on purpose. Its placeholder styling
-# lives in the welcome components' own CSS (demo_header carries the base
-# rules), so it loads only while a site still renders the first-run page and
-# a built site never ships a byte of it. A site's own theme.yml owns the
-# globals: local paths are inlined, https:// entries become real
-# <link>/<script defer> tags, and the map form ({url, integrity, async})
-# carries SRI.

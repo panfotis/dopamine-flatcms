@@ -105,7 +105,7 @@ section('A template error renders 500.twig, not a stack trace');
 
 // A component whose template cannot compile — the schema-rename case, which is
 // how this failed on a live site: a white page with a PHP fatal printed on it.
-$broken = $root . '/theme/components/_broken';
+$broken = $root . '/tests/fixtures/theme/components/_broken';
 register_shutdown_function(static function () use ($broken): void {
     array_map('unlink', glob($broken . '/*') ?: []);
     @rmdir($broken);
@@ -292,6 +292,98 @@ ok($declared === $checked,
 ok(in_array('ext-exif', $declared, true),
     'ext-exif among them — normalize() strips EXIF to remove GPS, so orientation must be baked in first');
 
+section('doctor: a site head.twig must extend the canonical, never copy it');
+
+$fixtureHead = $root . '/tests/fixtures/theme/head.twig';
+try {
+    // A standalone copy freezes the site's head — engine improvements never land.
+    file_put_contents($fixtureHead, "<meta charset=\"utf-8\">\n<title>copied</title>\n{{ theme_head() }}\n");
+    [$status, $out] = sh(escapeshellarg(PHP_BINARY) . ' bin/doctor');
+    ok($status !== 0, 'a standalone head.twig copy fails doctor');
+    contains($out, "must {% extends '@flatcms/head.twig' %}", 'with a message that names the fix');
+
+    // Every legitimate formatting of the extends tag passes: the check reads
+    // the COMPILED template, which normalises quoting, spacing and {%- -%}.
+    foreach ([
+        "{% extends '@flatcms/head.twig' %}",
+        '{% extends "@flatcms/head.twig" %}',
+        "{%  extends  '@flatcms/head.twig'  %}",
+        "{%- extends '@flatcms/head.twig' -%}",
+    ] as $variant) {
+        file_put_contents($fixtureHead, $variant . "\n{% block generator %}{% endblock %}\n");
+        [$status] = sh(escapeshellarg(PHP_BINARY) . ' bin/doctor');
+        ok($status === 0, 'formatting variant passes: ' . $variant);
+    }
+
+    // Comments are stripped at compile time, so an example inside one cannot
+    // satisfy the check the way it would fool a raw-source grep.
+    file_put_contents($fixtureHead,
+        "{# {% extends '@flatcms/head.twig' %} #}\n<title>still a copy</title>\n{{ theme_head() }}\n");
+    [$status] = sh(escapeshellarg(PHP_BINARY) . ' bin/doctor');
+    ok($status !== 0, 'a commented-out extends example does not satisfy the check');
+} finally {
+    @unlink($fixtureHead);
+}
+
+section('doctor: canonical partials are engine-owned; local overrides optional');
+
+// The healthy-site pass above already proves a theme with NO local
+// picture/video partial is complete. The cases below prove the other three
+// corners: a valid override passes, a broken one fails, a self-recursive one
+// fails even though it compiles.
+$fixturePicture = $root . '/tests/fixtures/theme/picture.twig';
+try {
+    file_put_contents($fixturePicture,
+        "<div class=\"ov\">{% include '@flatcms/picture.twig' with { image: image } only %}</div>\n");
+    [$status] = sh(escapeshellarg(PHP_BINARY) . ' bin/doctor');
+    ok($status === 0, 'a valid local picture override compiles and passes');
+
+    file_put_contents($fixturePicture, '{% if broken %}');
+    [$status, $out] = sh(escapeshellarg(PHP_BINARY) . ' bin/doctor');
+    ok($status !== 0, 'a broken local override fails — it would be a site-wide image outage');
+    contains($out, 'does not compile', 'and says which file');
+
+    // Compiles cleanly, recurses at render time — the trap compilation alone
+    // cannot catch.
+    file_put_contents($fixturePicture, "{% include ['picture.twig', '@flatcms/picture.twig'] only %}\n");
+    [$status, $out] = sh(escapeshellarg(PHP_BINARY) . ' bin/doctor');
+    ok($status !== 0, 'an override that resolves itself via the fallback list is rejected');
+    contains($out, '@flatcms/picture.twig', 'with the fix in the message');
+} finally {
+    @unlink($fixturePicture);
+}
+
+section('doctor: a theme is incomplete without its own layouts, loudly');
+
+$fixtureLayout = $root . '/tests/fixtures/theme/layout.twig';
+$layoutSource = (string) file_get_contents($fixtureLayout);
+try {
+    unlink($fixtureLayout);
+    [$status, $out] = sh(escapeshellarg(PHP_BINARY) . ' bin/doctor');
+    ok($status !== 0, 'a theme missing layout.twig fails — nothing underneath renders a placeholder');
+    contains($out, 'missing template: layout.twig', 'named plainly');
+
+    // A bare head include with nothing behind it used to pass doctor on the
+    // string match and become a fatal on first render.
+    file_put_contents($fixtureLayout,
+        "<!DOCTYPE html>\n<html><head>{% include 'head.twig' %}</head>\n"
+        . "<body><main>{% for block in blocks %}{{ block|raw }}{% endfor %}</main>\n{{ theme_foot() }}</body></html>\n");
+    [$status, $out] = sh(escapeshellarg(PHP_BINARY) . ' bin/doctor');
+    ok($status !== 0, 'a bare head.twig include that cannot resolve fails before runtime');
+    contains($out, 'cannot resolve', 'with the fallback-list form in the message');
+
+    // theme_foot() is where component behaviour and self-hosted libraries
+    // load; a layout without it is an outage, and it now fails outright.
+    file_put_contents($fixtureLayout,
+        "<!DOCTYPE html>\n<html><head>{% include ['head.twig', '@flatcms/head.twig'] %}</head>\n"
+        . "<body><main>{% for block in blocks %}{{ block|raw }}{% endfor %}</main></body></html>\n");
+    [$status, $out] = sh(escapeshellarg(PHP_BINARY) . ' bin/doctor');
+    ok($status !== 0, 'a layout that never calls theme_foot() fails, no longer a warning');
+    contains($out, 'theme_foot', 'and the message names the call');
+} finally {
+    file_put_contents($fixtureLayout, $layoutSource);
+}
+
 section('bin/doctor refuses every way a site can be quietly broken');
 
 // A throwaway content tree per case, so nothing here can touch real content.
@@ -459,7 +551,7 @@ section('bin/doctor refuses a broken component, and an unsafe production box');
 // The component cases need a real component directory, so build one and take
 // it away again whatever happens.
 $tmpType = '_doctor';
-$tmpDir = $root . '/theme/components/' . $tmpType;
+$tmpDir = $root . '/tests/fixtures/theme/components/' . $tmpType;
 register_shutdown_function(static function () use ($tmpDir): void {
     array_map('unlink', glob($tmpDir . '/*') ?: []);
     @rmdir($tmpDir);
@@ -706,6 +798,23 @@ contains($deployText, 'tests/run.sh --portable',
     'deploy runs all test files without assuming a DDEV router exists on the VPS');
 ok(strpos($deployText, 'site_env_load "$env_file" 1') > strpos($deployText, 'tests/run.sh --portable'),
     'the live environment is loaded only after isolated tests, so tests cannot mutate shared content');
+
+// The same honest-cheapest check for the post-switch half: asset smoke, purge,
+// prune — in that order, each with its defined failure behaviour.
+$assetSmokeAt = strpos($deployText, 'Fetching the asset bundles');
+$purgeAt      = strpos($deployText, 'purge_cache');
+$pruneAt      = strpos($deployText, '--prune-assets');
+ok($assetSmokeAt !== false && $purgeAt !== false && $pruneAt !== false
+    && $switchAt < $assetSmokeAt && $assetSmokeAt < $purgeAt && $purgeAt < $pruneAt,
+    'post-switch order holds: switch < asset smoke < purge < prune');
+ok(strpos($deployText, 'PUBLIC_ASSETS_PATH="$root/shared/assets"') < $switchAt,
+    'bundles are warmed (doctor runs with PUBLIC_ASSETS_PATH) before current moves');
+contains($deployText, 'bundle $asset_path is referenced but not served',
+    'a bundle the web server cannot serve reverses the switch — writing is not delivering');
+contains($deployText, '"success":true', 'the purge is judged by its JSON body, not by HTTP 200');
+contains($deployText, 'skipping bundle prune', 'no confirmed purge, no prune — cached HTML may still name old hashes');
+contains($deployText, 'disk maintenance only', 'a prune failure alone does not fail an otherwise healthy deploy');
+contains($deployText, 'purge FAILED', 'a purge failure leaves the release live but exits failed, naming the task');
 contains($deployText, 'ENV_FILE="$env_file"', 'doctor and the release smoke test receive the shared environment');
 
 $nginx = (string) file_get_contents($root . '/nginx.conf.example');

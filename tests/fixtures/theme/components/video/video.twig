@@ -32,7 +32,7 @@
       </script>
     {% endif %}
 
-    {% include 'video_facade.twig' with {
+    {% include ['video_facade.twig', '@flatcms/video_facade.twig'] with {
          video: fields.embed,
          poster: fields.poster,
          title: fields.heading

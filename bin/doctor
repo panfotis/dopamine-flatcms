@@ -13,6 +13,8 @@
  *
  *   bin/doctor            check and report
  *   bin/doctor --quiet    exit code only, for cron
+ *   bin/doctor --prune-assets  also delete bundles older than seven days
+ *                              (deploy only, after a confirmed edge purge)
  *
  * Exit 0 clean, 1 if anything is wrong. Warnings do not fail the run.
  */
@@ -279,7 +281,10 @@ foreach ($loaded as $type => $schema) {
     }
 }
 
-foreach (['layout.twig', '404.twig', '500.twig', 'picture.twig'] as $template) {
+// The templates a SITE must own. picture.twig and video_facade.twig are not
+// here: their canonicals are engine-owned (@flatcms/…) and a site without
+// local overrides is complete — the checks for those follow below.
+foreach (['layout.twig', '404.twig', '500.twig'] as $template) {
     $exists = false;
     foreach ((array) $config['paths']['theme'] as $root) {
         if (is_file((string) $root . '/' . $template)) {
@@ -295,6 +300,50 @@ foreach (['layout.twig', '404.twig', '500.twig', 'picture.twig'] as $template) {
         $cms->twig->load($template);
     } catch (Throwable $e) {
         $fail(sprintf('%s does not compile — %s', $template, $e->getMessage()));
+    }
+}
+
+// The engine-owned canonicals must exist and compile — every image and video
+// on every site renders through them when no local override exists.
+foreach (['@flatcms/picture.twig', '@flatcms/video_facade.twig'] as $template) {
+    try {
+        $cms->twig->load($template);
+    } catch (Throwable $e) {
+        $fail(sprintf('%s does not compile — %s', $template, $e->getMessage()));
+    }
+}
+
+// A local override is optional and deliberately site-owned — but it must
+// compile (a broken one is a site-wide image outage), and it must not
+// resolve ITSELF: inside an override, the canonical is '@flatcms/…', never
+// the bare name or the fallback list, both of which recurse at render time
+// while compiling cleanly.
+foreach ((array) $config['paths']['theme'] as $root) {
+    foreach (['picture.twig', 'video_facade.twig'] as $partial) {
+        $file = (string) $root . '/' . $partial;
+        if (!is_file($file)) {
+            continue;
+        }
+        try {
+            // Compiled under its own name — compileSource() asks the loader
+            // for that name's cache key, so it must be resolvable, and the
+            // file being checked IS a resolvable copy of it.
+            $compiledPartial = $cms->twig->compileSource(
+                new Twig\Source((string) file_get_contents($file), $partial, $file)
+            );
+        } catch (Throwable $e) {
+            $fail(sprintf('%s does not compile — %s', $file, $e->getMessage()));
+            continue;
+        }
+        // A self-reference compiles to ->load("picture.twig"…) or, via the
+        // fallback list, ->load(["picture.twig"… (older Twig: loadTemplate).
+        // Matching only the first-argument position matters: the compiled
+        // output also embeds the template's own name in comments, in
+        // getTemplateName() and in its Source line — none of which are
+        // references.
+        if (preg_match('/->load(?:Template)?\(\[?"' . preg_quote($partial, '/') . '"/', $compiledPartial) === 1) {
+            $fail(sprintf('%s: references itself by bare name — inside an override the canonical is @flatcms/%s, anything else recurses at render time', $file, $partial));
+        }
     }
 }
 
@@ -325,13 +374,23 @@ $collectManifest = static function (string $dir, string $who) use (&$localCss, &
     foreach (['css', 'js'] as $kind) {
         foreach ((array) ($data[$kind] ?? []) as $entry) {
             if (is_array($entry)) {
-                $url = (string) ($entry['url'] ?? '');
-                if ($url === '') {
-                    $fail(sprintf('%s: external %s entry has no url', $who, $kind));
-                } else {
-                    $externals[] = [$who, $kind, $url, $entry];
+                // Exactly one of url|file — the same rule Assets::collect()
+                // enforces softly at runtime, loud here.
+                if (isset($entry['url']) === isset($entry['file'])) {
+                    $fail(sprintf('%s: %s map entry needs exactly one of url or file', $who, $kind));
+                    continue;
                 }
-                continue;
+                if (isset($entry['url'])) {
+                    $externals[] = [$who, $kind, (string) $entry['url'], $entry];
+                    continue;
+                }
+                if (preg_match('#^(https?:)?//#i', (string) $entry['file']) === 1) {
+                    $fail(sprintf('%s: file: must be a local path, got %s', $who, (string) $entry['file']));
+                    continue;
+                }
+                // {file:, wrap: false} — the path is validated exactly like a
+                // bare string entry by falling through to the checks below.
+                $entry = $entry['file'];
             }
             $entry = (string) $entry;
             if (str_starts_with($entry, 'https://')) {
@@ -448,22 +507,26 @@ if ($hasAsync && $localJs !== []) {
     $warn('an async external script coexists with local JS — async has no ordering guarantee against DOMContentLoaded, so local code must not depend on it');
 }
 
-// Inlined CSS has no file URL to resolve against: a relative url() or @import
-// silently requests the wrong path on every page. data:, https:, /… and #…
-// survive inlining; nothing else does.
+// Theme CSS is either inlined (no file URL to resolve against) or bundled
+// under /assets/css/ (a different base than the page). Either way a relative
+// url() requests the wrong path; data:, https:, /… and #… survive both.
 foreach ($localCss as [$who, $file]) {
     $css = (string) @file_get_contents($file);
     foreach ((array) (preg_match_all('#url\(\s*[\'"]?([^\'")\s]+)#i', $css, $m) ? $m[1] : []) as $ref) {
         if (preg_match('~^(data:|https://|/|\#)~', $ref) !== 1) {
-            $fail(sprintf('%s: relative url(%s) cannot resolve once inlined', $who, $ref));
+            $fail(sprintf('%s: relative url(%s) resolves against neither the page nor /assets/css/ — make it root-relative', $who, $ref));
         }
     }
+    // @import and @charset are position-sensitive: both must precede all
+    // rules, which concatenation cannot honour for anything but the first
+    // file. An external stylesheet belongs in theme.yml as a <link> entry.
     foreach ((array) (preg_match_all('#@import\s+(?:url\()?[\'"]?([^\'")\s;]+)#i', $css, $m) ? $m[1] : []) as $ref) {
-        if (str_starts_with($ref, 'https://')) {
-            $warn(sprintf('%s: @import %s is a serialized second round-trip — declare it in the manifest as a <link> instead', $who, $ref));
-        } else {
-            $fail(sprintf('%s: relative @import %s cannot resolve once inlined', $who, $ref));
-        }
+        $fail(str_starts_with($ref, 'https://')
+            ? sprintf('%s: @import %s is invalid once bundled (imports must precede all rules) — declare it in the manifest as a <link> instead', $who, $ref)
+            : sprintf('%s: relative @import %s cannot resolve once inlined or bundled', $who, $ref));
+    }
+    if (preg_match('#@charset\b#i', $css) === 1) {
+        $fail(sprintf('%s: @charset is invalid anywhere but the first bytes of a file, so it cannot survive bundling — the pipeline serves UTF-8', $who));
     }
 }
 
@@ -480,25 +543,74 @@ foreach (array_slice($adminDirs, 0, -1) as $dir) {
 // strpos: a {# theme_head() #} comment is stripped at compile and stray
 // spacing inside the call does not matter.
 $pipelined = ['layout.twig', 'bare.twig', '404.twig'];
-$checkPipelined = static function () use (&$pipelined, $cms, $fail, $warn): void {
-    // head.twig owns the <head> half and is checked with them; the rest own
-    // <body>, which is the only place theme_foot() can go.
-    foreach ([...$pipelined, 'head.twig'] as $template) {
+$checkPipelined = static function () use (&$pipelined, $themeDirs, $cms, $fail): void {
+    $loader = $cms->twig->getLoader();
+
+    foreach ($pipelined as $template) {
         try {
-            $source   = $cms->twig->getLoader()->getSourceContext($template);
-            $compiled = $cms->twig->compileSource($source);
+            $compiled = $cms->twig->compileSource($loader->getSourceContext($template));
         } catch (Throwable) {
             continue; // missing or broken templates are reported above
         }
-        // Either the layout calls it, or it includes the shared head that does.
-        // compileSource() does not follow an include, but the included name is
-        // in the compiled output, and head.twig is checked on its own below —
-        // so a layout cannot pass by including something that skips the call.
-        if (!str_contains($compiled, 'theme_head') && !str_contains($compiled, 'head.twig')) {
-            $fail(sprintf('%s never calls theme_head() — every page it renders ships without CSS', $template));
+        // The head must actually RESOLVE, not merely be mentioned: either the
+        // layout emits theme_head() itself (404.twig's minimal head), or it
+        // references the canonical @flatcms/head.twig — directly or as the
+        // tail of the fallback list — or a chain head.twig the loader can
+        // really find. A bare 'head.twig' reference with nothing behind it
+        // used to sail through here and become a fatal on first render.
+        $headOk = str_contains($compiled, 'theme_head')
+            || str_contains($compiled, '@flatcms/head.twig')
+            || (str_contains($compiled, 'head.twig') && $loader->exists('head.twig'));
+        if (!$headOk) {
+            $fail(sprintf(
+                "%s: its head reference cannot resolve — use {%% include ['head.twig', '@flatcms/head.twig'] %%}",
+                $template
+            ));
         }
-        if ($template !== 'head.twig' && !str_contains($compiled, 'theme_foot')) {
-            $warn(sprintf('%s never calls theme_foot() — no JS will load on it', $template));
+        // A failure, not a warning: component behaviour and any self-hosted
+        // library load through theme_foot(), so a layout without it ships
+        // pages where no JS at all runs — an outage, not a nit.
+        if (!str_contains($compiled, 'theme_foot')) {
+            $fail(sprintf('%s never calls theme_foot() — no JS at all loads on the pages it renders', $template));
+        }
+    }
+
+    // Engine-side regression guard: the canonical head is the one place the
+    // whole-site CSS emission lives, outside every overridable block.
+    try {
+        $canonical = $cms->twig->compileSource($loader->getSourceContext('@flatcms/head.twig'));
+        if (!str_contains($canonical, 'theme_head')) {
+            $fail('@flatcms/head.twig never calls theme_head() — the engine template has regressed');
+        }
+    } catch (Throwable $e) {
+        $fail('@flatcms/head.twig does not compile — ' . $e->getMessage());
+    }
+
+    // A site head.twig exists only to extend the canonical. A standalone copy
+    // freezes this site's <head> forever — engine head improvements would
+    // never reach it again, which is precisely the divergence this layout
+    // replaced. Checked on the COMPILED output: Twig normalises quoting,
+    // spacing and {%- -%} markers and strips comments at compile time, so
+    // every legitimate formatting of the extends tag passes and a commented
+    // example cannot.
+    foreach ($themeDirs as $root) {
+        $file = $root . '/head.twig';
+        if (!is_file($file)) {
+            continue;
+        }
+        try {
+            $compiledHead = $cms->twig->compileSource(
+                new Twig\Source((string) file_get_contents($file), 'head.twig', $file)
+            );
+        } catch (Throwable $e) {
+            $fail(sprintf('%s does not compile — %s', $file, $e->getMessage()));
+            continue;
+        }
+        if (!str_contains($compiledHead, 'doGetParent') || !str_contains($compiledHead, '@flatcms/head.twig')) {
+            $fail(sprintf(
+                "%s: a site head.twig must {%% extends '@flatcms/head.twig' %%} and override blocks — a standalone copy freezes the head, and engine head improvements never reach this site again",
+                $file
+            ));
         }
     }
 };
@@ -838,6 +950,79 @@ if (is_file($redirectFile)) {
         }
         if (str_starts_with($resolved, '/') && !isset($liveUrls[rtrim($resolved, '/') ?: '/'])) {
             $fail(sprintf('redirect "%s" -> "%s" lands on nothing', $from, $resolved));
+        }
+    }
+}
+
+// ── Asset bundles ───────────────────────────────────────────────────────────
+
+// Only when bundles are configured; an inline-delivery site has nothing here.
+// Only on an otherwise-healthy site: warming RENDERS every page, so a theme
+// already known to be broken would be executed rather than reported — a
+// self-recursive partial would exhaust memory and kill the process before it
+// could print the finding that names it.
+$assetsDir = (string) ($config['paths']['public_assets'] ?? '');
+if ($assetsDir !== '' && $problems !== []) {
+    $warn('asset bundles not warmed: fix the failures above first');
+} elseif ($assetsDir !== '') {
+    // Writability by probe, never is_writable(): the directory may not exist
+    // yet on a fresh checkout, and is_writable() would answer the wrong
+    // question about the wrong path. This also proves nothing about php-fpm,
+    // which runs as another user — see the deployment notes.
+    $probeOk = (is_dir($assetsDir) || @mkdir($assetsDir, 0775, true) || is_dir($assetsDir));
+    $probe   = $assetsDir . '/.doctor-probe';
+    if (!$probeOk || @file_put_contents($probe, "\n") === false) {
+        $fail(sprintf('paths.public_assets %s is not writable — bundles cannot be generated (php-fpm needs write access here too)', $assetsDir));
+    } else {
+        @unlink($probe);
+
+        // Warm: render every page in every locale so each live bundle exists
+        // before the switch, touching the ones already there so an active hash
+        // never looks stale to the pruner.
+        $warmed = 0;
+        foreach (array_keys($cms->locales()) as $warmLocale) {
+            $warmCms = new Cms($config);
+            $warmCms->useLocale($warmLocale);
+            foreach ($warmCms->content->list() as $warmPage) {
+                try {
+                    $html = $warmCms->renderPage($warmCms->content->findBySlug((string) $warmPage['slug']) ?? $warmPage);
+                } catch (Throwable $e) {
+                    $fail(sprintf('page "%s" (%s) does not render — %s', $warmPage['id'] ?? '?', $warmLocale, $e->getMessage()));
+                    continue;
+                }
+                if (preg_match_all('#/assets/(css|js)/([a-z]+-[0-9a-f]{12}\.(?:css|js))#', $html, $m, PREG_SET_ORDER)) {
+                    foreach ($m as $hit) {
+                        $bundleFile = $assetsDir . '/' . $hit[1] . '/' . $hit[2];
+                        if (is_file($bundleFile)) {
+                            @touch($bundleFile);
+                            $warmed++;
+                        } else {
+                            $fail(sprintf('bundle %s is referenced but missing on disk', $hit[0]));
+                        }
+                    }
+                }
+            }
+        }
+        if (!$quiet && $warmed > 0) {
+            fwrite(STDOUT, sprintf("  · %d asset bundle references warmed\n", $warmed));
+        }
+
+        // Pruning is a deploy step, never a health check: it runs only behind
+        // --prune-assets, and deploy.sh calls it only after a confirmed edge
+        // purge. Anything still referenced was touched a moment ago.
+        if (in_array('--prune-assets', $argv, true)) {
+            $cutoff = time() - 7 * 86400;
+            $pruned = 0;
+            foreach (['css', 'js'] as $kind) {
+                foreach (glob($assetsDir . '/' . $kind . '/*-*.' . $kind) ?: [] as $old) {
+                    if (filemtime($old) < $cutoff && @unlink($old)) {
+                        $pruned++;
+                    }
+                }
+            }
+            if (!$quiet) {
+                fwrite(STDOUT, sprintf("  · %d bundle(s) older than seven days pruned\n", $pruned));
+            }
         }
     }
 }

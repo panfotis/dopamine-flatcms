@@ -11,7 +11,7 @@
 <!DOCTYPE html>
 <html lang="{{ locale|default(site('locale')) }}">
 <head>
-{% include 'head.twig' %}
+{% include ['head.twig', '@flatcms/head.twig'] %}
 </head>
 <body>
 {# No header_blocks and no footer_blocks: that is the whole difference. #}

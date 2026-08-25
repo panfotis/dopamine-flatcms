@@ -61,6 +61,18 @@ server {
     #
     # Only used when R2_ENABLED=0. With R2 on, these URLs are absolute and never
     # reach this server at all.
+    # Generated CSS/JS bundles. Content-addressed names, so the bytes behind a
+    # URL never change and it can be cached forever — a rebuild produces a new
+    # name, never a new body. php-fpm writes here at runtime (an editor saving
+    # a new component combination mints a bundle), which is exactly why the
+    # execute guard below is not optional.
+    location /assets/ {
+        alias /var/www/example-domain/shared/assets/;
+        expires max;
+        add_header Cache-Control "public, immutable";
+        location ~ \.php$ { return 403; }
+    }
+
     location /uploads/ {
         alias /var/www/example-domain/shared/content/uploads/;
         expires 30d;

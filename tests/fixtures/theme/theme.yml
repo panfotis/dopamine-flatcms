@@ -1,3 +1,7 @@
-# Fixture globals — gives the non-site manifest tier content to assert on.
+# The demo theme's globals (its components are the snapshot below, and they
+# are styled entirely through these custom properties), plus the fixture
+# marker the suite asserts the manifest tier with. Fonts fall back to the
+# system stack by design — no external entries in the test theme.
 css:
+  - assets/css/site.css
   - assets/css/fixture.css

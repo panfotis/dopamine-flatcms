@@ -41,6 +41,9 @@
   <h1>{{ t('settings.title') }}</h1>
   <p class="sub">
     <a href="?">{{ t('nav.back') }}</a> ·
+    {# The product name needs no catalogue entry; the version is the fact this
+       screen exists to state, top of page, before any config row. #}
+    Dopamine FlatCMS <code>{{ engine }}</code> ·
     {{ t('settings.intro') }}
   </p>
 

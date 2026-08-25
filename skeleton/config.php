@@ -157,14 +157,28 @@ $config = [
         // differently. Everything else still comes from the engine, including
         // keys added by a later release.
         'lang'       => [__DIR__ . '/lang', $enginePath . '/lang'],
-        // First match wins: add a local component/template to override a
-        // starter without ever editing vendor/.
-        // Site theme first, engine theme after: any file dropped here —
-        // a layout, a component folder, a stylesheet — overrides the
-        // engine's copy without touching vendor/.
-        'theme'       => [__DIR__ . '/theme', $enginePath . '/theme'],
+        // One theme root: everything in theme/ is this site's, outright —
+        // there is no engine theme underneath to fall back to, so a missing
+        // template fails loudly in bin/doctor instead of silently rendering
+        // a placeholder. The engine's canonical templates (head, picture,
+        // video facade) are @flatcms/… — engine-owned, outside this list,
+        // unshadowable. The list form still works for a deliberately shared
+        // base theme across sites (first match wins per file).
+        'theme'       => [__DIR__ . '/theme'],
         'admin_theme' => [__DIR__ . '/admin-theme', $enginePath . '/admin-theme'],
         'cache'      => $varPath . '/cache',
+        // Where the asset bundles are written, behind the /assets/ URL space.
+        // Derived, never a required setting: with VAR_PATH pointing at
+        // shared/var (the release layout), bundles default to its
+        // shared/assets sibling, outside every release — exactly the layout
+        // that needs them there, with nothing to configure. Everywhere else
+        // they default to public/assets and the docroot serves them natively.
+        // PUBLIC_ASSETS_PATH overrides either. php-fpm must be able to write
+        // here — an editor saving a new component combination mints a bundle
+        // at request time; if it cannot, every page inlines its CSS/JS
+        // instead: slower, never broken.
+        'public_assets' => env('PUBLIC_ASSETS_PATH',
+            $varPath === __DIR__ . '/var' ? __DIR__ . '/public/assets' : dirname($varPath) . '/assets'),
         // Inside content/, not under the docroot: uploads are client-owned
         // state and belong in the content repository with everything else the
         // client can lose. nginx aliases /uploads/ here, so stored `src` values

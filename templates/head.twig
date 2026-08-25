@@ -1,0 +1,64 @@
+{# @flatcms/head.twig — the canonical <head>. The engine owns the default:
+   a site overrides a named block by creating theme/head.twig with
+   {% extends '@flatcms/head.twig' %}, or adds markup with theme/head-extra.twig.
+   Nobody should ever need to copy this file — a copy is what froze the old
+   skeleton head one em dash away from the engine's, forever.
+
+   charset, viewport and theme_head() sit OUTSIDE every block on purpose: they
+   are correctness, not preference, and must not be removable. A site that
+   could blank the asset emission would ship unstyled pages while still passing
+   doctor's theme_head() check against this file. #}
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{# Name only, never a version. The name is how a site gets counted by
+   BuiltWith and Wappalyzer, which is the entire point of publishing it. A
+   version number is something else: it turns the tag into a filter for
+   "which installs are on the release with the known hole", which is why every
+   WordPress hardening guide starts by removing theirs.
+
+   Override with an empty block on a site whose client would rather not say:
+   {% block generator %}{% endblock %} #}
+{% block generator %}<meta name="generator" content="Dopamine FlatCMS">
+{% endblock %}
+{#
+  Everything below comes from the page's `seo:` map, resolved by Cms::seo() —
+  which is where the fallbacks live, so nothing here has to branch on an empty
+  value that has a perfectly good default sitting one key away.
+#}
+{% block title %}<title>{{ page.seo.title }} — {{ site('name') }}</title>
+{% endblock %}
+{% block seo %}{% if page.seo.description %}<meta name="description" content="{{ page.seo.description }}">{% endif %}
+{% if page.seo.noindex %}<meta name="robots" content="noindex, nofollow">{% endif %}
+{% if page.seo.canonical %}<link rel="canonical" href="{{ page.seo.canonical }}">{% endif %}
+{% endblock %}
+{% block social %}<meta property="og:type" content="website">
+<meta property="og:title" content="{{ page.seo.title }}">
+<meta property="og:url" content="{{ page.seo.url }}">
+{% if page.seo.description %}<meta property="og:description" content="{{ page.seo.description }}">{% endif %}
+{# No og:image:alt — the share image is declared decorative, and the card
+   already carries the title and description as text beside it. #}
+{% if page.seo.og_image.src %}
+<meta property="og:image" content="{{ page.seo.og_image.src }}">
+<meta name="twitter:card" content="summary_large_image">
+{% endif %}
+{% endblock %}
+{% block icons %}{% if site('favicon') %}<link rel="icon" href="{{ site('favicon') }}">{% endif %}
+{% endblock %}
+{# Absolute, because a hreflang a crawler cannot resolve is worse than none —
+   and only for languages that actually have this page, since pointing at a
+   home page as the "alternate" of a subpage is a claim that is not true.
+   A single-language site emits one self-referencing link, which is the valid
+   shape for a group of one rather than a placeholder. #}
+{% block alternates %}{% for alt in alternates|default([])|filter(a => not a.missing) %}
+<link rel="alternate" hreflang="{{ alt.locale }}" href="{{ alt.abs }}">
+{% if alt.default and alternates|length > 1 %}<link rel="alternate" hreflang="x-default" href="{{ alt.abs }}">{% endif %}
+{% endfor %}
+{% endblock %}
+{{ theme_head() }}
+{# The additive extension point: analytics, verification tags, preloads.
+   ignore missing suppresses only "not found" — a syntax error still raises.
+   Asset files and external URLs belong in theme.yml instead, which gives
+   them minification, SRI and dedup; this is for markup the manifest cannot
+   represent. #}
+{% block extra %}{% include 'head-extra.twig' ignore missing %}
+{% endblock %}

@@ -25,3 +25,6 @@ var/submissions/
 # repository restores the site whole, images included. See the engine README,
 # "Where content lives".
 /content/
+
+# Generated asset bundles: content-addressed, rebuilt on demand.
+/public/assets/

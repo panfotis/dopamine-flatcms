@@ -145,17 +145,30 @@ $config = [
     'paths' => [
         'content'    => $contentPath,
         'lang'       => __DIR__ . '/lang',
-        // One folder per layer: the site's theme over the engine's. This repo
-        // is the engine plus its own demo site, so a single root each.
-        // Two roots, and this file never ships — it is export-ignored, the
-        // engine's development config. theme/ is the first-run placeholder the
-        // package actually distributes; tests/fixtures/theme holds the nine
-        // components the suite attacks and the dev site renders. Keeping them
-        // apart is why the shipped theme can be three components without
-        // costing the suite a single hostile-input case.
-        'theme'       => [__DIR__ . '/theme', __DIR__ . '/tests/fixtures/theme'],
+        // One theme root: the site owns its theme outright. This file never
+        // ships — it is the engine's export-ignored development config, and
+        // tests/fixtures/theme is its complete theme: the components the
+        // suite attacks and the dev site renders, plus the layouts. The
+        // engine itself ships no theme at all — its canonical templates
+        // (head, picture, video facade) live in templates/ under the
+        // @flatcms namespace, outside any theme root. The list form still
+        // works for a deliberately layered base theme; the engine is just
+        // never an implicit member of it.
+        'theme'       => [__DIR__ . '/tests/fixtures/theme'],
         'admin_theme' => __DIR__ . '/admin-theme',
         'cache'      => $varPath . '/cache',
+        // Where the asset bundles are written, behind the /assets/ URL space.
+        // Derived, never a required setting: with VAR_PATH pointing at
+        // shared/var (the release layout), bundles default to its
+        // shared/assets sibling, outside every release — exactly the layout
+        // that needs them there, with nothing to configure. Everywhere else
+        // they default to public/assets and the docroot serves them natively.
+        // PUBLIC_ASSETS_PATH overrides either. php-fpm must be able to write
+        // here — an editor saving a new component combination mints a bundle
+        // at request time; if it cannot, every page inlines its CSS/JS
+        // instead: slower, never broken.
+        'public_assets' => env('PUBLIC_ASSETS_PATH',
+            $varPath === __DIR__ . '/var' ? __DIR__ . '/public/assets' : dirname($varPath) . '/assets'),
         // Inside content/, not under the docroot: uploads are client-owned
         // state and belong in the content repository with everything else the
         // client can lose. nginx aliases /uploads/ here, so stored `src` values

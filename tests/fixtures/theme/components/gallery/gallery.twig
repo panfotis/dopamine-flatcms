@@ -8,7 +8,7 @@
         {% for photo in fields.photos %}
           {# Never lazy: false here. A gallery is below the fold by
              construction, and thirty eager images is the LCP mistake at scale. #}
-          {% include 'picture.twig' with {
+          {% include ['picture.twig', '@flatcms/picture.twig'] with {
                image: photo,
                widths: [320, 640, 960],
                sizes: '(min-width: 900px) 300px, 45vw'

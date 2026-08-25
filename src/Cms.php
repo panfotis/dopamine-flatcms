@@ -40,6 +40,14 @@ final class Cms
     private readonly array $themeDirs;
     /** @var list<string> admin-theme roots, same ordering */
     private readonly array $adminDirs;
+    /**
+     * Where asset bundles are written, or null to inline them.
+     *
+     * Site renders pass it; the panel never does — it is authenticated and
+     * no-store, so caching buys it nothing and it must not depend on a
+     * writable public directory to render at all.
+     */
+    private readonly ?string $publicAssets;
     /** The current render's asset collector; null outside a render. */
     private ?Assets $assets = null;
 
@@ -73,6 +81,8 @@ final class Cms
         // override is one rule: drop a same-named file in the site's theme/.
         $this->themeDirs = array_values(array_unique(array_filter((array) $paths['theme'], 'is_string')));
         $this->adminDirs = array_values(array_unique(array_filter((array) ($paths['admin_theme'] ?? []), 'is_string')));
+        $pub = $paths['public_assets'] ?? null;
+        $this->publicAssets = is_string($pub) && $pub !== '' ? $pub : null;
 
         $this->components = new Components(array_map(
             static fn (string $d): string => $d . '/components',
@@ -106,6 +116,13 @@ final class Cms
         foreach ($this->adminDirs as $dir) {
             $loader->addPath($dir, 'admin');
         }
+        // Engine-owned canonical templates: the shared <head> (and the shared
+        // partials). Registered OUTSIDE the theme chain so no same-named site
+        // file can silently shadow them — that shadowing is how the old
+        // skeleton head froze. Sites customise by extending
+        // @flatcms/head.twig or by dropping theme/head-extra.twig, never by
+        // copying.
+        $loader->addPath(dirname(__DIR__) . '/templates', 'flatcms');
         $this->twig = new Environment($loader, [
             'cache'      => $config['twig_cache'] ? $paths['cache'] . '/twig' : false,
             'autoescape' => 'html',
@@ -642,7 +659,7 @@ final class Cms
         // A fresh collector for exactly this render: Cms outlives a request,
         // and a longer-lived one would leak this page's component CSS into the
         // next (the tests render fifteen pages on one instance).
-        $this->assets = new Assets($this->themeDirs);
+        $this->assets = new Assets($this->themeDirs, $this->publicAssets);
 
         // Resolved once and hung on the page, so `page.seo` is the same shape
         // in the layout as in any component that wants to read it.
@@ -684,7 +701,7 @@ final class Cms
      */
     public function renderTemplate(string $name, array $vars = []): string
     {
-        $this->assets = new Assets($this->themeDirs);
+        $this->assets = new Assets($this->themeDirs, $this->publicAssets);
 
         return $this->twig->render($name, $vars);
     }

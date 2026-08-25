@@ -5,7 +5,7 @@
       {# lazy: false — this is the LCP element. The alt="" it renders now comes
          from `decorative: true` in schema.yml rather than from a hardcoded
          attribute nobody would have found. #}
-      {% include 'picture.twig' with {
+      {% include ['picture.twig', '@flatcms/picture.twig'] with {
            image: fields.image,
            widths: [640, 960, 1280, 1600, 2048],
            sizes: '100vw',

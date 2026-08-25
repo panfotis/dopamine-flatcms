@@ -23,3 +23,6 @@ var/submissions/
 # This stops being right at a gallery site or past a few hundred MB. That site
 # sets R2_ENABLED=1 and the paths stop being local; see README "Safety net"
 # and "R2 — media storage".
+
+# Generated asset bundles: content-addressed, rebuilt on demand.
+/public/assets/

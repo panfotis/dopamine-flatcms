@@ -141,18 +141,29 @@ src/          Cms Admin Auth Components Content Fields Form Lang Locks Media
               Cloudflare AccessDeniedException StaleContentException
               bootstrap.php — process-level error handlers, not a class
 users.yml     email -> admin|editor, committed, no secrets
-theme/        everything site-facing: head.twig (the whole <head>, included by
-              every layout — a tag added once reaches every page, including the
-              bare landing pages where a forgotten tracking script reports
-              nothing; `include`, not inheritance, so no layout can override
-              part of it), layout.twig, bare.twig (no header/footer;
-              `layout: bare`), 404.twig, 500.twig (both standalone, with their
-              own minimal heads), picture.twig,
-              video_facade.twig, components/<name>/ (schema.yml + <name>.twig
-              + optional <name>.css / <name>.js — the file beside the template
-              is the whole declaration), theme.yml (global CSS/JS, local paths
+templates/    the engine-owned canonical templates, served under the @flatcms
+              Twig namespace so no site file can shadow them. head.twig is the
+              whole <head>: layouts pull it with
+              {% include ['head.twig', '@flatcms/head.twig'] %}, a site ADDS
+              tags by dropping theme/head-extra.twig (analytics, verification —
+              rendered by the canonical's `extra` block), and REPLACES a section
+              by creating theme/head.twig that {% extends '@flatcms/head.twig' %}
+              and overrides a named block (generator, title, seo, social, icons,
+              alternates, extra). charset, viewport and theme_head() sit outside
+              every block on purpose — bin/doctor fails a site head.twig that
+              does not extend the canonical, because a copy freezes the head.
+              picture.twig and video_facade.twig live here too, called by
+              components through {% include ['picture.twig', '@flatcms/…'] %} —
+              a site override is optional and deliberate, never shipped.
+theme/        the SITE'S theme, and only the site's — the engine ships none.
+              layout.twig, bare.twig (no header/footer; `layout: bare`),
+              404.twig, 500.twig (both standalone, with their own minimal
+              heads), components/<name>/ (schema.yml + <name>.twig + optional
+              <name>.css / <name>.js — the file beside the template is the
+              whole declaration), theme.yml (global CSS/JS, local paths
               inlined and https:// entries emitted as tags) and assets/.
-              Site theme layers over the engine's, first root wins per file.
+              paths.theme is one root by default; the list form still layers
+              deliberately-shared bases, first root wins per file.
 content/      pages/<locale>/*.yml, uploads/, .revisions/, redirects.yml
               A page id starting with `_` — `_header`, `_footer` — is a
               **global**: an ordinary page file that renders on every page
@@ -183,9 +194,15 @@ admin-theme/  the panel: _layout.twig, edit.twig, fields/*.twig, theme.yml,
               is discouraged, not prevented, and bin/doctor warns rather than
               fails. Branding via assets is the supported surface; overriding
               panel templates tracks engine internals and is not.
-              Every image on the site renders through theme/picture.twig. A
+              Every image on the site renders through @flatcms/picture.twig
+              (or a site's own theme/picture.twig override — the fallback-list
+              include gives every site exactly one override point). A
               component that writes its own <img> is caught by 01_render.php.
-public/       docroot: index.php, admin.php, img.php, router.php
+public/       docroot: index.php, admin.php, img.php, router.php, and the
+              generated assets/ bundle directory (gitignored; in the release
+              layout it derives to shared/assets from VAR_PATH — override with
+              PUBLIC_ASSETS_PATH — where nginx aliases it like /uploads/ and
+              php-fpm must be able to write).
 tests/        01_render 02_admin 03_lockdown 04_hardening 05_concurrency
               06_production 07_shipkit 08_form 09_package 10_assets, lib.php, fixtures/,
               run.sh. 09 proves a mirrored Composer install and clean archive.

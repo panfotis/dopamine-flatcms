@@ -6,7 +6,7 @@
   <div class="wrap">
     <a class="brand" href="{{ home_url }}">
       {% if fields.logo.src|default('') %}
-        {% include 'picture.twig' with {
+        {% include ['picture.twig', '@flatcms/picture.twig'] with {
              image: fields.logo,
              widths: [640],
              sizes: '200px',

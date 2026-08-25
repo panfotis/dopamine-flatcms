@@ -17,23 +17,46 @@ where PHP 8.4 and all required extensions exist.
 The engine lives in `vendor/dopamine/flatcms`. Site-owned files live here:
 
 - `theme/` is the site: layouts, components, `theme.yml` (global CSS/JS,
-  local or CDN) and `assets/`. Any file here overrides the engine's copy.
+  local or CDN) and `assets/`. Everything in `theme/` is this site's own;
+  the engine keeps only `@flatcms/…` (head, picture, video facade).
 - `admin-theme/` brands the panel — `assets/css/admin.css` is the supported
   surface; overriding panel templates tracks engine internals.
 - `content/` contains pages, globals, revisions, and uploads.
 - `lang/` holds interface strings — see below. Absent until you need it.
 - `config.php` and `.env` configure this installation.
 
-A new site opens on the engine theme's **first-run page** — a placeholder that
+A new site opens on its own **first-run page** — three placeholder components
+this skeleton copied into `theme/components/`, a placeholder that
 says where you are and points at the docs. Replace it: clone the
 [demo theme](https://github.com/panfotis/flatcms-theme-demo) over `theme/`, or
 write your own components here. Once you do, every component on the site is
 yours outright and there is nothing in `vendor/` left to override.
 
+CSS and JS are served as **content-hashed bundle files** under `/assets/` —
+written on demand, cached forever by the browser, and replaced by a new URL
+whenever a byte changes, so there is nothing to purge and no build step to run.
+In the release layout they land in `shared/assets/` automatically (derived
+from `VAR_PATH`; `PUBLIC_ASSETS_PATH` overrides); php-fpm must be able to
+write there. If they cannot be written, every page falls back to
+inlining its CSS/JS — slower, never broken.
+
 Styling, cheapest first: add rules to `theme/assets/css/site.css` (emitted last,
 wins the cascade) → edit the component's own `.css`, which sits beside its
 template → change the template. Nothing here receives engine updates, because
 nothing here comes from the engine.
+
+The `<head>` is the one exception — it is engine-owned (`@flatcms/head.twig`)
+so every site keeps receiving head improvements. Three rules:
+
+- **To add tags** (analytics, verification metas, preloads): create
+  `theme/head-extra.twig` and put them there. It renders at the end of the
+  head with the full page context.
+- **To replace or remove a section**: create `theme/head.twig` containing
+  `{% extends '@flatcms/head.twig' %}` and override a named block —
+  `generator`, `title`, `seo`, `social`, `icons`, `alternates`, `extra`.
+  Everything you do not override keeps tracking the engine. A standalone
+  copy fails `bin/doctor`, because a copy freezes your head forever.
+- **Most sites need neither.**
 
 Never edit files in `vendor/`; Composer updates replace them.
 

@@ -14,18 +14,27 @@ use Symfony\Component\Yaml\Yaml;
  * tests reuse one Cms across fifteen renderPage() calls), so a collector held
  * any longer than one render would leak one page's component CSS into the next.
  *
- * Local files are inlined — measured at ~3 KB a page, cheaper than the request
- * that would fetch them — and external URLs become real <link>/<script> tags,
- * so nothing static is ever served from this origin. CSS is minified on the
- * way in; the file on disk stays the readable copy. Emission order is four
- * tiers: external tags, lower layers' globals (the engine itself ships none —
- * its placeholder styling rides with the welcome components), component assets
- * in render order, the site layer's globals. Site last is what lets a site
+ * Local files are written to content-addressed bundles under /assets/ and
+ * linked — the name is the hash of the bytes, so a bundle is immutable, is
+ * cached forever by the browser and never needs a CDN purge. External URLs
+ * become real <link>/<script> tags. CSS is minified on the way in; the file on
+ * disk stays the readable copy. Emission order is four tiers: external tags,
+ * lower layers' globals (the engine itself ships none), component assets in
+ * render order, the site layer's globals. Site last is what lets a site
  * restyle any component from its own site.css without forking the component.
  *
- * One <style>/<script> per file rather than one concatenated block: a syntax
- * error, an uncaught exception or a top-of-file @import then breaks only the
- * file that carries it, not everything emitted after it.
+ * With no writable target — the panel, or a misconfigured box — every tier
+ * falls back to being inlined instead, which is what this class did before
+ * bundles existed and remains a fully supported way to run.
+ *
+ * The two contracts bundling changes, both enforced by bin/doctor:
+ *  - CSS resolves relative url() against /assets/css/, not the page, so
+ *    references must be root-relative or absolute; @import and @charset are
+ *    position-sensitive and refused outright.
+ *  - Concatenated JS shares one parse: a syntax error breaks the whole bundle,
+ *    not one file. Per-file DOMContentLoaded wrappers still isolate runtime
+ *    errors and scope, and files are joined with "\n;\n" so a missing trailing
+ *    semicolon cannot merge two statements.
  */
 final class Assets
 {
@@ -54,20 +63,31 @@ final class Assets
     /** @var list<string> */
     private readonly array $themeDirs;
 
+    /** Where bundles are written, or null to inline (the panel, and tests). */
+    private readonly ?string $publicAssets;
+
+    /** Set once a write fails: the rest of this render inlines. */
+    private bool $failed = false;
+
     /**
      * @param string|list<string> $themeDirs site layer first, engine last —
      *        the same order config.paths declares them in.
+     * @param string|null $publicAssets directory behind /assets/; null inlines.
      */
-    public function __construct(string|array $themeDirs)
+    public function __construct(string|array $themeDirs, ?string $publicAssets = null)
     {
         $this->themeDirs = array_values(array_filter((array) $themeDirs, 'is_string'));
+        $this->publicAssets = $publicAssets !== null && $publicAssets !== '' ? rtrim($publicAssets, '/') : null;
 
         // Manifests read engine-first so the site's globals land in the last
-        // tier and win the cascade. A single-layer setup is its own engine:
-        // its globals are the baseline, emitted before component CSS.
-        $last = count($this->themeDirs) - 1;
+        // tier and win the cascade. The FIRST root is always the site layer,
+        // single-root installs included — that is the documented styling
+        // ladder ("add rules to site.css, emitted last, wins the cascade").
+        // Gating this on having more than one root made a single-root site's
+        // globals emit BEFORE its component CSS, silently losing every
+        // equal-specificity override.
         foreach (array_reverse($this->themeDirs, true) as $i => $dir) {
-            $site = $last > 0 && $i === 0;
+            $site = $i === 0;
             foreach ($this->manifest($dir) as $kind => $entries) {
                 foreach ($entries as $entry) {
                     $this->collect($kind, $entry, $dir, $site);
@@ -119,7 +139,7 @@ final class Assets
         $this->addLocal($kind, $root, $rel, 'component');
     }
 
-    /** Everything for <head>: preconnects, external stylesheets, inline styles. */
+    /** Everything for <head>: preconnects, external stylesheets, then the CSS. */
     public function head(): string
     {
         $out = [];
@@ -130,11 +150,33 @@ final class Assets
         foreach ($this->extCss as $url => $attrs) {
             $out[] = '<link rel="stylesheet" href="' . htmlspecialchars($url) . '"' . $this->attrs($attrs) . '>';
         }
-        foreach ([...$this->cssPre, ...array_values($this->cssComponent), ...$this->cssPost] as $file) {
-            $content = self::minifyCss($this->read($file));
-            if ($content !== '') {
-                $out[] = "<style>\n" . $content . "\n</style>";
+
+        // Three tiers, always in this order, whether bundled or inlined:
+        // lower-layer globals, this page's components, the site's globals last
+        // — which is what lets site.css restyle any component.
+        $tiers = [
+            'base' => $this->cssPre,
+            'page' => array_values($this->cssComponent),
+            'site' => $this->cssPost,
+        ];
+
+        foreach ($tiers as $prefix => $files) {
+            $parts = [];
+            foreach ($files as $file) {
+                $content = self::minifyCss($this->read($file));
+                if ($content !== '') {
+                    $parts[] = $content;
+                }
             }
+            if ($parts === []) {
+                continue;
+            }
+            // Newline-joined: CSS has no ASI hazard, but a bundle that ended
+            // mid-comment would swallow the next file's first rule.
+            $bundled = $this->bundle('css', $prefix, implode("\n", $parts));
+            $out[] = $bundled !== null
+                ? '<link rel="stylesheet" href="' . htmlspecialchars($bundled) . '">'
+                : "<style>\n" . implode("\n</style>\n<style>\n", $parts) . "\n</style>";
         }
 
         return implode("\n", $out);
@@ -152,19 +194,117 @@ final class Assets
             $mode = ($attrs['async'] ?? false) === true ? ' async' : ' defer';
             $out[] = '<script src="' . htmlspecialchars($url) . '"' . $mode . $this->attrs($attrs) . '></script>';
         }
-        foreach ([...$this->jsPre, ...array_values($this->jsComponent), ...$this->jsPost] as $file) {
+        $locals = [...$this->jsPre, ...array_values($this->jsComponent), ...$this->jsPost];
+
+        // Libraries first: a {file:, wrap: false} entry installs its globals at
+        // top level, before any wrapped code queues behind DOMContentLoaded.
+        // Bundled, every local tag is `defer`, so document order IS execution
+        // order — external defers, then lib, then the wrapped tiers — and all
+        // of them finish before DOMContentLoaded fires, which is what lets the
+        // wrapped code's listeners register in time.
+        $lib = [];
+        foreach ($locals as $file) {
+            if ($file['wrap'] ?? true) {
+                continue;
+            }
             $content = $this->read($file);
             if ($content !== '') {
-                // In code position </script> cannot legitimately appear, and in
-                // a JS string '<\/script' means the same thing — so this cannot
-                // change behaviour, only close the tag-breakout hole.
-                $content = str_ireplace('</script', '<\/script', $content);
-                $out[] = "<script>document.addEventListener('DOMContentLoaded', function () {\n"
-                    . $content . "\n});</script>";
+                $lib[] = str_ireplace('</script', '<\/script', $content);
             }
+        }
+        if ($lib !== []) {
+            // "\n;\n" between files: a library whose last statement omits its
+            // semicolon must not swallow the next file's leading `(` through
+            // automatic semicolon insertion.
+            $bundled = $this->bundle('js', 'lib', implode("\n;\n", $lib));
+            $out[] = $bundled !== null
+                ? '<script src="' . htmlspecialchars($bundled) . '" defer></script>'
+                : "<script>\n" . implode("\n;\n", $lib) . "\n</script>";
+        }
+
+        $tiers = [
+            'base' => $this->jsPre,
+            'page' => array_values($this->jsComponent),
+            'site' => $this->jsPost,
+        ];
+        foreach ($tiers as $prefix => $files) {
+            $parts = [];
+            foreach ($files as $file) {
+                if (!($file['wrap'] ?? true)) {
+                    continue;
+                }
+                $content = $this->read($file);
+                if ($content !== '') {
+                    // In code position </script> cannot legitimately appear, and
+                    // in a JS string '<\/script' means the same thing — so this
+                    // cannot change behaviour, only close the tag-breakout hole.
+                    $content = str_ireplace('</script', '<\/script', $content);
+                    // Each file keeps its own listener: that is what stops two
+                    // components' top-level `const`s from colliding once they
+                    // share one bundle scope.
+                    $parts[] = "document.addEventListener('DOMContentLoaded', function () {\n"
+                        . $content . "\n});";
+                }
+            }
+            if ($parts === []) {
+                continue;
+            }
+            $bundled = $this->bundle('js', $prefix, implode("\n;\n", $parts));
+            $out[] = $bundled !== null
+                ? '<script src="' . htmlspecialchars($bundled) . '" defer></script>'
+                : '<script>' . implode("</script>\n<script>", $parts) . '</script>';
         }
 
         return implode("\n", $out);
+    }
+
+    /**
+     * One tier written to a content-addressed file; null means "inline it".
+     *
+     * The name IS the invalidation: change a byte and the URL changes, so the
+     * file can be served immutable and never needs a CDN purge. Nothing is
+     * pre-checked — no is_writable() gate, because on a fresh checkout the
+     * directory does not exist yet and a gate would pin the site to inline
+     * mode forever. We attempt the write; only a real failure falls back.
+     */
+    private function bundle(string $kind, string $prefix, string $content): ?string
+    {
+        if ($this->publicAssets === null || $this->failed) {
+            return null;
+        }
+
+        $name = $prefix . '-' . substr(hash('xxh128', $content), 0, 12) . '.' . $kind;
+        $dir  = $this->publicAssets . '/' . $kind;
+        $path = $dir . '/' . $name;
+        $url  = '/assets/' . $kind . '/' . $name;
+
+        if (is_file($path)) {
+            return $url;
+        }
+        if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+            return $this->bundlesOff('cannot create ' . $dir);
+        }
+        // tmp + rename, so a concurrent request never reads a half-written
+        // bundle: rename() is atomic within a filesystem.
+        $tmp = $path . '.' . getmypid() . '.tmp';
+        if (@file_put_contents($tmp, $content) === false || !@rename($tmp, $path)) {
+            @unlink($tmp);
+
+            return $this->bundlesOff('cannot write ' . $path);
+        }
+
+        return $url;
+    }
+
+    /** One log line per render, then inline everything for the rest of it. */
+    private function bundlesOff(string $why): null
+    {
+        if (!$this->failed) {
+            $this->failed = true;
+            error_log('[dopamine-flatcms] assets: ' . $why . ' — falling back to inline delivery');
+        }
+
+        return null;
     }
 
     // ── collection ──────────────────────────────────────────────────────────
@@ -192,7 +332,31 @@ final class Assets
     private function collect(string $kind, mixed $entry, string $root, bool $site, bool $externalOnly = false): void
     {
         if (is_array($entry)) {
-            $this->addExternal($kind, $entry);
+            // Exactly one of url|file. Both or neither is a manifest typo;
+            // fail soft here, bin/doctor is where it gets loud.
+            if (isset($entry['url']) === isset($entry['file'])) {
+                error_log('[dopamine-flatcms] assets: map entry needs exactly one of url or file');
+
+                return;
+            }
+            if (isset($entry['url'])) {
+                $this->addExternal($kind, $entry);
+
+                return;
+            }
+            if ($externalOnly) {
+                error_log('[dopamine-flatcms] assets: local path in schema assets: ' . (string) $entry['file']);
+
+                return;
+            }
+            // {file: path, wrap: false} — a local library that must execute at
+            // top level: inside the DOMContentLoaded wrapper `this` is the
+            // listener's currentTarget (document), so a UMD bundle resolving
+            // its global via `this` installs itself on the wrong object and
+            // window.gsap never exists. Only JS distinguishes wrap; for CSS
+            // the map form is just a path.
+            $this->addLocal($kind, $root, (string) $entry['file'], $site ? 'post' : 'pre',
+                ($entry['wrap'] ?? true) !== false);
 
             return;
         }
@@ -220,7 +384,7 @@ final class Assets
         $this->addLocal($kind, $root, $entry, $site ? 'post' : 'pre');
     }
 
-    private function addLocal(string $kind, string $root, string $rel, string $tier): void
+    private function addLocal(string $kind, string $root, string $rel, string $tier, bool $wrap = true): void
     {
         // Confined to the declaring layer's own root: a manifest is developer-
         // authored, but ../../.env inlined into a public page is not a mistake
@@ -234,7 +398,7 @@ final class Assets
             return;
         }
 
-        $file = ['root' => $root, 'rel' => $rel];
+        $file = ['root' => $root, 'rel' => $rel, 'wrap' => $wrap];
         match (true) {
             $tier === 'component' && $kind === 'css' => $this->cssComponent[$real] = $file,
             $tier === 'component'                    => $this->jsComponent[$real] = $file,

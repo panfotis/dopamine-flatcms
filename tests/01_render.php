@@ -9,15 +9,14 @@ $cms = cms();
 section('Components load from disk');
 $types = array_keys($cms->components->all());
 sort($types);
-// Two roots, and the union of both: twelve from tests/fixtures/theme — a
-// frozen snapshot of the demo theme, see its README — plus the three demo_*
-// placeholders the package ships as its first-run page. Discovery merging the
-// roots rather than stopping at the first is the property under test here.
-ok($types === ['callout', 'contact_cta', 'contact_form', 'demo_footer',
-               'demo_header', 'demo_home_content', 'faq', 'feature_grid',
+// One root: tests/fixtures/theme, a frozen snapshot of the demo theme (see
+// its README) that doubles as the dev site's theme. The engine ships no
+// components at all — the demo_* placeholders live in the skeleton and are
+// copied into a new site, never inherited.
+ok($types === ['callout', 'contact_cta', 'contact_form', 'faq', 'feature_grid',
                'gallery', 'hero', 'prose', 'site_footer', 'site_header',
                'text_image', 'video'],
-    'fifteen components discovered across both theme roots: ' . implode(', ', $types));
+    'twelve components discovered from the theme root: ' . implode(', ', $types));
 ok($cms->components->get('hero')['fields']['heading']['max'] === 70, 'hero.heading max parsed from schema.yml');
 ok($cms->components->get('hero')['fields']['align']['editable'] === false, 'hero.align is marked non-editable');
 ok(!array_key_exists('align', $cms->components->editableFields('hero')), 'non-editable field excluded from editable set');
@@ -27,7 +26,7 @@ section('Page rendering');
 $page = $cms->content->findBySlug('/');
 ok($page !== null, 'home page resolved from slug /');
 $html = $cms->renderPage($page);
-contains($html, '<title>Αρχική - Demo Πελάτη</title>', 'title rendered');
+contains($html, '<title>Αρχική — Demo Πελάτη</title>', 'title rendered');
 // Read off the page, never hardcoded. What is under test is that the value
 // reaches the markup - tying that to a particular sentence of demo copy means
 // every edit from the panel is a failing suite.
@@ -51,10 +50,27 @@ section('Every image renders through picture.twig');
 // component that hand-rolls an <img> is one that will ship without a
 // width/height pair, without a WebP source, or with alt on the wrong element.
 $bare = array_filter(
-    glob(dirname(__DIR__) . '/theme/components/*/*.twig') ?: [],
+    array_merge(
+        glob(dirname(__DIR__) . '/tests/fixtures/theme/components/*/*.twig') ?: [],
+        glob(dirname(__DIR__) . '/skeleton/theme/components/*/*.twig') ?: []
+    ),
     static fn (string $f): bool => str_contains((string) file_get_contents($f), '<img')
 );
 ok($bare === [], 'no component template writes its own <img>: ' . implode(', ', array_map('basename', $bare)));
+// The same mechanism, one level up: every image include goes through the
+// fallback list, so a site override governs all of them at once.
+$unlisted = array_filter(
+    array_merge(
+        glob(dirname(__DIR__) . '/tests/fixtures/theme/components/*/*.twig') ?: [],
+        glob(dirname(__DIR__) . '/skeleton/theme/components/*/*.twig') ?: []
+    ),
+    static fn (string $f): bool => preg_match(
+        "/include\s+'(picture|video_facade)\.twig'/",
+        (string) file_get_contents($f)
+    ) === 1
+);
+ok($unlisted === [], 'every component uses the fallback-list include, never the bare partial name: '
+    . implode(', ', array_map('basename', $unlisted)));
 
 $contactPage = $cms->content->findBySlug('/epikoinonia');
 $heroImage = $contactPage['blocks'][0]['fields']['image'];
@@ -79,7 +95,7 @@ section('SEO: the seo block reaches the head, and falls back where it is empty')
 $base = rtrim((string) $cms->config['site']['base_url'], '/');
 $homeSeo = $cms->seo($cms->content->load('home'));
 ok($homeSeo['title'] === 'Αρχική', 'a page with no seo.title falls back to its page title');
-contains($html, '<title>Αρχική - Demo Πελάτη</title>', 'and the head is unchanged by the fallback');
+contains($html, '<title>Αρχική — Demo Πελάτη</title>', 'and the head is unchanged by the fallback');
 contains($html, '<meta name="description" content="'
     . htmlspecialchars($homeSeo['description'], ENT_QUOTES | ENT_SUBSTITUTE) . '">', 'the description is rendered');
 contains($html, '<meta property="og:title" content="Αρχική">', 'og:title uses the same resolved title');
@@ -341,7 +357,7 @@ $bare = $cms->renderPage($landing);
 contains($bare, 'Προσφορά', 'the page renders');
 missing($bare, '<header>', 'with no header');
 missing($bare, '<footer>', 'and no footer — that is the whole difference');
-contains($bare, '<title>L - Demo Πελάτη</title>', 'while the head is still built from page.seo');
+contains($bare, '<title>L — Demo Πελάτη</title>', 'while the head is still built from page.seo');
 
 // Developer-owned, and it names a *template*: a value from a request would be a
 // file-read primitive. A name that does not resolve falls back rather than
@@ -509,5 +525,130 @@ try {
 } finally {
     rename($moved . '.gone', $moved);
 }
+
+// ── The canonical head ──────────────────────────────────────────────────────
+
+section('The canonical head: engine-owned, extended never copied');
+
+$plain = cms()->renderPage(['id' => 'h1', 'title' => 'H', 'slug' => '/h1', 'blocks' => []]);
+contains($plain, '<meta name="generator" content="Dopamine FlatCMS">',
+    'a site with no head.twig gets the canonical @flatcms head — generator meta');
+contains($plain, '<meta property="og:type" content="website">', 'its social block');
+contains($plain, 'rel="alternate" hreflang=', 'and its hreflang block');
+
+$headDir = dirname(__DIR__) . '/var/cache/test-head-' . bin2hex(random_bytes(4));
+mkdir($headDir, 0775, true);
+register_shutdown_function(static function () use ($headDir): void {
+    exec('rm -rf ' . escapeshellarg($headDir));
+});
+$headCfg = test_config();
+$headCfg['paths']['theme'] = array_merge([$headDir], (array) $headCfg['paths']['theme']);
+$headPage = ['id' => 'h2', 'title' => 'H', 'slug' => '/h2', 'blocks' => []];
+
+file_put_contents($headDir . '/head-extra.twig',
+    "<meta name=\"google-site-verification\" content=\"EXTRA-OK\">\n");
+contains((new Dopamine\FlatCms\Cms($headCfg))->renderPage($headPage), 'content="EXTRA-OK"',
+    'theme/head-extra.twig is rendered inside the head — the additive extension point');
+
+// ignore missing must suppress ONLY "not found" — a broken extra is an error,
+// never a tag that silently stopped reporting. A separate layer, not an
+// overwrite: Twig's disk cache is keyed by resolved path, so rewriting the
+// same file in-place can serve the stale compile instead of the error.
+$brokenDir = $headDir . '-broken';
+mkdir($brokenDir, 0775, true);
+register_shutdown_function(static function () use ($brokenDir): void {
+    exec('rm -rf ' . escapeshellarg($brokenDir));
+});
+file_put_contents($brokenDir . '/head-extra.twig', '{% if broken %}');
+$brokenCfg = $headCfg;
+$brokenCfg['paths']['theme'] = array_merge([$brokenDir], (array) $headCfg['paths']['theme']);
+$threw = false;
+try {
+    (new Dopamine\FlatCms\Cms($brokenCfg))->renderPage($headPage);
+} catch (Throwable) {
+    $threw = true;
+}
+ok($threw, 'a syntax error in head-extra.twig raises rather than being silently swallowed');
+unlink($headDir . '/head-extra.twig');
+
+// A site head.twig is a narrow extension: what it overrides changes, and
+// everything it does not still tracks the engine — the property that makes
+// copies unnecessary.
+file_put_contents($headDir . '/head.twig',
+    "{% extends '@flatcms/head.twig' %}\n"
+    . "{% block generator %}{% endblock %}\n"
+    . "{% block title %}<title>{{ page.seo.title }} | {{ site('name') }}</title>{% endblock %}\n");
+$overridden = (new Dopamine\FlatCms\Cms($headCfg))->renderPage($headPage);
+missing($overridden, 'name="generator"', 'an empty generator block removes the meta');
+contains($overridden, '<title>H | Demo Πελάτη</title>', 'an overridden title block renders the site version');
+contains($overridden, '<meta property="og:title"', 'while the untouched social block still tracks the engine');
+contains($overridden, 'rel="alternate" hreflang=', 'and so does hreflang');
+contains($overridden, '.fixmark{color:green}',
+    'and theme_head() output survives — asset emission sits outside every overridable block');
+
+// ── Canonical partials: engine defaults, deliberate site overrides ──────────
+
+section('picture/video: canonical by default, one site override point');
+
+$partialPage = ['id' => 'pp', 'title' => 'P', 'slug' => '/pp', 'blocks' => [
+    ['id' => 'ph', 'type' => 'hero', 'fields' => [
+        'heading' => 'Π', 'image' => ['src' => '/uploads/x.jpg', 'alt' => 'A'],
+    ]],
+    ['id' => 'pv', 'type' => 'video', 'fields' => [
+        'embed'  => ['provider' => 'youtube', 'id' => 'dQw4w9WgXcQ'],
+        'poster' => ['src' => '/uploads/p.jpg', 'alt' => 'P'],
+    ]],
+]];
+
+$default = cms()->renderPage($partialPage);
+ok(substr_count($default, '<picture>') === 2,
+    'no local overrides: hero image AND video poster render through @flatcms/picture.twig');
+contains($default, 'class="video-facade"', 'and the facade through @flatcms/video_facade.twig');
+
+// A local picture.twig takes over every component's images at once — video
+// posters included, because the canonical facade uses the same fallback list.
+$ovDir = dirname(__DIR__) . '/var/cache/test-partials-' . bin2hex(random_bytes(4));
+mkdir($ovDir, 0775, true);
+register_shutdown_function(static function () use ($ovDir): void {
+    exec('rm -rf ' . escapeshellarg($ovDir));
+});
+file_put_contents($ovDir . '/picture.twig',
+    '<div class="site-picture" data-alt="{{ image.alt|default(\'\') }}"></div>');
+$ovCfg = test_config();
+$ovCfg['paths']['theme'] = array_merge([$ovDir], (array) $ovCfg['paths']['theme']);
+$ovHtml = (new Dopamine\FlatCms\Cms($ovCfg))->renderPage($partialPage);
+ok(substr_count($ovHtml, 'class="site-picture"') === 2,
+    'a local picture.twig overrides pictures globally — hero and video poster both');
+missing($ovHtml, '<picture>', 'and no canonical <picture> markup remains');
+contains($ovHtml, 'class="video-facade"', 'while the facade itself still comes from the canonical');
+
+file_put_contents($ovDir . '/video_facade.twig', '<div class="site-facade">{{ title|default("") }}</div>');
+$ovHtml2 = (new Dopamine\FlatCms\Cms($ovCfg))->renderPage($partialPage);
+contains($ovHtml2, 'class="site-facade"', 'a local video_facade.twig overrides video rendering');
+missing($ovHtml2, 'class="video-facade"', 'replacing the canonical facade entirely');
+
+// The fallback is live resolution, not a copy: drop the overrides and the
+// engine defaults are back.
+$restored = cms()->renderPage($partialPage);
+ok(substr_count($restored, '<picture>') === 2 && str_contains($restored, 'class="video-facade"'),
+    'removing the local overrides restores the engine defaults');
+
+// A broken override is an error a developer sees, not markup that silently
+// vanished. Fresh dir: Twig caches compiled templates by resolved path.
+$badDir = $ovDir . '-broken';
+mkdir($badDir, 0775, true);
+register_shutdown_function(static function () use ($badDir): void {
+    exec('rm -rf ' . escapeshellarg($badDir));
+});
+file_put_contents($badDir . '/picture.twig', '{% if broken %}');
+$badCfg = test_config();
+$badCfg['paths']['theme'] = array_merge([$badDir], (array) $badCfg['paths']['theme']);
+$threw = false;
+try {
+    (new Dopamine\FlatCms\Cms($badCfg))->renderPage($partialPage);
+} catch (Throwable) {
+    $threw = true;
+}
+ok($threw, 'a syntax error in a local override is reported, never silently ignored');
 
 summary();

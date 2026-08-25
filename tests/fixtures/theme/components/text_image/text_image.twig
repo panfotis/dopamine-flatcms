@@ -8,7 +8,7 @@
 
     {% if fields.image.src|default('') %}
       <figure class="media">
-        {% include 'picture.twig' with {
+        {% include ['picture.twig', '@flatcms/picture.twig'] with {
              image: fields.image,
              widths: [320, 640, 960, 1280],
              sizes: '(min-width:820px) 46vw, 100vw'

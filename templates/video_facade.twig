@@ -1,7 +1,10 @@
 {#
-  Every embedded video on the site renders through here.
+  Every embedded video on the site renders through here — the engine-owned
+  canonical, served as @flatcms/video_facade.twig. Components call it through
+  a fallback list so a site can override deliberately with its own
+  theme/video_facade.twig:
 
-    {% include 'video_facade.twig' with {
+    {% include ['video_facade.twig', '@flatcms/video_facade.twig'] with {
          video: fields.video,
          poster: fields.video_poster,
          title: fields.heading
@@ -31,7 +34,9 @@
 
   <div class="video-facade" data-video-src="{{ src }}">
     {% if poster.src|default('') %}
-      {% include 'picture.twig' with {
+      {# The same fallback list the components use, so a site's picture
+         override governs video posters too — one override point, everywhere. #}
+      {% include ['picture.twig', '@flatcms/picture.twig'] with {
            image: poster,
            widths: [640, 960, 1280],
            sizes: '(min-width: 900px) 900px, 100vw'

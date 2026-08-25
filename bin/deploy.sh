@@ -62,6 +62,9 @@ trap cleanup_failed_build EXIT
 
 step "Fetching $revision"
 mkdir -p "$release"
+# Bundles live outside the release so every hash stays resolvable across
+# deploys and rollbacks. php-fpm writes here at runtime too: see README.
+mkdir -p "$root/shared/assets"
 git -c advice.detachedHead=false clone --quiet --no-checkout "$repo" "$release/.git-tmp"
 git --git-dir="$release/.git-tmp/.git" --work-tree="$release" checkout --quiet "$revision" -- .
 rm -rf "$release/.git-tmp"
@@ -95,6 +98,7 @@ step "Checking shared content"
 env CONTENT_PATH="$root/shared/content" \
     VAR_PATH="$root/shared/var" \
     UPLOADS_PATH="$root/shared/content/uploads" \
+    PUBLIC_ASSETS_PATH="$root/shared/assets" \
     ENV_FILE="$env_file" \
     "$php" "$release/bin/doctor"
 
@@ -106,6 +110,7 @@ smoke_port="${SMOKE_PORT:-8781}"
 env CONTENT_PATH="$root/shared/content" \
     VAR_PATH="$root/shared/var" \
     UPLOADS_PATH="$root/shared/content/uploads" \
+    PUBLIC_ASSETS_PATH="$root/shared/assets" \
     ENV_FILE="$env_file" \
     "$php" -S "127.0.0.1:$smoke_port" -t "$release/public" "$release/public/router.php" >/dev/null 2>&1 &
 smoke_pid=$!
@@ -124,25 +129,84 @@ step "Switching to $(basename "$release")"
 release_switch "$root" "$release"
 
 step "Smoke-testing the live site"
-if ! curl -fsS -o /dev/null "$smoke_url"; then
+# Cache-busted: this runs BEFORE the purge, so a plain request can be answered
+# from the edge with the *previous* release's HTML and prove nothing about the
+# one just switched to.
+smoke_html="$(curl -fsS -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+  "${smoke_url}?deploy-smoke=$(basename "$release")" 2>/dev/null)" || smoke_html=''
+if [ -z "$smoke_html" ]; then
   echo "live smoke test failed — switching back to $(basename "$previous")" >&2
   [ -n "$previous" ] && release_switch "$root" "$previous"
   exit 1
 fi
 
+# Writing a bundle is not the same as serving one: if php-fpm writes to
+# shared/assets while the web server aliases somewhere else, generation
+# succeeds, the page emits links, and there is no inline fallback to catch it.
+# Only fetching the URLs the page actually printed proves delivery.
+step "Fetching the asset bundles the live page references"
+asset_urls="$(printf '%s' "$smoke_html" | grep -oE '/assets/(css|js)/[a-z]+-[0-9a-f]{12}\.(css|js)' | sort -u)"
+if [ -n "$asset_urls" ]; then
+  base_url="${smoke_url%/}"
+  for asset_path in $asset_urls; do
+    if ! curl -fsS -o /dev/null "${base_url}${asset_path}"; then
+      echo "bundle $asset_path is referenced but not served — switching back to $(basename "$previous")" >&2
+      [ -n "$previous" ] && release_switch "$root" "$previous"
+      exit 1
+    fi
+  done
+  echo "  · $(printf '%s\n' "$asset_urls" | wc -l | tr -d ' ') bundle(s) served"
+else
+  # A site delivering inline, or one with no local assets at all, is valid.
+  echo "  · no local bundles referenced (inline delivery)"
+fi
+
 # Everything, not by tag: a template or CSS change has no page id, and tag
 # purging would leave a year of stale HTML on every page it touched.
+#
+# HTTP 200 is not proof: Cloudflare answers 200 with {"success": false} for a
+# token that cannot purge this zone. Pruning depends on this having worked, so
+# the body is read rather than discarded.
 step "Purging the edge"
+purged=0
 if [ -n "${CF_ZONE_ID:-}" ] && [ -n "${CF_API_TOKEN:-}" ]; then
-  curl -fsS -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
+  purge_body="$(curl -fsS -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
     -H "Authorization: Bearer $CF_API_TOKEN" \
     -H "Content-Type: application/json" \
-    --data '{"purge_everything":true}' -o /dev/null
+    --data '{"purge_everything":true}' 2>/dev/null)" || purge_body=''
+  case "$purge_body" in
+    *'"success":true'*|*'"success": true'*) purged=1 ;;
+    *) echo "  edge purge did not report success: ${purge_body:-no response}" >&2 ;;
+  esac
 else
   echo "  CF_ZONE_ID/CF_API_TOKEN unset — skipping purge" >&2
 fi
 
+# Old bundles are only safe to delete once no cached HTML can still name them,
+# which is exactly what the purge guarantees. No purge, no prune — a full disk
+# is recoverable, a page whose stylesheet 404s is not.
+if [ "$purged" = 1 ]; then
+  step "Pruning asset bundles older than seven days"
+  env CONTENT_PATH="$root/shared/content" \
+      VAR_PATH="$root/shared/var" \
+      UPLOADS_PATH="$root/shared/content/uploads" \
+      PUBLIC_ASSETS_PATH="$root/shared/assets" \
+      ENV_FILE="$env_file" \
+      "$php" "$release/bin/doctor" --prune-assets --quiet \
+    || echo "  bundle pruning failed — disk maintenance only, the release is healthy" >&2
+else
+  echo "  · skipping bundle prune: the edge was not purged" >&2
+fi
+
 release_prune "$root" "$keep"
 trap - EXIT
+
+# The release is live and serving correctly either way; a failed purge is an
+# operator task, not a reason to roll a good release back — a rollback's own
+# correctness would depend on the very purge that just failed.
+if [ "$purged" != 1 ] && [ -n "${CF_ZONE_ID:-}" ]; then
+  printf '\n\033[33mDeployed %s, but the edge purge FAILED — re-run it before trusting the cache\033[0m\n' "$(basename "$release")"
+  exit 1
+fi
 
 printf '\n\033[32mDeployed %s (rollback: bin/rollback.sh)\033[0m\n' "$(basename "$release")"

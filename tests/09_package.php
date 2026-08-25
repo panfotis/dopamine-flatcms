@@ -110,8 +110,13 @@ if (isset($archives[0])) {
 ok($listStatus === 0, 'the generated package is a readable zip archive');
 if ($listStatus === 0) {
     $names = preg_split('/\R/', trim($listOutput)) ?: [];
-    ok(in_array('src/Cms.php', $names, true) && in_array('theme/components/demo_home_content/schema.yml', $names, true),
-        'engine classes and starter components are included');
+    ok(in_array('src/Cms.php', $names, true), 'engine classes are included');
+    ok(in_array('templates/head.twig', $names, true)
+        && in_array('templates/picture.twig', $names, true)
+        && in_array('templates/video_facade.twig', $names, true),
+        'all three canonical @flatcms templates ship — a site without them has no head and no images');
+    ok(array_filter($names, static fn (string $name): bool => str_starts_with($name, 'theme/')) === [],
+        'and no theme/ directory at all — the engine ships no theme; the placeholders live in the skeleton');
     ok(!in_array('config.php', $names, true)
         && !array_filter($names, static fn (string $name): bool => preg_match('#^(content|public|skeleton|vendor|PENS)/#', $name) === 1
             || preg_match('#^dopamine-flatcms-.*\.md$#', $name) === 1),

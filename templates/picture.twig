@@ -1,18 +1,26 @@
 {#
-  Every image on the site renders through here.
+  Every image on the site renders through here — the engine-owned canonical,
+  served as @flatcms/picture.twig. Components call it through a fallback list,
+  which is what gives a site one deliberate, site-wide override point:
 
-    {% include 'picture.twig' with {
+    {% include ['picture.twig', '@flatcms/picture.twig'] with {
          image: fields.image,
          widths: [640, 960, 1280],
          sizes: '(min-width: 1200px) 1100px, 100vw',
          lazy: false
        } only %}
 
+  No local picture.twig → this file renders, and the site keeps receiving
+  engine improvements. Creating theme/picture.twig overrides image rendering
+  across every component using the list — video posters included. Inside such
+  an override, reference this canonical directly as '@flatcms/picture.twig',
+  never via the fallback list, which would resolve to the override itself and
+  recurse.
+
   A template rather than a PHP helper on purpose: building this markup in PHP
   would mean marking a function `is_safe: html`, which is the exact mistake
   §9 records removing the `|rich` filter for. As a template, autoescaping
-  handles `alt` for free, and a site overrides it by dropping a file of the
-  same name in front of it on the loader path.
+  handles `alt` for free.
 
   There is no bare-<img> case to fall back to. Without Cloudflare's
   `format=auto` doing content negotiation, WebP-with-a-fallback needs a

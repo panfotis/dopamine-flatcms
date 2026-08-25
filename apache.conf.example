@@ -53,6 +53,19 @@
     # one `git clone` of shared/content/ restores the pages *and* the images on
     # them. Only used when R2_ENABLED=0 — with R2 on, these URLs are absolute
     # and never reach this server at all.
+    # Generated CSS/JS bundles. Content-addressed names, so the bytes behind a
+    # URL never change and it can be cached forever. php-fpm writes here at
+    # runtime, which is why the execute guard is not optional.
+    Alias /assets/ /var/www/example-domain/shared/assets/
+    <Directory /var/www/example-domain/shared/assets/>
+        Require all granted
+        Header set Cache-Control "public, immutable, max-age=31536000"
+        <FilesMatch \.php$>
+            SetHandler none
+            Require all denied
+        </FilesMatch>
+    </Directory>
+
     Alias /uploads/ /var/www/example-domain/shared/content/uploads/
     <Directory /var/www/example-domain/shared/content/uploads/>
         Require all granted

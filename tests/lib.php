@@ -92,6 +92,11 @@ function test_config(): array
     $config = require dirname(__DIR__) . '/config.php';
     $config['paths']['content'] = content_root();
     $config['paths']['uploads'] = content_root() . '/uploads';
+    // Inline delivery by default, deliberately: inlining is the production
+    // fallback whenever bundles cannot be written, so every assertion in the
+    // suite that reads CSS or JS out of the rendered HTML is real coverage of
+    // that path. 10_assets.php opts into bundles with its own temp directory.
+    unset($config['paths']['public_assets']);
 
     return $config;
 }

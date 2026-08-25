@@ -791,6 +791,11 @@ unlink($orphanFile);
 section('The settings screen lists how the install is configured');
 $settings = (string) admin_get(['action' => 'settings'])->getContent();
 contains($settings, cms()->lang->t('settings.title'), 'the screen renders');
+// The version the public generator meta deliberately withholds is stated
+// here, top of page — "ask the panel, not the public HTML".
+ok(preg_match('#Dopamine FlatCMS <code>[^<]+</code>#', $settings) === 1,
+    'the installed engine version is named at the top of the screen');
+missing($settings, 'Dopamine FlatCMS <code>unknown</code>', 'and it is a real version, not the fallback');
 contains($settings, 'base_url', 'a nested key is named');
 contains($settings, 'derivatives', 'and so is a key three levels down');
 contains($settings, '320, 640', 'a list of scalars is one line, not one row per value');

@@ -1,10 +1,14 @@
-# This site's global assets, loaded on every page. They emit AFTER the engine
-# theme's globals, so anything here wins the cascade — restyle an engine
-# component from site.css instead of forking its folder.
+# This site's global assets, loaded on every page. The engine ships no theme
+# and no global assets — everything emitted comes from this file and from the
+# components' own .css/.js — so what you declare here is the whole cascade,
+# with these globals last so they win over component styles.
 #
 # A bare string is a local path inside this theme/ (inlined) or an https://
 # URL (a real <link>/<script defer> tag). The map form carries SRI — pin CDN
 # entries to a tag, never a branch, or the hash breaks on every upstream push.
+# A local library that must run at top level (a self-hosted GSAP or Lenis)
+# is {file: assets/js/gsap.min.js, wrap: false} — bare-string JS is wrapped
+# in a DOMContentLoaded callback, which a library's globals cannot survive.
 css:
   - assets/css/site.css
 

@@ -62,6 +62,8 @@ ok($env['CONTENT_PATH'] === '/var/www/example-domain/shared/content', 'content/ 
 ok($env['VAR_PATH'] === '/var/www/example-domain/shared/var', 'var/ is shared: cache, locks, submissions never deployed');
 ok(str_starts_with($env['UPLOADS_PATH'], $env['CONTENT_PATH']), 'uploads live inside the content repository, not the release');
 ok($env['USERS_FILE'] === '/var/www/example-domain/shared/users.yml', 'the users file is shared state too');
+ok($env['PUBLIC_ASSETS_PATH'] === '/var/www/example-domain/shared/assets',
+    'asset bundles are shared, outside every release — a hash a cached page names survives switches and rollbacks');
 
 // The engine must actually honour them — a fixture nobody reads is a comment.
 $probe = __DIR__ . '/_probe_paths.php';
@@ -69,13 +71,27 @@ file_put_contents($probe, "<?php\n\$c = require dirname(__DIR__) . '/config.php'
     . "echo json_encode(\$c['paths'] + ['roles' => \$c['auth']['users_file']]);\n");
 // APP_ENV dropped: the guard is item 5's business and users.yml does not exist here.
 $paths = json_decode(run($probe, ['CONTENT_PATH' => $env['CONTENT_PATH'], 'VAR_PATH' => $env['VAR_PATH'],
-    'UPLOADS_PATH' => $env['UPLOADS_PATH'], 'USERS_FILE' => $env['USERS_FILE']]), true);
+    'UPLOADS_PATH' => $env['UPLOADS_PATH'], 'USERS_FILE' => $env['USERS_FILE'],
+    'PUBLIC_ASSETS_PATH' => $env['PUBLIC_ASSETS_PATH']]), true);
 unlink($probe);
 
 ok(($paths['content'] ?? '') === $env['CONTENT_PATH'], 'config.php resolves CONTENT_PATH');
 ok(($paths['cache'] ?? '') === $env['VAR_PATH'] . '/cache', 'config.php puts the cache under VAR_PATH');
 ok(($paths['uploads'] ?? '') === $env['UPLOADS_PATH'], 'config.php resolves UPLOADS_PATH');
 ok(($paths['roles'] ?? '') === $env['USERS_FILE'], 'config.php resolves USERS_FILE');
+ok(($paths['public_assets'] ?? '') === $env['PUBLIC_ASSETS_PATH'], 'config.php resolves PUBLIC_ASSETS_PATH');
+
+// The env var is an override, not a requirement: on the release layout the
+// path derives from VAR_PATH's shared/assets sibling, so provisioning a
+// standard server needs no assets setting at all.
+$derived = json_decode(run($probe2 = __DIR__ . '/_probe_derive.php', (static function () use ($probe2, $env): array {
+    file_put_contents($probe2, "<?php\n\$c = require dirname(__DIR__) . '/config.php';\necho json_encode(\$c['paths']);\n");
+
+    return ['VAR_PATH' => $env['VAR_PATH']];
+})()), true);
+unlink($probe2);
+ok(($derived['public_assets'] ?? '') === dirname($env['VAR_PATH']) . '/assets',
+    'with only VAR_PATH set, bundles derive to the shared/assets sibling — zero configuration on the release layout');
 
 // Production does not export twenty values into every command. PHP entrypoints
 // load the one shared file, selected explicitly by ENV_FILE; prove that path in
@@ -145,7 +161,7 @@ ok(count(glob($root . '/content/pages/' . $cmsBoot['site']['locale'] . '/*.yml')
 section('An atomic release preserves shared state across two releases');
 
 $spike = $root . '/var/cache/spike-' . bin2hex(random_bytes(4));
-foreach (['releases/r1', 'releases/r2', 'shared/content/pages/el', 'shared/var/cache', 'shared/var/locks'] as $d) {
+foreach (['releases/r1', 'releases/r2', 'shared/content/pages/el', 'shared/var/cache', 'shared/var/locks', 'shared/assets/css'] as $d) {
     mkdir($spike . '/' . $d, 0775, true);
 }
 // Each release is code only. Nothing a client can write lives inside one.
@@ -171,6 +187,8 @@ $shared->save('home', ['title' => 'Γραμμένο στο r1', 'slug' => '/', '
 $shared->snapshot('home');
 file_put_contents($spike . '/shared/var/locks/home.json', '{"who":"client"}');
 file_put_contents($spike . '/shared/var/cache/warm.txt', 'warm');
+// A bundle written while r1 served: its URL may sit in edge-cached HTML.
+file_put_contents($spike . '/shared/assets/css/site-abc123def456.css', '.x{}');
 
 ok(is_file($spike . '/shared/content/pages/el/home.yml'), 'the save landed in shared/content, not in the release');
 ok(!is_file($spike . '/releases/r1/content/pages/el/home.yml'), 'the release directory holds no content at all');
@@ -183,10 +201,13 @@ ok(($shared->load('home')['title'] ?? '') === 'Γραμμένο στο r1', 'the
 ok(count(glob($spike . '/shared/content/.revisions/el/home.*.yml') ?: []) === 1, 'revision history survives the deploy');
 ok(is_file($spike . '/shared/var/locks/home.json'), 'shared/var/locks survives the deploy');
 ok(is_file($spike . '/shared/var/cache/warm.txt'), 'shared/var/cache survives the deploy');
+ok(is_file($spike . '/shared/assets/css/site-abc123def456.css'),
+    'a bundle written under r1 survives the switch to r2 — edge-cached HTML naming it keeps working');
 
 // A rollback is the same flip in reverse, and equally harmless to content.
 $deploy($spike . '/releases/r1');
 ok(($shared->load('home')['title'] ?? '') === 'Γραμμένο στο r1', 'a rollback to r1 does not resurrect old content either');
+ok(is_file($spike . '/shared/assets/css/site-abc123def456.css'), 'and the bundle survives the rollback too');
 
 exec('rm -rf ' . escapeshellarg($spike));
 

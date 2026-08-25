@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="{{ locale|default(site('locale')) }}">
 <head>
-{% include 'head.twig' %}
+{% include ['head.twig', '@flatcms/head.twig'] %}
 </head>
 <body>
 {# The header and the footer are content, not markup: `_header.yml` and

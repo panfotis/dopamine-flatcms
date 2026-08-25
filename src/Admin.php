@@ -776,7 +776,35 @@ final class Admin
             // screen to check, and only an admin can reach it.
             'sections' => $this->redact($this->cms->config),
             'user'     => $user,
+            'engine'   => self::engineVersion(),
         ]));
+    }
+
+    /**
+     * The installed engine version — the answer the public generator meta
+     * deliberately withholds ("ask the panel, not the public HTML", per the
+     * canonical head). From Composer's runtime API, so it is the version that
+     * is actually installed, not one someone remembered to bump; a dev
+     * checkout appends its short git reference, the only identity a branch
+     * install has.
+     */
+    private static function engineVersion(): string
+    {
+        try {
+            $version = \Composer\InstalledVersions::getPrettyVersion('dopamine/flatcms') ?? 'unknown';
+            if (str_contains($version, 'dev')) {
+                $ref = \Composer\InstalledVersions::getReference('dopamine/flatcms');
+                if (is_string($ref) && $ref !== '') {
+                    $version .= ' @' . substr($ref, 0, 7);
+                }
+            }
+
+            return $version;
+        } catch (\Throwable) {
+            // Composer's runtime API is only absent in exotic setups (a repack
+            // without vendor metadata); a settings row is not worth a 500.
+            return 'unknown';
+        }
     }
 
     /**

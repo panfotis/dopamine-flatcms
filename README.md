@@ -359,6 +359,8 @@ every rollback.
     │   ├── .revisions/     per-save snapshots, also tracked
     │   └── redirects.yml
     ├── var/                cache, locks, submissions — never deployed
+    ├── assets/             generated CSS/JS bundles, served at /assets/ —
+    │                       content-addressed, so they outlive every release
     ├── users.yml
     └── .env                secrets — never deployed, never committed
 ```
@@ -370,8 +372,14 @@ The vhost docroot is `current/public/`, and `/uploads/` is **aliased** to
 `src` values stay `/uploads/...` either way. Start from whichever matches your
 server and replace the example domain and deploy root throughout.
 
+If your host runs PHP as your own site user — CloudPanel, RunCloud, most
+shared hosting — **skip the command below**: everything you create is already
+writable by PHP, and there is nothing to hand over. It exists only for the
+classic root-managed layout where php-fpm runs as `www-data` while you deploy
+as someone else (the layout the example vhosts above describe):
+
 ```bash
-chown -R www-data:www-data shared/content shared/var
+chown -R www-data:www-data shared/content shared/var shared/assets
 ```
 
 ### One deploy
@@ -522,7 +530,7 @@ identically — handy for local work.
 **Optional, and off by default.** Derivatives are generated locally with GD:
 `/img.php?src=…&w=…` resizes on first request, writes to `var/cache/images/`
 keyed by source content hash + width + format, and serves it immutable for a
-year. Every image renders through `theme/picture.twig` as a `<picture>`
+year. Every image renders through `@flatcms/picture.twig` as a `<picture>`
 with a WebP source and a JPEG (or PNG, where there is transparency) fallback.
 
 The width allowlist is finite — `320, 640, 960, 1280, 1600, 2048` — and a width
