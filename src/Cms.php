@@ -125,6 +125,13 @@ final class Cms
         $loader->addPath(dirname(__DIR__) . '/templates', 'flatcms');
         $this->twig = new Environment($loader, [
             'cache'      => $config['twig_cache'] ? $paths['cache'] . '/twig' : false,
+            // Recheck a template's mtime before trusting its compiled copy.
+            // Costs one stat per template per render; without it, an in-place
+            // `composer install` keeps serving the PREVIOUS release's compiled
+            // templates until someone remembers `rm -rf var/cache/twig` — the
+            // atomic-release layout never hits this (new release, new paths),
+            // but a CloudPanel-style single-directory site does, every update.
+            'auto_reload' => true,
             'autoescape' => 'html',
             'strict_variables' => false,
         ]);
