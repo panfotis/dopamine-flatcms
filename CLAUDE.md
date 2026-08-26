@@ -123,7 +123,7 @@ that happens, or every portrait on the site is sideways. `bin/doctor` checks the
 same list against the *running* interpreter, since Composer resolves under the
 CLI php and the site runs under php-fpm.
 
-Test suite: 1,133 checks across ten files. Run all of them, not just the new ones.
+Test suite: 1,290 checks across eleven files. Run all of them, not just the new ones.
 
 **Do not add anything else without asking.** Explicitly rejected, with reasons:
 
@@ -136,8 +136,8 @@ Test suite: 1,133 checks across ten files. Run all of them, not just the new one
 ## Layout
 
 ```
-src/          Cms Admin Auth Components Content Fields Form Lang Locks Media
-              R2 Submissions
+src/          Cms Admin Site Auth Components Content Fields Form Lang Locks
+              Media R2 Submissions
               Cloudflare AccessDeniedException StaleContentException
               bootstrap.php — process-level error handlers, not a class
 users.yml     email -> admin|editor, committed, no secrets
@@ -152,9 +152,11 @@ templates/    the engine-owned canonical templates, served under the @flatcms
               alternates, extra). charset, viewport and theme_head() sit outside
               every block on purpose — bin/doctor fails a site head.twig that
               does not extend the canonical, because a copy freezes the head.
-              picture.twig and video_facade.twig live here too, called by
-              components through {% include ['picture.twig', '@flatcms/…'] %} —
-              a site override is optional and deliberate, never shipped.
+              picture.twig, video_facade.twig and sitemap.xsl.twig live here
+              too, reached through a fallback list — {% include ['picture.twig',
+              '@flatcms/…'] %} from a component, resolveTemplate() from
+              Cms::sitemapXsl(). A site override is optional and deliberate,
+              never shipped.
 theme/        the SITE'S theme, and only the site's — the engine ships none.
               layout.twig, bare.twig (no header/footer; `layout: bare`),
               404.twig, 500.twig (both standalone, with their own minimal
@@ -204,11 +206,14 @@ public/       docroot: index.php, admin.php, img.php, router.php, and the
               PUBLIC_ASSETS_PATH — where nginx aliases it like /uploads/ and
               php-fpm must be able to write).
 tests/        01_render 02_admin 03_lockdown 04_hardening 05_concurrency
-              06_production 07_shipkit 08_form 09_package 10_assets, lib.php, fixtures/,
-              run.sh. 09 proves a mirrored Composer install and clean archive.
-              Requests run in-process: build a Request, assert on the Response.
-              Only _boot.php (needs a real environment) and _img_route.php
-              (measures peak memory) still fork.
+              06_production 07_shipkit 08_form 09_package 10_assets 11_routing,
+              lib.php, fixtures/, run.sh. 09 proves a mirrored Composer install
+              and clean archive; 11 covers the public front controller as a
+              composition rather than as ingredients.
+              Requests run in-process: build a Request, assert on the Response —
+              admin() for the panel, site() for the public site. Only _boot.php
+              (needs a real environment) and _img_route.php (measures peak
+              memory) still fork.
 skeleton/     the dopamine/flatcms-skeleton create-project package. It owns
               public/, config, starter content and site-facing bin wrappers;
               engine code is installed under vendor/ and never copied here.

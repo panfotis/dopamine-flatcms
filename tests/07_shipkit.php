@@ -292,6 +292,115 @@ ok($declared === $checked,
 ok(in_array('ext-exif', $declared, true),
     'ext-exif among them — normalize() strips EXIF to remove GPS, so orientation must be baked in first');
 
+section('doctor: the front controller must delegate, because Composer cannot fix it');
+
+// public/index.php is the one file in a site Composer never touches: the engine
+// package excludes /public, and a created site does not depend on the skeleton.
+// Anything routing-shaped left in it is frozen at the version the site was
+// created with — which is how the old 168-line controller kept skipping
+// X-Robots-Tag on two of its redirects with no way to ship the fix.
+$indexFile = $root . '/public/index.php';
+$indexWas  = (string) file_get_contents($indexFile);
+
+try {
+    // The shape every site created before Site existed still has.
+    file_put_contents($indexFile, <<<'STALE'
+<?php
+
+declare(strict_types=1);
+
+use Dopamine\FlatCms\Cms;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+$cms = new Cms(require dirname(__DIR__) . '/config.php');
+Dopamine\FlatCms\bootstrap_error_handler($cms);
+
+$request = Request::createFromGlobals();
+$page = $cms->content->findBySlug($request->getPathInfo());
+(new Response($cms->renderPage($page)))->send();
+STALE);
+
+    [$status, $out] = sh(escapeshellarg(PHP_BINARY) . ' bin/doctor');
+    ok($status !== 0, 'a front controller that routes for itself fails doctor');
+    contains($out, 'still routes requests itself', 'with a message that names the problem');
+    contains($out, 'Site::handle()', 'and the fix');
+
+    // A mention inside a comment is not delegation. Same rule the head.twig
+    // check applies by reading compiled output rather than raw source.
+    file_put_contents($indexFile, "<?php\n// TODO: move this to Site::handle() one day\n\$x = 1;\n");
+    [$status] = sh(escapeshellarg(PHP_BINARY) . ' bin/doctor');
+    ok($status !== 0, 'naming Site in a comment does not satisfy the check');
+
+    // The error handler is the other half: without it a Twig error after a
+    // schema rename is a white page on a live client site.
+    file_put_contents($indexFile,
+        "<?php\n\nuse Dopamine\\FlatCms\\Site;\n\n(new Site(\$cms))->handle(\$r)->send();\n");
+    [$status, $out] = sh(escapeshellarg(PHP_BINARY) . ' bin/doctor');
+    ok($status !== 0, 'delegating but dropping the error handler still fails');
+    contains($out, 'bootstrap_error_handler', 'naming the missing call');
+
+    // And the real one passes.
+    file_put_contents($indexFile, $indexWas);
+    [$status, $out] = sh(escapeshellarg(PHP_BINARY) . ' bin/doctor');
+    ok($status === 0, 'the shipped eleven-line front controller passes');
+} finally {
+    file_put_contents($indexFile, $indexWas);
+}
+
+section('doctor: a site may declare its own field types, but not typo one');
+
+// A field whose value is a string needs no engine code: the panel falls back to
+// a text input when admin-theme/fields/<type>.twig is absent, and the save path
+// sanitises an undeclared type as plain text. All that was missing was a way to
+// say "deliberate", so `type: txet` still fails the build.
+$customDir = $root . '/tests/fixtures/theme/components/zz_custom_field';
+$siteRoot  = $root . '/var/cache/site-' . bin2hex(random_bytes(4));
+mkdir($customDir, 0775, true);
+mkdir($siteRoot, 0775, true);
+
+try {
+    file_put_contents($customDir . '/schema.yml',
+        "label: Custom field probe\nfields:\n  picked:\n    type: color\n    label: Brand colour\n");
+    file_put_contents($customDir . '/zz_custom_field.twig', "<p>{{ fields.picked }}</p>\n");
+
+    // Undeclared: the type is unknown, and that is a build failure.
+    [$status, $out] = sh(escapeshellarg(PHP_BINARY) . ' bin/doctor');
+    ok($status !== 0, 'a type the site never declared fails doctor');
+    contains($out, 'unknown type "color"', 'and the message names it');
+
+    // Declared in config.field_types: deliberate, so it passes.
+    file_put_contents($siteRoot . '/config.php',
+        "<?php\n\n\$c = require " . var_export($root . '/config.php', true) . ";\n"
+        . "\$c['field_types'] = ['color'];\n\nreturn \$c;\n");
+
+    [$status, $out] = sh(
+        escapeshellarg(PHP_BINARY) . ' bin/doctor',
+        ['DOPAMINE_SITE_ROOT' => $siteRoot]
+    );
+    ok($status === 0, "declaring it in config.field_types makes it deliberate, and doctor passes");
+    contains($out, 'doctor: ok', 'and says so');
+
+    // The check is not simply switched off: a neighbouring typo still fails,
+    // which is the whole reason this is a list rather than a dropped check.
+    file_put_contents($customDir . '/schema.yml',
+        "label: Custom field probe\nfields:\n  picked:\n    type: color\n  oops:\n    type: txet\n");
+    [$status, $out] = sh(
+        escapeshellarg(PHP_BINARY) . ' bin/doctor',
+        ['DOPAMINE_SITE_ROOT' => $siteRoot]
+    );
+    ok($status !== 0, 'a typo beside a declared type still fails');
+    contains($out, 'unknown type "txet"', 'naming the typo, not the declared one');
+    missing($out, 'unknown type "color"', 'and leaving the declared type alone');
+} finally {
+    array_map('unlink', glob($customDir . '/*') ?: []);
+    @rmdir($customDir);
+    @unlink($siteRoot . '/config.php');
+    @rmdir($siteRoot);
+}
+
 section('doctor: a site head.twig must extend the canonical, never copy it');
 
 $fixtureHead = $root . '/tests/fixtures/theme/head.twig';

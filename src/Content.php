@@ -48,6 +48,19 @@ final class Content
      */
     private const REGIONS = ['_header', '_footer'];
 
+    /**
+     * One glob-and-parse of pages/ per instance, keyed by the globals flag.
+     * A render asks three times over — findBySlug(), nav(), and the link
+     * picker's slug map — and sitemap() asks twice per locale on top of that.
+     *
+     * Per-instance only, and Cms::contentIn() builds one instance per locale
+     * per request, so the cache lives exactly as long as the request does.
+     *
+     * @var array<string, list<array{id:string, title:string, slug:string,
+     *                               nav:array<string,mixed>|null, noindex:bool, mtime:int}>>
+     */
+    private array $scanned = [];
+
     public function __construct(
         private readonly string $dir,
         private readonly string $locale,
@@ -186,6 +199,15 @@ final class Content
      */
     private function scan(bool $global): array
     {
+        return $this->scanned[$global ? 'g' : 'p'] ??= $this->doScan($global);
+    }
+
+    /**
+     * @return list<array{id:string, title:string, slug:string,
+     *                    nav:array<string,mixed>|null, noindex:bool, mtime:int}>
+     */
+    private function doScan(bool $global): array
+    {
         $out = [];
         foreach (glob($this->pagesDir() . '/*.yml') ?: [] as $file) {
             $id = basename($file, '.yml');
@@ -271,6 +293,11 @@ final class Content
             @unlink($tmp);
             throw new RuntimeException('Could not replace ' . $file);
         }
+
+        // The only write path. transaction() and restore() both land here, and
+        // there is no delete() — so one line here is the whole invalidation,
+        // rather than one per caller that could be forgotten.
+        $this->scanned = [];
     }
 
     /**

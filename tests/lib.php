@@ -107,6 +107,30 @@ function cms(): Cms
 }
 
 /**
+ * Run one public request in-process, exactly as public/index.php does.
+ *
+ * Phase 1 exists so this is possible. The front controller used to echo and
+ * exit, so its *composition* — the order of the decisions, and which of them
+ * skipped the headers at the bottom of the file — could only be asserted by
+ * grepping a subprocess's stdout, and never was. Here the status, the headers
+ * and the body are all first-class, the same way admin() made them.
+ *
+ * @param array<string, mixed>|null $config
+ */
+function site(Request $request, ?array $config = null): Response
+{
+    return (new Dopamine\FlatCms\Site(new Cms($config ?? test_config())))->handle($request);
+}
+
+/**
+ * @param array<string, mixed>|null $config
+ */
+function site_get(string $uri, ?array $config = null): Response
+{
+    return site(Request::create($uri, 'GET'), $config);
+}
+
+/**
  * Run one admin request in-process, exactly as public/admin.php does.
  *
  * Phase 2 exists so this is possible: handle() returns a Response instead of

@@ -651,4 +651,67 @@ try {
 }
 ok($threw, 'a syntax error in a local override is reported, never silently ignored');
 
+// ── The sitemap stylesheet is a template ────────────────────────────────────
+
+section('/sitemap.xsl is a template a theme can own');
+
+$xslCms = cms();
+contains($xslCms->sitemapXsl(), '<xsl:stylesheet', 'the engine ships a stylesheet');
+contains($xslCms->sitemapXsl(), 'count(s:urlset/s:url)', 'that counts the URLs it is given');
+
+// Same override rule as picture.twig: drop a same-named file in the site's
+// theme and it wins, with no registration step and nothing to configure.
+$xslDir = dirname(__DIR__) . '/var/cache/xsl-' . bin2hex(random_bytes(4));
+mkdir($xslDir, 0775, true);
+register_shutdown_function(static function () use ($xslDir): void {
+    exec('rm -rf ' . escapeshellarg($xslDir));
+});
+file_put_contents($xslDir . '/sitemap.xsl.twig', "<?xml version=\"1.0\"?>\n<!-- mine -->\n");
+
+$xslCfg = test_config();
+$xslCfg['paths']['theme'] = array_merge([$xslDir], (array) $xslCfg['paths']['theme']);
+$mine = (new Dopamine\FlatCms\Cms($xslCfg))->sitemapXsl();
+contains($mine, '<!-- mine -->', "a site's own sitemap.xsl.twig wins over the engine's");
+missing($mine, '<xsl:stylesheet', 'and replaces it outright, rather than layering on top');
+
+// ── One scan per instance ───────────────────────────────────────────────────
+
+section('The page index is scanned once per request, not once per caller');
+
+// A render asks three times over — findBySlug(), nav(), and the link picker's
+// slug map — and sitemap() asks twice more per locale. Proving the memo without
+// a spy: change the directory behind Content's back and see the answer NOT move.
+$scanCms = cms();
+$before  = $scanCms->content->list();
+ok($before !== [], 'the fixture has pages to index');
+
+$smuggled = $scanCms->content->pagesDir() . '/zz_smuggled.yml';
+file_put_contents($smuggled, "title: Smuggled\nslug: /smuggled\n");
+register_shutdown_function(static function () use ($smuggled): void {
+    @unlink($smuggled);
+});
+
+ok(
+    count($scanCms->content->list()) === count($before),
+    'a second list() does not re-glob — a file added behind its back is not seen'
+);
+
+// And the memo is not a leak: the one write path clears it, so the panel saving
+// a page and then re-rendering the menu cannot serve the pre-save index.
+$scanCms->content->save('zz_saved', ['title' => 'Saved', 'slug' => '/saved']);
+$saved = $scanCms->content->pagesDir() . '/zz_saved.yml';
+register_shutdown_function(static function () use ($saved): void {
+    @unlink($saved);
+});
+
+$after = array_column($scanCms->content->list(), 'id');
+ok(in_array('zz_saved', $after, true), 'save() clears the memo, so the new page appears');
+ok(in_array('zz_smuggled', $after, true), 'and the re-scan is a real one, not a patched-in row');
+
+// A separate instance is a separate request: no cross-request memory.
+ok(
+    count(cms()->content->list()) === count($after),
+    'the cache is per-instance — a fresh Cms scans from disk'
+);
+
 summary();

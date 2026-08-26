@@ -272,6 +272,31 @@ an authenticated address it does not list is refused outright.
 Paste handling in `richtext` is forced to plain text, so a paste from Word
 cannot carry styling into the page.
 
+### Adding your own
+
+A field whose stored value is a **string** — a colour, a date, a number, a
+slider — needs no engine change.
+
+1. Drop `admin-theme/fields/<type>.twig` in your site for the input widget. The
+   panel falls back to a text input when there is none, so this step is
+   optional while you are still deciding.
+2. Name the type in `config.php` so `bin/doctor` knows it is deliberate:
+
+   ```php
+   'field_types' => ['color', 'date'],
+   ```
+
+3. Use it in a component's `schema.yml` like any built-in.
+
+The value is stored as sanitised plain text, and `max` and `required` work as
+they do everywhere else. Listing the type is what separates a real field from
+`type: txet` — doctor still fails the typo, and a deploy whose doctor fails
+never switches `current`.
+
+A type whose value is **not** a string — a map, a repeater, anything holding
+media — needs its own `Fields::sanitise()` arm and belongs in the engine, where
+it arrives by `composer update`.
+
 ---
 
 ## Interface strings

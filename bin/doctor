@@ -183,6 +183,30 @@ foreach ((array) $config['paths']['theme'] as $root) {
         $componentDirs[basename($dir)] ??= $dir;
     }
 }
+/**
+ * The field types a component may declare: the built-ins, plus whatever this
+ * site added.
+ *
+ * A site does not need engine code to add a field whose value is a string. It
+ * drops admin-theme/fields/<type>.twig for the input — edit.twig falls back to
+ * text.twig when there is none — and Fields::sanitise() stores an undeclared
+ * type as sanitised plain text, which is the safe answer and the right one.
+ * The only thing missing was a way to say "this one is deliberate", because
+ * Fields::TYPES is consulted nowhere in src/ and only here.
+ *
+ * Listing them rather than dropping the check: `type: txet` must still fail, or
+ * a typo ships as a text input nobody notices until the client asks where their
+ * date picker went. A type whose value is NOT a string — a map, a list, one
+ * that holds media — still needs a `sanitise()` arm and belongs in the engine.
+ */
+$knownFieldTypes = array_merge(
+    Dopamine\FlatCms\Fields::TYPES,
+    array_values(array_filter(
+        (array) ($config['field_types'] ?? []),
+        static fn (mixed $t): bool => is_string($t) && $t !== ''
+    ))
+);
+
 foreach ($componentDirs as $type => $dir) {
     $types[] = $type;
 
@@ -205,7 +229,7 @@ foreach ($componentDirs as $type => $dir) {
         $def = is_array($def) ? $def : ['type' => $def];
         $fieldType = (string) ($def['type'] ?? 'text');
 
-        if (!in_array($fieldType, Dopamine\FlatCms\Fields::TYPES, true)) {
+        if (!in_array($fieldType, $knownFieldTypes, true)) {
             $fail(sprintf('component "%s", field "%s": unknown type "%s"', $type, $name, $fieldType));
         }
         // Silently locking a field is the fail-closed behaviour Components
@@ -614,6 +638,50 @@ $checkPipelined = static function () use (&$pipelined, $themeDirs, $cms, $fail):
         }
     }
 };
+
+// ── The front controller ────────────────────────────────────────────────────
+
+/**
+ * `public/index.php` is the one file in a site that Composer can never fix.
+ *
+ * The engine package excludes `/public` from its archive, and a site created by
+ * `composer create-project` does not depend on the skeleton at all — it *is*
+ * the skeleton, unpacked once. So whatever routing logic sits in this file is
+ * frozen at the version the site was created with, permanently.
+ *
+ * That is why it must not contain any: every routing decision belongs in
+ * Site::handle(), which lives in src/ and arrives by `composer update`. The
+ * cost of getting this wrong is not theoretical — the 168-line front
+ * controller this replaced skipped X-Robots-Tag on two of its redirects, and
+ * there was no way to ship the fix to a site that already existed.
+ *
+ * A failure here is a one-time, thirty-second migration, and the message says
+ * exactly what to paste.
+ */
+$indexFile = $siteRoot . '/public/index.php';
+if (is_file($indexFile)) {
+    $index = (string) file_get_contents($indexFile);
+
+    // Comments are not code: an example inside one must not satisfy the check,
+    // the same way the head.twig check reads compiled output rather than source.
+    $code = (string) preg_replace('~/\*.*?\*/|//[^\n]*|\#[^\n]*~s', '', $index);
+
+    if (!str_contains($code, 'Site')) {
+        $fail(sprintf(
+            '%s still routes requests itself. Every routing decision belongs in '
+            . 'Site::handle(), which arrives by `composer update`; this file cannot be '
+            . 'updated by Composer and freezes whatever it holds. Replace its body with: '
+            . '$cms = new Cms(require dirname(__DIR__) . "/config.php"); '
+            . 'Dopamine\\FlatCms\\bootstrap_error_handler($cms); '
+            . '(new Site($cms))->handle(Request::createFromGlobals())->send();',
+            $indexFile
+        ));
+    } elseif (!str_contains($code, 'bootstrap_error_handler')) {
+        // Without it a Twig error after a schema rename is a white page with a
+        // PHP fatal on a live client site, rather than 500.twig.
+        $fail(sprintf('%s never calls bootstrap_error_handler() — a template error would be a white page', $indexFile));
+    }
+}
 
 // ── Pages ───────────────────────────────────────────────────────────────────
 

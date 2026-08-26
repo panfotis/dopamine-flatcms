@@ -374,6 +374,28 @@ $config = [
     // R2 public_base is appended automatically when configured.
     'media_bases' => ['/uploads/'],
 
+    /**
+     * Extra field types this site's components may declare, beyond the
+     * built-ins in Fields::TYPES.
+     *
+     * Adding one takes no engine code as long as its value is a **string**.
+     * Drop `admin-theme/fields/<type>.twig` for the input widget — the panel
+     * falls back to a text input when there is none — and name the type here.
+     * The save path sanitises an undeclared type as plain text, which is the
+     * safe default and the correct one for a date, a colour or a number.
+     *
+     * This list exists so `bin/doctor` can tell a deliberate type from a typo:
+     * `type: txet` must still fail the build. It is developer-owned like
+     * `paths` and `media_bases` — nothing a client touches.
+     *
+     * A type whose stored value is NOT a string — a map, a list, anything
+     * holding media — needs its own `Fields::sanitise()` arm and belongs in
+     * the engine, where it arrives by `composer update`.
+     *
+     *   'field_types' => ['color', 'date'],
+     */
+    'field_types' => [],
+
     'cloudflare' => [
         // Purge the edge cache when the client saves.
         'purge_on_save' => env_bool('CF_PURGE_ENABLED'),

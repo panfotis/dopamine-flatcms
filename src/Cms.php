@@ -1119,51 +1119,14 @@ final class Cms
      */
     public function sitemapXsl(): string
     {
-        return <<<'XSL'
-<?xml version="1.0" encoding="UTF-8"?>
-<xsl:stylesheet version="1.0"
-    xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
-    xmlns:s="http://www.sitemaps.org/schemas/sitemap/0.9"
-    xmlns:xhtml="http://www.w3.org/1999/xhtml">
-<xsl:output method="html" encoding="UTF-8"/>
-<xsl:template match="/">
-<html>
-<head>
-<title>Sitemap</title>
-<style>
-body{font:14px/1.5 system-ui,sans-serif;margin:2rem;color:#222}
-table{border-collapse:collapse;width:100%}
-th,td{padding:.4rem .6rem;border:1px solid #ddd;text-align:left;vertical-align:top}
-th{background:#f5f5f5}
-a{color:#06c}
-</style>
-</head>
-<body>
-<h1>Sitemap</h1>
-<p><xsl:value-of select="count(s:urlset/s:url)"/> URLs</p>
-<table>
-<tr><th>URL</th><th>Last modified</th><th>Languages</th></tr>
-<xsl:for-each select="s:urlset/s:url">
-<tr>
-<td><a href="{s:loc}"><xsl:value-of select="s:loc"/></a></td>
-<td><xsl:value-of select="s:lastmod"/></td>
-<td>
-<xsl:for-each select="xhtml:link[@hreflang!='x-default']">
-<div>
-<xsl:value-of select="translate(@hreflang,'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ')"/>
-<xsl:text>: </xsl:text>
-<a href="{@href}"><xsl:value-of select="@href"/></a>
-</div>
-</xsl:for-each>
-</td>
-</tr>
-</xsl:for-each>
-</table>
-</body>
-</html>
-</xsl:template>
-</xsl:stylesheet>
-XSL;
+        // A fallback list, exactly like picture.twig and video_facade.twig: the
+        // engine ships the stylesheet, a site overrides it by dropping its own
+        // theme/sitemap.xsl.twig, and neither has to know about the other. It
+        // was 57 lines of XSL in a heredoc here, which is the one shape a theme
+        // could not touch.
+        return $this->twig
+            ->resolveTemplate(['sitemap.xsl.twig', '@flatcms/sitemap.xsl.twig'])
+            ->render([]);
     }
 
     /**

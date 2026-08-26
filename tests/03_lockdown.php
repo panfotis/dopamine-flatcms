@@ -65,6 +65,36 @@ missing($hero['heading'], 'onerror', 'inline event handler stripped');
 ok($hero['heading'] === 'Καλημέρα alert(1)', 'heading reduced to plain text: ' . $hero['heading']);
 ok(mb_strlen($hero['heading']) <= 70, 'max length respected');
 
+section('A site-declared field type is sanitised as plain text, never passed through');
+
+// A type this engine has no arm for — a site's own `color` or `date` — falls to
+// sanitise()'s default, and that default must stay `plain()`. If it ever became
+// a pass-through, config.field_types would turn into a way for a component
+// author to opt a field out of sanitisation entirely, which is the one thing
+// the schema-driven save exists to prevent.
+$custom = Dopamine\FlatCms\Fields::sanitise(
+    ['type' => 'color'],
+    '<script>alert(1)</script><b onerror=x>#ff0000</b>'
+);
+ok(is_string($custom), 'an undeclared type stores a string, never a structure it never validated');
+missing($custom, '<script', 'script tag stripped');
+missing($custom, 'onerror', 'inline event handler stripped');
+ok($custom === 'alert(1)#ff0000', 'reduced to plain text: ' . $custom);
+
+// The same ceilings apply, so `max:` on a custom type is not decoration.
+ok(
+    Dopamine\FlatCms\Fields::sanitise(['type' => 'date', 'max' => 4], '2026-08-26') === '2026',
+    'and max: is enforced on it like any other text field'
+);
+
+// An array posted at a scalar type is dropped rather than stored: sanitise()
+// casts non-scalars to '' before the match, which is what keeps a forged
+// nested payload from reaching disk under a type nobody wrote a walk for.
+ok(
+    Dopamine\FlatCms\Fields::sanitise(['type' => 'color'], ['nested' => ['deep' => 'x']]) === '',
+    'a forged nested payload under a custom type is dropped, not stored'
+);
+
 section('Link fields reject hostile URLs');
 ok($hero['cta_url'] === ['page' => '', 'url' => '', 'target' => '_self'],
     'javascript: URL rejected outright in both halves, and a forged target falls back to the same tab');
