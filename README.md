@@ -393,7 +393,11 @@ every rollback.
     │   └── redirects.yml
     ├── var/                cache, locks, submissions — never deployed
     ├── assets/             generated CSS/JS bundles, served at /assets/ —
-    │                       content-addressed, so they outlive every release
+    │                       content-addressed, so they outlive every release.
+    │                       Only bundles live here: a theme has no static
+    │                       directory. An icon a stylesheet needs goes inline
+    │                       as a data: URI; a photograph is content and
+    │                       belongs in an image field, never in a url()
     ├── users.yml
     └── .env                secrets — never deployed, never committed
 ```
