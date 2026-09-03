@@ -1025,8 +1025,10 @@ if (is_file($redirectFile)) {
             $fail(sprintf('redirect "%s" shadows a live page and can never fire', $from));
         }
 
+        // Local targets compared decoded, like the request will be: a target
+        // still written percent-encoded keeps working, it just reads worse.
         $resolved = str_starts_with($to, 'http') ? $to
-            : (str_starts_with($to, '/') ? $to : (rawurldecode($cms->pageUrl($to)) ?: null));
+            : (str_starts_with($to, '/') ? rawurldecode($to) : (rawurldecode($cms->pageUrl($to)) ?: null));
 
         if ($resolved === null) {
             $fail(sprintf('redirect "%s" points at page id "%s", which does not exist', $from, $to));
