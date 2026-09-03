@@ -232,7 +232,7 @@ file_put_contents(content_root() . '/pages/el/frena.yml', Yaml::dump([
 ]));
 $redirectsFile = content_root() . '/redirects.yml';
 $redirectsBefore = (string) file_get_contents($redirectsFile);
-file_put_contents($redirectsFile, Yaml::dump(['/παλιά-σελίδα' => 'frena']));
+file_put_contents($redirectsFile, Yaml::dump(['/παλιά-σελίδα' => 'frena', '/πιο-παλιά' => '/φρένα-αυτοκινήτων/ποιοι-είμαστε']));
 
 $encoded = '/' . implode('/', array_map(rawurlencode(...), ['φρένα-αυτοκινήτων', 'ποιοι-είμαστε']));
 $r = site_get($encoded);
@@ -243,6 +243,9 @@ ok($r->getStatusCode() === 301 && $r->headers->get('Location') === $encoded,
 $r = site_get('/' . rawurlencode('παλιά-σελίδα'));
 ok($r->getStatusCode() === 301 && $r->headers->get('Location') === $encoded,
     'a literal redirect key matches the encoded request and points at the encoded page');
+$r = site_get('/' . rawurlencode('πιο-παλιά'));
+ok($r->headers->get('Location') === $encoded,
+    'a literal path target is encoded into the Location header too — headers are ASCII');
 contains(site_get('/sitemap.xml')->getContent(), 'https://dopamine-flatcms.ddev.site' . $encoded,
     'the sitemap carries the encoded URL');
 missing(site_get('/sitemap.xml')->getContent(), 'φρένα', 'and never the raw bytes');

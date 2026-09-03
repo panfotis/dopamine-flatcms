@@ -394,12 +394,15 @@ final class Cms
     {
         $prefix = $this->locales()[$locale ?? $this->locale]['prefix'] ?? '';
 
-        // Slugs are stored literally — `/φρένα` — and this is the one place
-        // they become URLs, so it is the one place they are encoded. Per
-        // segment, so the slashes survive.
-        $path = implode('/', array_map(rawurlencode(...), explode('/', ltrim($slug, '/'))));
+        // Slugs are stored literally — `/φρένα` — and this is where they
+        // become URLs, so this is where they are encoded.
+        return $prefix . '/' . self::encodePath(ltrim($slug, '/'));
+    }
 
-        return $prefix . '/' . $path;
+    /** Per segment, so the slashes survive; a header or href must be ASCII. */
+    private static function encodePath(string $path): string
+    {
+        return implode('/', array_map(rawurlencode(...), explode('/', $path)));
     }
 
     /**
@@ -641,9 +644,12 @@ final class Cms
 
             $to = (string) $to;
 
-            return str_starts_with($to, '/') || str_starts_with($to, 'http')
-                ? $to
-                : ($this->pageUrl($to) ?: null);
+            return match (true) {
+                str_starts_with($to, 'http') => $to,
+                // Written literally like a slug, sent as a Location header.
+                str_starts_with($to, '/')    => self::encodePath($to),
+                default                      => $this->pageUrl($to) ?: null,
+            };
         }
 
         return null;
