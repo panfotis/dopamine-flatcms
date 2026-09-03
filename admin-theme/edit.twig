@@ -20,23 +20,25 @@
   </nav>
 {% endblock %}
 
-{# Title, address and the save controls are one piece of chrome: everything
-   that says "which page is this and what happens when I press the button".
-   The buttons reach the form by id, since the bar renders outside it. #}
+{# Identity above, controls below. The title gets a whole line because a
+   Greek page title is forty characters on a good day, and beside four
+   buttons it wrapped to two. Only the control row sticks: the rail already
+   names the page being edited, so the header can scroll away without losing
+   anyone. The buttons reach the form by id, since the bar renders outside it. #}
 {% block actionbar %}
+  <div class="pagehead">
+    <p class="sub">
+      <a href="?locale={{ locale }}">{{ t('nav.back') }}</a> ·
+      {% if locales|length > 1 %}{{ locales[locale].label }} · {% endif %}
+      {% if global %}
+        {{ t('edit.everywhere') }}
+      {% else %}
+        <code>{{ page.slug }}</code>
+      {% endif %}
+    </p>
+    <h1>{{ page.title }}</h1>
+  </div>
   <div class="savebar"><div class="inner">
-    <div class="titles">
-      <h1>{{ page.title }}</h1>
-      <p class="sub">
-        <a href="?locale={{ locale }}">{{ t('nav.back') }}</a> ·
-        {% if locales|length > 1 %}{{ locales[locale].label }} · {% endif %}
-        {% if global %}
-          {{ t('edit.everywhere') }}
-        {% else %}
-          <code>{{ page.slug }}</code>
-        {% endif %}
-      </p>
-    </div>
     <span class="status" id="status">{{ t('edit.published') }}</span>
     {% if user.role == 'admin' %}
       <a class="btn ghost" href="?action=revisions&amp;page={{ page.id }}&amp;locale={{ locale }}">{{ t('edit.revisions') }}</a>
