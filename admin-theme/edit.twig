@@ -331,6 +331,9 @@
 <script>
   const T = {
     linkPrompt: {{ t('rt.link_prompt')|json_encode|raw }},
+    style: {{ t('rt.style')|json_encode|raw }},
+    // Named styles from config; the Style menu exists only when there are any.
+    styles: {{ richtext_classes|json_encode|raw }},
     uploading: {{ t('edit.uploading')|json_encode|raw }},
     uploadingN: {{ t('edit.uploading_n')|json_encode|raw }},
     uploadFailed: {{ t('up.failed')|json_encode|raw }},

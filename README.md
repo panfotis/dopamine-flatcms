@@ -235,7 +235,7 @@ fall back to `default` (or an empty string) rather than erroring.
 |---|---|---|
 | `text` | single-line input | plain text, whitespace collapsed, truncated at `max` |
 | `textarea` | multi-line input | plain text, blank lines collapsed |
-| `richtext` | small contenteditable with B / I / list / link | only `p br strong b em i u a ul ol li`, all attributes stripped except `href` |
+| `richtext` | Squire editor: B / I / list / link / undo / redo / HTML source, plus a Style menu when `richtext_classes` is set | only `p br strong b em i u a ul ol li`, all attributes stripped except `href` — and `class`, only as a name listed in `config.richtext_classes` for that tag. `style` never |
 | `image` | thumbnail + upload button + alt input | a map: `src` (must be under `media_bases`), `alt`, and server-derived `width`/`height` |
 | `link` | page picker | a page id — the filename. The slug is resolved at render time |
 | `url` | single-line input | an absolute `http(s)` URL, a site-relative path, a fragment, `mailto:` or `tel:`. Everything else becomes empty — the same rule richtext hrefs use |
@@ -271,6 +271,14 @@ an authenticated address it does not list is refused outright.
 
 Paste handling in `richtext` is forced to plain text, so a paste from Word
 cannot carry styling into the page.
+
+Named styles are the one way a client reaches a class: `richtext_classes`
+in config.php maps a tag to `class => label` (`'span' => ['highlight' =>
+'Highlight']`), the theme styles `.highlight` once, and the panel shows a
+Style menu with the labels. On save a class survives only as one of those
+names for that tag; anything typed into the source view or carried by a
+paste is cut. Tags are limited to `Fields::STYLE_TAGS` — a site can admit a
+`<mark>`, never a `<script>` — and `bin/doctor` fails anything else.
 
 ### Adding your own
 

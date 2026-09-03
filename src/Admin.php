@@ -364,6 +364,8 @@ final class Admin
             'blocks'   => $blocks,
             'seo'      => $seo,
             'seo_fields' => $seoFields,
+            // The Style menu's entries, exactly as the sanitiser will read them.
+            'richtext_classes' => Fields::styles($this->cms->config['richtext_classes'] ?? []),
             'pages'    => $pages,
             'page_ids' => array_column($pages, 'id'),
             'csrf'     => $this->csrf($request),

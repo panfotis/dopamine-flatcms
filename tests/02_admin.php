@@ -187,6 +187,11 @@ section('Every field type renders its own control');
 contains($edit, 'data-rt-toolbar="intro-body"', 'richtext gets a formatting toolbar');
 contains($edit, 'id="intro-body-rt"', 'and a contenteditable surface');
 contains($edit, 'data-cmd="source"', 'with a source view — the mirror textarea, unhidden');
+contains($edit, 'styles: []', 'and no Style menu entries while the site lists none');
+$styledCfg = test_config();
+$styledCfg['richtext_classes'] = ['span' => ['highlight' => 'Highlight'], 'script' => ['x' => 'no']];
+$styledEdit = (string) admin_get(['action' => 'edit', 'page' => 'home'], $styledCfg)->getContent();
+contains($styledEdit, 'styles: {"span":{"highlight":"Highlight"}}', 'the listed styles reach the editor, the unlistable tag does not');
 contains($edit, 'data-target="intro-body"', 'pointed at the input it mirrors into');
 ok((bool) preg_match('/<textarea id="intro-body" name="blocks\[intro\]\[body\]" hidden>/', $edit),
     'which is a hidden textarea — the contenteditable div itself never posts');

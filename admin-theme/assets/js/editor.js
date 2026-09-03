@@ -94,10 +94,38 @@
         rt.hidden = toSource;
         target.classList.toggle('rt-source', toSource);
         srcBtn.classList.toggle('is-active', toSource);
-        bar.querySelectorAll('button:not([data-cmd=source])').forEach(b => { b.disabled = toSource; });
+        bar.querySelectorAll('button:not([data-cmd=source]),select').forEach(b => { b.disabled = toSource; });
         (toSource ? target : squire).focus();
       },
     };
+    // The Style menu: config's richtext_classes as labels. The client picks
+    // "Highlight", the theme styles .highlight once, the save path keeps only
+    // classes it lists — so nothing here decides what a class is allowed to
+    // be. Inline (span) entries only; a block class is a source-view edit.
+    const styles = (T.styles && T.styles.span) || {};
+    const names = Object.keys(styles);
+    if (names.length) {
+      const sel = document.createElement('select');
+      sel.title = T.style;
+      [['', T.style], ...names.map(c => [c, styles[c]])].forEach(([value, label]) => {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = label;
+        sel.appendChild(opt);
+      });
+      const span = c => ({ tag: 'span', attributes: { class: c } });
+      sel.addEventListener('change', () => {
+        names.forEach(c => squire.changeFormat(null, span(c)));
+        if (sel.value) squire.changeFormat(span(sel.value), null);
+        squire.focus();
+        sync();
+      });
+      squire.addEventListener('pathChange', () => {
+        sel.value = names.find(c => squire.hasFormat('span', { class: c })) || '';
+      });
+      bar.insertBefore(sel, srcBtn);
+    }
+
     bar.addEventListener('click', e => {
       const btn = e.target.closest('button[data-cmd]');
       if (!btn || !cmds[btn.dataset.cmd]) return;

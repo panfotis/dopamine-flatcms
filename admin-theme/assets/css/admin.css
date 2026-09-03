@@ -126,6 +126,7 @@
   .rt-toolbar button:hover{background:var(--line-2)}
   .rt-toolbar button:disabled{opacity:.4;cursor:default}
   .rt-toolbar button.is-active{background:var(--line-2)}
+  .rt-toolbar select{width:auto;padding:2px 28px 2px 6px;border:0;font-size:13px;background-position:right 6px center}
   .rt-source{min-height:160px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.5}
 
   .media{display:flex;gap:16px;align-items:flex-start}

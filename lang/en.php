@@ -103,6 +103,7 @@ return [
     'rt.undo' => 'Undo',
     'rt.redo' => 'Redo',
     'rt.source' => 'HTML source',
+    'rt.style' => 'Style',
 
     // ── Flashes and refusals ────────────────────────────────────────────────
     'flash.saved' => 'Your changes are saved.',
