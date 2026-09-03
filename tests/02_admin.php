@@ -186,6 +186,7 @@ section('Every field type renders its own control');
 // textarea that is what actually posts. Both halves, or the value never arrives.
 contains($edit, 'data-rt-toolbar="intro-body"', 'richtext gets a formatting toolbar');
 contains($edit, 'id="intro-body-rt"', 'and a contenteditable surface');
+contains($edit, 'data-cmd="source"', 'with a source view — the mirror textarea, unhidden');
 contains($edit, 'data-target="intro-body"', 'pointed at the input it mirrors into');
 ok((bool) preg_match('/<textarea id="intro-body" name="blocks\[intro\]\[body\]" hidden>/', $edit),
     'which is a hidden textarea — the contenteditable div itself never posts');

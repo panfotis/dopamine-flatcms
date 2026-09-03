@@ -124,6 +124,9 @@
   .rt-toolbar button{border:0;background:none;border-radius:2px;padding:2px 6px;min-width:26px;
     cursor:pointer;font-size:14px;line-height:1.6;color:#475569}
   .rt-toolbar button:hover{background:var(--line-2)}
+  .rt-toolbar button:disabled{opacity:.4;cursor:default}
+  .rt-toolbar button.is-active{background:var(--line-2)}
+  .rt-source{min-height:160px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.5}
 
   .media{display:flex;gap:16px;align-items:flex-start}
   .media .thumb{width:120px;height:80px;border:1px solid #cbd5e1;border-radius:var(--radius-sm);

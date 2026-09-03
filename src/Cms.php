@@ -739,7 +739,7 @@ final class Cms
      * actually came from, so an engine template can never be handed a site's
      * file of the same name.
      */
-    private function themeAttach(string $template, string $rel): void
+    private function themeAttach(string $template, string $rel, bool $wrap = true): void
     {
         if ($this->assets === null) {
             return;
@@ -755,7 +755,7 @@ final class Cms
         foreach ([...$this->themeDirs, ...$this->adminDirs] as $root) {
             $rootReal = realpath($root);
             if ($real !== false && $rootReal !== false && str_starts_with($real, $rootReal . '/')) {
-                $this->assets->attachFrom($root, $rel);
+                $this->assets->attachFrom($root, $rel, $wrap);
 
                 return;
             }

@@ -133,10 +133,10 @@ final class Assets
      * template resolved from, so an engine template can never be handed a
      * site's file of the same name.
      */
-    public function attachFrom(string $root, string $rel): void
+    public function attachFrom(string $root, string $rel, bool $wrap = true): void
     {
         $kind = str_ends_with($rel, '.js') ? 'js' : 'css';
-        $this->addLocal($kind, $root, $rel, 'component');
+        $this->addLocal($kind, $root, $rel, 'component', $wrap);
     }
 
     /** Everything for <head>: preconnects, external stylesheets, then the CSS. */

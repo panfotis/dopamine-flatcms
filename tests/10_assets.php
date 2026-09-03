@@ -230,6 +230,10 @@ contains((string) $edit->getContent(), 'const form = document.getElementById',
     'the edit screen attaches editor.js via theme_attach');
 contains((string) $edit->getContent(), "document.addEventListener('DOMContentLoaded'",
     'wrapped like every other local script');
+contains((string) $edit->getContent(), 'window.Squire=',
+    'while the editor\'s libraries are attached unwrapped, so their globals exist for it');
+ok(strpos((string) $edit->getContent(), 'window.Squire=') < strpos((string) $edit->getContent(), 'const form = document.getElementById'),
+    'and before it');
 
 // ── Bundle delivery ─────────────────────────────────────────────────────────
 //

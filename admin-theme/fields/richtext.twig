@@ -2,11 +2,15 @@
   <div class="rt-toolbar" data-rt-toolbar="{{ id }}">
     <button type="button" data-cmd="bold" title="{{ t('rt.bold') }}"><b>B</b></button>
     <button type="button" data-cmd="italic" title="{{ t('rt.italic') }}"><i>I</i></button>
-    <button type="button" data-cmd="insertUnorderedList" title="{{ t('rt.list') }}">•</button>
-    <button type="button" data-cmd="createLink" title="{{ t('rt.link') }}">🔗</button>
-    <button type="button" data-cmd="removeFormat" title="{{ t('rt.clear') }}">✕</button>
+    <button type="button" data-cmd="list" title="{{ t('rt.list') }}">•</button>
+    <button type="button" data-cmd="link" title="{{ t('rt.link') }}">🔗</button>
+    <button type="button" data-cmd="clear" title="{{ t('rt.clear') }}">✕</button>
+    <button type="button" data-cmd="undo" title="{{ t('rt.undo') }}">↶</button>
+    <button type="button" data-cmd="redo" title="{{ t('rt.redo') }}">↷</button>
+    <button type="button" data-cmd="source" title="{{ t('rt.source') }}">&lt;/&gt;</button>
   </div>
 {% endif %}
 <div class="rt" id="{{ id }}-rt" {{ locked ? '' : 'contenteditable="true"' }}
      data-target="{{ id }}">{{ value|raw }}</div>
+{# The mirror textarea is what posts — and, unhidden, it is the source view. #}
 <textarea id="{{ id }}" name="{{ fname }}" hidden>{{ value }}</textarea>

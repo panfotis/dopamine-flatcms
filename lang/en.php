@@ -100,6 +100,9 @@ return [
     'rt.link' => 'Link',
     'rt.clear' => 'Clear formatting',
     'rt.link_prompt' => 'Address for the link',
+    'rt.undo' => 'Undo',
+    'rt.redo' => 'Redo',
+    'rt.source' => 'HTML source',
 
     // ── Flashes and refusals ────────────────────────────────────────────────
     'flash.saved' => 'Your changes are saved.',

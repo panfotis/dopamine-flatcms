@@ -345,5 +345,10 @@
 </script>
 {# Only the edit screen needs the editor, so it is attached here rather than
    declared in theme.yml — the list and settings screens never ship it. #}
+{# The editor's libraries, at top level (wrap: false): DOMPurify's UMD header
+   hangs itself on `this`, which inside the DOMContentLoaded wrapper is the
+   document, and Squire then dies with "DOMPurify is not defined". #}
+{% do theme_attach(_self, 'assets/js/purify.js', false) %}
+{% do theme_attach(_self, 'assets/js/squire.js', false) %}
 {% do theme_attach(_self, 'assets/js/editor.js') %}
 {% endblock %}

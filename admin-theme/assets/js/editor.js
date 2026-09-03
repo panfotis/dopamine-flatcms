@@ -43,34 +43,66 @@
     paint();
   });
 
-  /* ---- minimal rich text --------------------------------------------
-     A contenteditable with four buttons. Deliberately tiny: the server
-     strips everything except p/br/strong/em/u/a/ul/ol/li anyway, so there
-     is no point offering the client formatting that will be thrown away. */
+  /* ---- rich text -----------------------------------------------------
+     Squire (vendored, DOMPurify as its peer) over the contenteditable.
+     execCommand still runs everywhere but is deprecated with no fix path,
+     and it cannot apply a class — which the Style menu needs. Still tiny on
+     purpose: the server allowlist decides what survives a save, so the
+     toolbar offers only what will. */
   document.querySelectorAll('.rt[contenteditable]').forEach(rt => {
     const target = document.getElementById(rt.dataset.target);
-    const sync = () => { target.value = rt.innerHTML; touch(); };
-    rt.addEventListener('input', sync);
+    const bar = document.querySelector('[data-rt-toolbar="' + rt.dataset.target + '"]');
+    if (!bar || typeof Squire === 'undefined') return;
 
+    // Plain text only, as before: a Word paste is where the junk comes from.
+    // Capture phase, registered before Squire's own capture listener, so
+    // this one runs first and stops it.
     rt.addEventListener('paste', e => {
       e.preventDefault();
-      const text = (e.clipboardData || window.clipboardData).getData('text/plain');
-      document.execCommand('insertText', false, text);
-    });
+      e.stopImmediatePropagation();
+      squire.insertPlainText((e.clipboardData || window.clipboardData).getData('text/plain'), false);
+    }, true);
 
-    const bar = document.querySelector('[data-rt-toolbar="' + rt.dataset.target + '"]');
-    if (!bar) return;
-    bar.addEventListener('click', e => {
-      const btn = e.target.closest('button');
-      if (!btn) return;
-      rt.focus();
-      if (btn.dataset.cmd === 'createLink') {
+    const seed = rt.innerHTML;
+    // blockTag: Squire's default is DIV, which the server blocks — every
+    // paragraph would merge into one on the first save.
+    const squire = new Squire(rt, { blockTag: 'p' });
+    squire.setHTML(seed);
+    const sync = () => { target.value = squire.getHTML(); touch(); };
+    squire.addEventListener('input', sync);
+
+    const toggle = (tag, on, off) => () => squire.hasFormat(tag) ? squire[off]() : squire[on]();
+    const srcBtn = bar.querySelector('[data-cmd=source]');
+    const cmds = {
+      bold:   toggle('b', 'bold', 'removeBold'),
+      italic: toggle('i', 'italic', 'removeItalic'),
+      list:   toggle('ul', 'makeUnorderedList', 'removeList'),
+      link:   () => {
+        if (squire.hasFormat('a')) return squire.removeLink();
         const url = prompt(T.linkPrompt, 'https://');
-        if (url) document.execCommand('createLink', false, url);
-      } else {
-        document.execCommand(btn.dataset.cmd, false, null);
-      }
-      sync();
+        if (url) squire.makeLink(url);
+      },
+      clear:  () => squire.removeAllFormatting(),
+      undo:   () => squire.undo(),
+      redo:   () => squire.redo(),
+      // The mirror textarea IS the source view: unhide it, hide the editor.
+      // Whichever is visible holds the truth; the other catches up on toggle.
+      source: () => {
+        const toSource = target.hidden;
+        if (toSource) target.value = squire.getHTML(); else squire.setHTML(target.value);
+        target.hidden = !toSource;
+        rt.hidden = toSource;
+        target.classList.toggle('rt-source', toSource);
+        srcBtn.classList.toggle('is-active', toSource);
+        bar.querySelectorAll('button:not([data-cmd=source])').forEach(b => { b.disabled = toSource; });
+        (toSource ? target : squire).focus();
+      },
+    };
+    bar.addEventListener('click', e => {
+      const btn = e.target.closest('button[data-cmd]');
+      if (!btn || !cmds[btn.dataset.cmd]) return;
+      cmds[btn.dataset.cmd]();
+      if (btn.dataset.cmd !== 'source') { squire.focus(); sync(); }
     });
   });
 
