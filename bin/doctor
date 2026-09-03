@@ -207,6 +207,20 @@ $knownFieldTypes = array_merge(
     ))
 );
 
+// richtext_classes is a closed set of tags. Fields::styles() drops anything
+// else quietly at save time; this is where the developer hears about it.
+foreach ((array) ($config['richtext_classes'] ?? []) as $tag => $classes) {
+    if (!in_array($tag, Dopamine\FlatCms\Fields::STYLE_TAGS, true)) {
+        $fail(sprintf('richtext_classes: "%s" cannot carry a style — one of %s', $tag, implode(', ', Dopamine\FlatCms\Fields::STYLE_TAGS)));
+        continue;
+    }
+    foreach (array_keys((array) $classes) as $class) {
+        if (!is_string($class) || preg_match('/^[a-z][a-z0-9_-]*$/i', $class) !== 1) {
+            $fail(sprintf('richtext_classes.%s: "%s" is not a class name', $tag, $class));
+        }
+    }
+}
+
 foreach ($componentDirs as $type => $dir) {
     $types[] = $type;
 

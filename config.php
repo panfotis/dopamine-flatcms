@@ -396,6 +396,23 @@ $config = [
      */
     'field_types' => [],
 
+    /*
+     * Named styles a client may apply in richtext — the CKEditor "Styles"
+     * idea without raw classes or inline CSS. Per tag, class => label:
+     *
+     *   'richtext_classes' => [
+     *       'span' => ['highlight' => 'Highlight'],
+     *       'p'    => ['lead' => 'Lead paragraph'],
+     *   ],
+     *
+     * The client picks a label from the panel's Style menu (span entries; a
+     * block class is reachable from the source view), the theme styles the
+     * class once in CSS. On save, `class` survives only as one of these for
+     * that tag; `style` never does. Tags are limited to Fields::STYLE_TAGS —
+     * config can widen the allowlist to a <mark>, never to a <script>.
+     */
+    'richtext_classes' => [],
+
     'cloudflare' => [
         // Purge the edge cache when the client saves.
         'purge_on_save' => env_bool('CF_PURGE_ENABLED'),

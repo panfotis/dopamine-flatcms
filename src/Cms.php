@@ -892,6 +892,7 @@ final class Cms
             'media_bases' => array_values(array_filter($bases)),
             // So a refusal names the field in the language the panel speaks.
             'lang' => $this->lang,
+            'richtext_classes' => Fields::styles($this->config['richtext_classes'] ?? []),
         ];
     }
 

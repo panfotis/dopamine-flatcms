@@ -12,6 +12,7 @@ session_start();
 
 require __DIR__ . '/lib.php';
 
+use Dopamine\FlatCms\Fields;
 use Symfony\Component\Yaml\Yaml;
 
 putenv('AUTH_DEV_BYPASS=1');   // explicit, exactly as .ddev/config.yaml does it
@@ -894,5 +895,34 @@ array_map('unlink', glob(content_root() . '/.revisions/el/_header.*.yml') ?: [])
 rename($backup, $file);
 // Scoped to the fixture page: a suite run must never wipe real revision history.
 array_map('unlink', glob(content_root() . '/.revisions/el/home.*.yml') ?: []);
+
+section('richtext_classes: a named style survives, nothing else on the tag does');
+
+$styled = ['span' => ['highlight' => 'Highlight'], 'script' => ['x' => 'never'], 'p' => ['1bad' => 'no']];
+$rt = static fn (string $html, array $ctx = []): string => (string) Fields::sanitise(['type' => 'richtext'], $html, $ctx);
+$in = '<p class="lead">A <span class="highlight other" style="position:fixed">b</span> <span>c</span></p>'
+    . '<script>1</script><mark>m</mark>';
+
+$out = $rt($in, ['richtext_classes' => $styled]);
+contains($out, '<span class="highlight">b</span>', 'the listed class survives and the unlisted one beside it is cut');
+missing($out, 'style=', 'style never survives, configured or not');
+missing($out, 'class="lead"', 'a class on a tag the site did not list is cut');
+missing($out, '<script', 'script cannot be smuggled in through config');
+missing($out, '<mark', 'nor is a styleable tag allowed until a site lists it');
+missing($rt($in), 'class=', 'with nothing configured no class survives');
+missing($rt($in), '<span', 'and span itself is not a tag');
+
+// Through the save path, so the config demonstrably reaches the sanitiser.
+$styledCfg = test_config();
+$styledCfg['richtext_classes'] = $styled;
+$styledSave = admin_post([
+    'action' => 'save', 'csrf' => 'test-token', 'page' => 'home',
+    'baseline' => (string) hash_file('sha256', $file),
+    'blocks' => ['intro' => ['body' => $in]],
+], $styledCfg);
+ok($styledSave->getStatusCode() === 303, 'the styled save is accepted');
+$introBody = (string) Yaml::parseFile($file)['blocks'][1]['fields']['body'];
+contains($introBody, '<span class="highlight">b</span>', 'and the named style is on disk');
+missing($introBody, 'style=', 'without the inline style');
 
 summary();

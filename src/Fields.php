@@ -187,6 +187,13 @@ final class Fields
     private const ALLOWED_TAGS = ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'ul', 'ol', 'li'];
 
     /**
+     * Tags a site may hang named styles on — `richtext_classes` in config.php.
+     * A closed list: config can add a <mark>, never anything with a script, a
+     * URL or a box of its own.
+     */
+    public const STYLE_TAGS = ['span', 'p', 'mark', 's', 'small', 'sub', 'sup', 'blockquote'];
+
+    /**
      * Elements whose text content is code rather than prose, and which the
      * sanitiser will not remove for us — see rich().
      */
@@ -326,7 +333,7 @@ final class Fields
 
         return match ($type) {
             'textarea' => self::plain($value, $def['max'] ?? null, true),
-            'richtext' => self::rich($value),
+            'richtext' => self::rich($value, $context),
             'image'    => self::image($def, $raw, $context),
             'media'    => self::mediaPath($value, (array) ($context['media_bases'] ?? [])),
             'link'     => self::linkMap($def, $raw, $context),
@@ -646,31 +653,76 @@ final class Fields
      * the whole selection in <b><span>, and dropping unknown elements with
      * their children would silently delete the client's text.
      */
-    private static function sanitizer(): HtmlSanitizer
+    /**
+     * `richtext_classes` from config as the sanitiser and the panel both read
+     * it: tag => [class => label], with tags outside STYLE_TAGS and class
+     * names that are not plain identifiers dropped. bin/doctor reports what
+     * was dropped; here it is simply not allowed.
+     *
+     * @return array<string, array<string, string>>
+     */
+    public static function styles(mixed $raw): array
     {
-        static $sanitizer = null;
+        $out = [];
+        foreach (is_array($raw) ? $raw : [] as $tag => $classes) {
+            if (!in_array($tag, self::STYLE_TAGS, true) || !is_array($classes)) {
+                continue;
+            }
+            foreach ($classes as $class => $label) {
+                if (is_string($class) && preg_match('/^[a-z][a-z0-9_-]*$/i', $class) === 1) {
+                    $out[$tag][$class] = (string) $label;
+                }
+            }
+        }
 
-        return $sanitizer ??= new HtmlSanitizer(
-            array_reduce(
-                self::ALLOWED_TAGS,
-                static fn (HtmlSanitizerConfig $c, string $tag): HtmlSanitizerConfig => $c->allowElement($tag),
-                (new HtmlSanitizerConfig())
-                    ->defaultAction(HtmlSanitizerAction::Block)
-                    ->allowElement('a', ['href'])
-                    ->allowLinkSchemes(['http', 'https', 'mailto', 'tel'])
-                    ->allowRelativeLinks()
-                    // We already cut the value to RICHTEXT_LIMIT *characters*;
-                    // this is the same ceiling in bytes, so it can only ever
-                    // fire on input our own guard failed to cut. It matters
-                    // that it never fires: on overflow the sanitiser returns an
-                    // empty string, which would silently erase the field.
-                    ->withMaxInputLength(self::RICHTEXT_LIMIT * 4)
-            )
-        );
+        return $out;
     }
 
-    private static function rich(string $v): string
+    /**
+     * @param array<string, array<string, string>> $styles
+     */
+    private static function sanitizer(array $styles): HtmlSanitizer
     {
+        // Keyed by the style set, not a bare singleton: under a persistent
+        // worker the first site's allowlist would otherwise serve every site.
+        static $built = [];
+        $key = (string) json_encode($styles);
+        if (isset($built[$key])) {
+            return $built[$key];
+        }
+
+        $config = array_reduce(
+            self::ALLOWED_TAGS,
+            static fn (HtmlSanitizerConfig $c, string $tag): HtmlSanitizerConfig => $c->allowElement($tag),
+            (new HtmlSanitizerConfig())
+                ->defaultAction(HtmlSanitizerAction::Block)
+                ->allowElement('a', ['href'])
+                ->allowLinkSchemes(['http', 'https', 'mailto', 'tel'])
+                ->allowRelativeLinks()
+                // We already cut the value to RICHTEXT_LIMIT *characters*;
+                // this is the same ceiling in bytes, so it can only ever
+                // fire on input our own guard failed to cut. It matters
+                // that it never fires: on overflow the sanitiser returns an
+                // empty string, which would silently erase the field.
+                ->withMaxInputLength(self::RICHTEXT_LIMIT * 4)
+        );
+        // After the base list, because allowElement() replaces: a styled <p>
+        // must end up with `class`, not without it. Which classes is decided
+        // in rich() — the sanitiser only knows the attribute exists.
+        foreach (array_keys($styles) as $tag) {
+            $config = $config->allowElement($tag, ['class']);
+        }
+
+        return $built[$key] = new HtmlSanitizer($config);
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private static function rich(string $v, array $context = []): string
+    {
+        $styles = self::styles($context['richtext_classes'] ?? []);
+
         if (mb_strlen($v) > self::RICHTEXT_LIMIT) {
             $v = mb_substr($v, 0, self::RICHTEXT_LIMIT);
         }
@@ -694,9 +746,22 @@ final class Fields
             }
         });
 
-        $v = self::sanitizer()->sanitize($v);
+        $v = self::sanitizer($styles)->sanitize($v);
 
-        $v = self::withDom($v, static function (\Dom\HTMLDocument $doc): void {
+        $v = self::withDom($v, static function (\Dom\HTMLDocument $doc) use ($styles): void {
+            // A class survives only as one of the site's named styles for that
+            // tag. A Word paste or a source-view edit loses everything else —
+            // and `style` was never allowed in, configured or not.
+            foreach ($styles as $tag => $classes) {
+                foreach ($doc->getElementsByTagName($tag) as $el) {
+                    $keep = array_intersect(
+                        preg_split('/\s+/', trim((string) $el->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY) ?: [],
+                        array_keys($classes)
+                    );
+                    $keep === [] ? $el->removeAttribute('class') : $el->setAttribute('class', implode(' ', $keep));
+                }
+            }
+
             // The sanitiser has already dropped hostile schemes. link() adds
             // the rules it does not have — protocol-relative and backslash
             // URLs, and upgrading a bare domain — so a client typing
