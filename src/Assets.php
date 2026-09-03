@@ -457,30 +457,47 @@ final class Assets
      */
     private static function minifyCss(string $css): string
     {
-        // Comments and strings in ONE alternation — leftmost match wins, so an
-        // apostrophe inside a comment can never open a string and a "/*"
-        // inside a string can never open a comment. Two separate passes get
-        // exactly that wrong. Comments drop; strings park verbatim behind
-        // placeholders so nothing below can touch `content: "a  b"`.
-        $strings = [];
-        $css = (string) preg_replace_callback(
-            '#/\*.*?\*/|"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'#s',
-            static function (array $m) use (&$strings): string {
-                if (str_starts_with($m[0], '/*')) {
-                    return '';
-                }
-                $strings[] = $m[0];
+        // Every preg_* returns null past pcre.backtrack_limit, and (string)
+        // null is '' — which head() reads as "nothing to emit". A gulp inline
+        // sourcemap (one 1 MB comment) once dropped a site's whole CSS tier
+        // that way, silently, with bin/doctor green. Two defences: the comment
+        // branch below cannot backtrack, and a failure anyway serves the file
+        // unminified rather than not at all.
+        $ok = static fn (?string $out): string => $out ?? throw new \RuntimeException(preg_last_error_msg());
 
-                return "\x01" . (count($strings) - 1) . "\x01";
-            }, $css);
-        $css = (string) preg_replace('/\s+/', ' ', $css);
-        // Only around punctuation that never needs a space. Not after ':' —
-        // `.a :hover` and `.a:hover` are different selectors.
-        $css = (string) preg_replace('/ ?([{};,]) ?/', '$1', $css);
-        $css = str_replace(';}', '}', $css);
+        try {
+            // Comments and strings in ONE alternation — leftmost match wins, so
+            // an apostrophe inside a comment can never open a string and a
+            // "/*" inside a string can never open a comment. Two separate
+            // passes get exactly that wrong. Comments drop; strings park
+            // verbatim behind placeholders so nothing below can touch
+            // `content: "a  b"`. The comment body is the classic
+            // `[^*]*\*+(?:[^/*][^*]*\*+)*` — linear, unlike a lazy `.*?`, which
+            // costs one backtrack per byte and dies at a megabyte.
+            $strings = [];
+            $css = $ok(preg_replace_callback(
+                '#/\*[^*]*\*+(?:[^/*][^*]*\*+)*/|"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'#s',
+                static function (array $m) use (&$strings): string {
+                    if (str_starts_with($m[0], '/*')) {
+                        return '';
+                    }
+                    $strings[] = $m[0];
 
-        return trim((string) preg_replace_callback('/\x01(\d+)\x01/',
-            static fn (array $m): string => $strings[(int) $m[1]], $css));
+                    return "\x01" . (count($strings) - 1) . "\x01";
+                }, $css));
+            $css = $ok(preg_replace('/\s+/', ' ', $css));
+            // Only around punctuation that never needs a space. Not after ':' —
+            // `.a :hover` and `.a:hover` are different selectors.
+            $css = $ok(preg_replace('/ ?([{};,]) ?/', '$1', $css));
+            $css = str_replace(';}', '}', $css);
+
+            return trim($ok(preg_replace_callback('/\x01(\d+)\x01/',
+                static fn (array $m): string => $strings[(int) $m[1]], $css)));
+        } catch (\RuntimeException $e) {
+            error_log('[dopamine-flatcms] assets: CSS served unminified (' . $e->getMessage() . ')');
+
+            return $css;
+        }
     }
 
     /** @param array<string, mixed> $attrs */

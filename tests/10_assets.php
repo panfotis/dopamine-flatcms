@@ -83,7 +83,11 @@ register_shutdown_function(static function () use ($siteDir): void {
 // comments would be swallowed with it. Regression for exactly that bug.
 file_put_contents($siteDir . '/assets/css/site.css',
     "/* strip me — it's a comment */\n.sitemark{color:red}\n/* and it's another */\n"
-    . ".q::before{ content: \"a  b\" ;\n  width: calc(100% - 2rem) }\n");
+    . ".q::before{ content: \"a  b\" ;\n  width: calc(100% - 2rem) }\n"
+    // A gulp inline sourcemap: one comment past pcre.backtrack_limit. The lazy
+    // comment regex this replaced returned null on it, (string) null is '',
+    // and head() dropped the whole site tier without a word.
+    . "/*# sourceMappingURL=data:application/json;base64," . str_repeat('A', 1_500_000) . " */\n");
 // fakelib stands in for a self-hosted GSAP: a UMD-style file that resolves its
 // global via top-level `this`, which only works OUTSIDE the DOMContentLoaded
 // wrapper — plus a "</script" in a string to prove escaping still applies.
@@ -167,6 +171,7 @@ ok(substr_count($html, '<style>') >= 3, 'one <style> per contributing file, not 
 section('Inlined CSS is minified; the file on disk stays the readable copy');
 
 missing($html, 'strip me', 'comments are stripped');
+missing($html, 'sourceMappingURL', 'a megabyte inline sourcemap is a comment like any other');
 contains($html, '.sitemark{color:red}.q::before{content: "a  b";width: calc(100% - 2rem)}',
     'whitespace collapses, while quoted strings and calc() operator spacing survive byte-for-byte');
 
