@@ -521,7 +521,7 @@ foreach ($externals as [$who, $kind, $url, $attrs]) {
     $seenUrl[$url] ??= $shape;
 
     if (($attrs['integrity'] ?? '') === '') {
-        $warn(sprintf('%s: %s has no integrity hash — pin to a tag and add one', $who, $url));
+        $warn(sprintf('%s: %s has no integrity hash — pin to a tag and add one: curl -s URL | openssl dgst -sha384 -binary | openssl base64 -A', $who, $url));
     }
     if (($attrs['async'] ?? false) === true) {
         $hasAsync = true;

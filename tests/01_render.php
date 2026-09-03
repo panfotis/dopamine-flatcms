@@ -27,6 +27,9 @@ $page = $cms->content->findBySlug('/');
 ok($page !== null, 'home page resolved from slug /');
 $html = $cms->renderPage($page);
 contains($html, '<title>Αρχική — Demo Πελάτη</title>', 'title rendered');
+$branded = $cms->renderPage(['id' => 'b', 'title' => 'B', 'slug' => '/b', 'blocks' => [],
+    'seo' => ['title' => 'Φρένα | Demo Πελάτη']]);
+contains($branded, '<title>Φρένα | Demo Πελάτη</title>', 'an SEO title that already carries the brand is not suffixed again');
 // Read off the page, never hardcoded. What is under test is that the value
 // reaches the markup - tying that to a particular sentence of demo copy means
 // every edit from the panel is a failing suite.
