@@ -90,6 +90,7 @@ return [
     'edit.move_later' => 'Later',
     'edit.poster' => 'Poster image',
     'edit.poster_hint' => 'Shown before the video starts.',
+    'edit.focal_hint' => 'Click the thumbnail on the part that must stay visible when the image is cropped.',
     'edit.stored_as' => 'Stored: %s / %s',
     'edit.unsaved' => 'You have unsaved changes.',
 
@@ -182,6 +183,7 @@ return [
     // ── Field labels the engine owns ────────────────────────────────────────
     'field.image' => 'Image',
     'field.alt' => 'Image description',
+    'field.focal' => 'Focal point',
     'field.alt_hint' => 'What the image shows, in one sentence. Read aloud to anyone using a screen reader, shown in its place if it does not load, and read by Google.',
     'field.link_page' => 'Page',
     'field.link_url' => 'Or a custom address',

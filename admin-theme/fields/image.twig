@@ -3,8 +3,12 @@
    path refuses one without the other, so the form draws them as one panel. #}
 <div class="field-group">
 <div class="media">
+  {# Clicking the thumbnail sets the focal point — the spot a theme keeps
+     in view when it crops. Shown whole (contain) so a click lands where the
+     eye says it does. #}
   <div class="thumb" id="{{ id }}-thumb"
-       style="{% if src %}background-image:url('{{ src }}'){% endif %}"></div>
+       {% if not locked %}data-focal="{{ id }}" title="{{ t('edit.focal_hint') }}"{% endif %}
+       style="{% if src %}background-image:url('{{ src }}'){% endif %}"><span class="focal-dot" hidden></span></div>
   <div class="controls">
     {% if not locked %}
       <input type="file" id="{{ id }}-file" accept="image/jpeg,image/png,image/webp" hidden>
@@ -12,6 +16,7 @@
       <button type="button" class="btn ghost" data-clear="{{ id }}">{{ t('edit.remove') }}</button>
     {% endif %}
     <input type="hidden" id="{{ id }}" name="{{ fname }}[src]" value="{{ src }}">
+    <input type="hidden" id="{{ id }}-focal" name="{{ fname }}[focal]" value="{{ value.focal|default('') }}">
     <p class="path" id="{{ id }}-path">{{ src ?: t('edit.no_image') }}</p>
   </div>
 </div>

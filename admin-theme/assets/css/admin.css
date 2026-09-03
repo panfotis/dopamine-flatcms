@@ -132,6 +132,10 @@
   .media{display:flex;gap:16px;align-items:flex-start}
   .media .thumb{width:120px;height:80px;border:1px solid #cbd5e1;border-radius:var(--radius-sm);
     background:#f1f5f9 center/cover no-repeat;flex:none}
+  /* Focal picking shows the whole image so a click lands where it looks. */
+  .media .thumb[data-focal]{background-size:contain;cursor:crosshair;position:relative}
+  .focal-dot{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;
+             background:#fff;border:2px solid var(--accent);box-shadow:0 0 0 1px #0003;pointer-events:none}
   .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:12px}
   .gallery .tile{margin:0;border:1px solid var(--line-2);border-radius:var(--radius-sm);padding:8px;background:#fff}
   .gallery .tile .thumb{height:96px;border-radius:2px;background:#f1f5f9 center/cover no-repeat}

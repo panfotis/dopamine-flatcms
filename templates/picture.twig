@@ -69,6 +69,10 @@
              above-the-fold image delays LCP, and it is the single most common
              way responsive images are got wrong. #}
          loading="{{ lazy ? 'lazy' : 'eager' }}" decoding="async"
-         {%- if not lazy %} fetchpriority="high"{% endif %}>
+         {%- if not lazy %} fetchpriority="high"{% endif %}
+         {#- The panel's focal point, for wherever a theme crops with
+             object-fit: cover. Validated on save to "N% N%", so it is the one
+             value that may go into a style attribute. -#}
+         {%- if image.focal|default('') %} style="object-position:{{ image.focal }}"{% endif %}>
   </picture>
 {% endif %}

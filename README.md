@@ -236,7 +236,7 @@ fall back to `default` (or an empty string) rather than erroring.
 | `text` | single-line input | plain text, whitespace collapsed, truncated at `max` |
 | `textarea` | multi-line input | plain text, blank lines collapsed |
 | `richtext` | Squire editor: B / I / list / link / undo / redo / HTML source, plus a Style menu when `richtext_classes` is set | only `p br strong b em i u a ul ol li`, all attributes stripped except `href` — and `class`, only as a name listed in `config.richtext_classes` for that tag. `style` never |
-| `image` | thumbnail + upload button + alt input | a map: `src` (must be under `media_bases`), `alt`, and server-derived `width`/`height` |
+| `image` | thumbnail + upload button + alt input; click the thumbnail to set a focal point | a map: `src` (must be under `media_bases`), `alt`, optional `focal` (`"24% 50%"`, rendered as `object-position` for themes that crop with `object-fit: cover`), and server-derived `width`/`height` |
 | `link` | page picker | a page id — the filename. The slug is resolved at render time |
 | `url` | single-line input | an absolute `http(s)` URL, a site-relative path, a fragment, `mailto:` or `tel:`. Everything else becomes empty — the same rule richtext hrefs use |
 | `select` | dropdown | must match a declared option |

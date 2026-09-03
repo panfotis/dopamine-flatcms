@@ -13,6 +13,7 @@ session_start();
 require __DIR__ . '/lib.php';
 
 use Dopamine\FlatCms\Fields;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Yaml\Yaml;
 
 putenv('AUTH_DEV_BYPASS=1');   // explicit, exactly as .ddev/config.yaml does it
@@ -895,6 +896,22 @@ array_map('unlink', glob(content_root() . '/.revisions/el/_header.*.yml') ?: [])
 rename($backup, $file);
 // Scoped to the fixture page: a suite run must never wipe real revision history.
 array_map('unlink', glob(content_root() . '/.revisions/el/home.*.yml') ?: []);
+
+section('An image focal point is "N% N%" or nothing');
+
+$focalSave = static fn (string $focal): Response => admin_post([
+    'action' => 'save', 'csrf' => 'test-token', 'page' => 'home',
+    'baseline' => (string) hash_file('sha256', $file),
+    'blocks' => ['hero' => ['image' => ['src' => $storedImage['src'], 'alt' => 'Εστίαση', 'focal' => $focal]]],
+]);
+$heroImage = static fn (): array => Yaml::parseFile($file)['blocks'][0]['fields']['image'];
+ok($focalSave('24% 50%')->getStatusCode() === 303, 'a focal point saves');
+ok(($heroImage()['focal'] ?? null) === '24% 50%', 'and lands on disk as given');
+$focalSave('150% 50%');
+ok(!isset($heroImage()['focal']), 'out of range is dropped, not clamped, and absent rather than empty on disk');
+$focalSave('24% 50%; background:url(//evil.gr)');
+ok(!isset($heroImage()['focal']), 'anything that is not two percentages never reaches a style attribute');
+ok($heroImage()['width'] === $storedImage['width'], 'while width/height stay server-derived beside it');
 
 section('richtext_classes: a named style survives, nothing else on the tag does');
 

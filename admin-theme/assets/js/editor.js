@@ -163,6 +163,9 @@
         // field with its own preview, so painting the mp4 URL in here would
         // just break the tile.
         if (!data.video) thumb.style.backgroundImage = "url('" + (data.preview || data.url) + "')";
+        // A new picture, a new centre: the old focal point meant a spot on
+        // the old one.
+        thumb.dispatchEvent(new Event('focal:reset'));
         path.textContent = data.url;
         if (alt && !data.video) alt.required = true;
         status.textContent = data.video ? T.videoUploaded : T.imageUploaded;
@@ -181,6 +184,7 @@
     btn.addEventListener('click', () => {
       document.getElementById(id).value = '';
       document.getElementById(id + '-thumb').style.backgroundImage = '';
+      document.getElementById(id + '-thumb').dispatchEvent(new Event('focal:reset'));
       // A video's clear button says "no video"; everything else defaults.
       document.getElementById(id + '-path').textContent = btn.dataset.empty || T.noImage;
       // No image, no alt to demand — same condition the save path uses.
@@ -188,6 +192,49 @@
       if (alt) alt.required = false;
       touch();
     });
+  });
+
+  /* ---- focal point -----------------------------------------------------
+     A click on the thumbnail stores "x% y%" for object-position. The thumb
+     shows the whole image letterboxed, so the click is mapped through the
+     letterbox onto the image itself — otherwise a wide photo in the 3:2 box
+     would put every point a third off. */
+  document.querySelectorAll('[data-focal]').forEach(thumb => {
+    const input = document.getElementById(thumb.dataset.focal + '-focal');
+    const dot = thumb.querySelector('.focal-dot');
+    if (!input || !dot) return;
+
+    // The image's box inside the thumb, once the browser knows its size.
+    const withRect = cb => {
+      const url = (thumb.style.backgroundImage.match(/url\(['"]?(.*?)['"]?\)/) || [])[1];
+      if (!url) return;
+      const img = new Image();
+      img.onload = () => {
+        const box = thumb.getBoundingClientRect();
+        const scale = Math.min(box.width / img.naturalWidth, box.height / img.naturalHeight);
+        const w = img.naturalWidth * scale, h = img.naturalHeight * scale;
+        cb({ left: (box.width - w) / 2, top: (box.height - h) / 2, w, h, box });
+      };
+      img.src = url;
+    };
+    const paint = () => {
+      const m = /^(\d+)% (\d+)%$/.exec(input.value);
+      dot.hidden = true;
+      if (!m) return;
+      withRect(r => {
+        dot.style.left = (r.left + r.w * m[1] / 100) + 'px';
+        dot.style.top = (r.top + r.h * m[2] / 100) + 'px';
+        dot.hidden = false;
+      });
+    };
+    thumb.addEventListener('click', e => withRect(r => {
+      const pct = v => Math.round(Math.min(1, Math.max(0, v)) * 100);
+      input.value = pct((e.clientX - r.box.left - r.left) / r.w) + '% ' + pct((e.clientY - r.box.top - r.top) / r.h) + '%';
+      paint();
+      touch();
+    }));
+    thumb.addEventListener('focal:reset', () => { input.value = ''; paint(); });
+    paint();
   });
 
   /* ---- galleries -------------------------------------------------------

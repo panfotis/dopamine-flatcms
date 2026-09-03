@@ -87,6 +87,11 @@ final class Fields
             'label' => 'field.alt',
             'hint'  => 'field.alt_hint',
         ],
+        // Where the image should stay visible when a theme crops it with
+        // object-fit: cover — "24% 50%", straight into object-position.
+        // Optional, absent means centre, and the derivatives stay width-only:
+        // the browser does the crop, so no pipeline changes hands.
+        'focal' => ['type' => 'focal', 'label' => 'field.focal'],
     ];
 
     /**
@@ -341,6 +346,8 @@ final class Fields
             // of TYPES so a component cannot declare a bare page id and lose
             // the target with it.
             'page'     => self::pageId($value),
+            // Internal, like `media`: only ever the image map's focal point.
+            'focal'    => self::focal($value),
             // The same href rule richtext uses, exposed as a type for the one
             // field that really is a URL the client types. A second URL rule
             // beside link() is how the two would come to disagree.
@@ -370,7 +377,7 @@ final class Fields
      *
      * @param  array<string, mixed> $def
      * @param  array<string, mixed> $context
-     * @return array{src: string, alt: string, width: int, height: int}
+     * @return array{src: string, alt: string, focal?: string, width: int, height: int}
      */
     private static function image(array $def, mixed $raw, array $context): array
     {
@@ -398,7 +405,19 @@ final class Fields
             );
         }
 
+        // Absent rather than '' on disk: every image on every page would
+        // otherwise grow a line that says nothing.
+        if ($out['focal'] === '') {
+            unset($out['focal']);
+        }
+
         return $out + self::dimensions($src, $stored, $context);
+    }
+
+    /** "24% 50%" or nothing — the only shape picture.twig will put in a style attribute. */
+    private static function focal(string $v): string
+    {
+        return preg_match('/^(\d{1,3})% (\d{1,3})%$/', $v, $m) === 1 && (int) $m[1] <= 100 && (int) $m[2] <= 100 ? $v : '';
     }
 
     /**

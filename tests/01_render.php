@@ -27,6 +27,12 @@ $page = $cms->content->findBySlug('/');
 ok($page !== null, 'home page resolved from slug /');
 $html = $cms->renderPage($page);
 contains($html, '<title>Αρχική — Demo Πελάτη</title>', 'title rendered');
+$focal = $cms->renderPage(['id' => 'f', 'title' => 'F', 'slug' => '/f', 'blocks' => [
+    ['id' => 'h', 'type' => 'hero', 'fields' => ['heading' => 'F', 'image' => [
+        'src' => '/uploads/2026/08/pexels-willianjusten-30929497.jpg', 'alt' => 'x', 'focal' => '24% 50%']]],
+]]);
+contains($focal, 'style="object-position:24% 50%"', 'a focal point reaches the <img> as object-position');
+missing($html, 'object-position', 'and an image without one carries no style attribute');
 $branded = $cms->renderPage(['id' => 'b', 'title' => 'B', 'slug' => '/b', 'blocks' => [],
     'seo' => ['title' => 'Φρένα | Demo Πελάτη']]);
 contains($branded, '<title>Φρένα | Demo Πελάτη</title>', 'an SEO title that already carries the brand is not suffixed again');
