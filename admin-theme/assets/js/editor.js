@@ -121,7 +121,8 @@
     btn.addEventListener('click', () => {
       document.getElementById(id).value = '';
       document.getElementById(id + '-thumb').style.backgroundImage = '';
-      document.getElementById(id + '-path').textContent = T.noImage;
+      // A video's clear button says "no video"; everything else defaults.
+      document.getElementById(id + '-path').textContent = btn.dataset.empty || T.noImage;
       // No image, no alt to demand — same condition the save path uses.
       const alt = document.getElementById(id + '-alt');
       if (alt) alt.required = false;

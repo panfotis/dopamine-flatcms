@@ -1,13 +1,16 @@
 {# The clip, its poster and the poster's description are one item. #}
 <div class="field-group">
 <div class="media">
+  {# The poster paints the tile only when there is a clip to stand for: a
+     poster without a video is the poster field's own preview, and painting it
+     here too reads as "video present" beside "no video". #}
   <div class="thumb" id="{{ id }}-thumb"
-       style="{% if value.poster.src|default('') %}background-image:url('{{ value.poster.src }}'){% endif %}"></div>
+       style="{% if value.src|default('') and value.poster.src|default('') %}background-image:url('{{ value.poster.src }}'){% endif %}"></div>
   <div class="controls">
     {% if not locked %}
       <input type="file" id="{{ id }}-file" accept="video/mp4" hidden>
       <button type="button" class="btn ghost" data-upload="{{ id }}">{{ t('edit.change_video') }}</button>
-      <button type="button" class="btn ghost" data-clear="{{ id }}">{{ t('edit.remove') }}</button>
+      <button type="button" class="btn ghost" data-clear="{{ id }}" data-empty="{{ t('edit.no_video') }}">{{ t('edit.remove') }}</button>
     {% endif %}
     <input type="hidden" id="{{ id }}" name="{{ fname }}[src]" value="{{ value.src|default('') }}">
     <p class="path" id="{{ id }}-path">{{ value.src|default('') ?: t('edit.no_video') }}</p>
