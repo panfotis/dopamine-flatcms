@@ -186,6 +186,9 @@
 
   table{width:100%;border-collapse:collapse;background:#fff}
   th,td{text-align:start;padding:16px 24px;border-bottom:1px solid var(--line-2)}
+  /* An actions cell is as wide as its buttons and no wider, so a long Greek
+     slug beside it cannot squeeze View and Edit onto two rows. */
+  td:has(> .btn){white-space:nowrap;width:1%}
   th{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
      background:var(--soft-2);padding-block:12px}
   td strong{font-weight:600}
