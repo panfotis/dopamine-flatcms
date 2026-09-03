@@ -39,7 +39,12 @@ final class Site
 
     public function handle(Request $request): Response
     {
-        $slug = $request->getPathInfo();
+        // getPathInfo() is percent-encoded, stored slugs are literal — so a
+        // Greek slug never matched either spelling of its own URL. Decoded once
+        // here; every lookup below sees the form the YAML is written in, and
+        // localeUrl() re-encodes on the way out.
+        $raw = $request->getPathInfo();
+        $slug = rawurldecode($raw);
 
         $feed = $this->feedFor($slug);
         $page = null;
@@ -53,7 +58,7 @@ final class Site
             [$locale, $path] = $this->cms->localeOf($slug);
             $this->cms->useLocale($locale);
 
-            $redirect = $this->redirectToCanonical($request, $slug);
+            $redirect = $this->redirectToCanonical($request, $raw, $slug);
             if ($redirect !== null) {
                 // Not an early return: a pre-launch domain's redirects must
                 // carry X-Robots-Tag too, and that is applied below. Returning
@@ -119,10 +124,13 @@ final class Site
      * GET and HEAD only — a 301 would turn a POSTed form into a GET and drop
      * the submission on the floor.
      */
-    private function redirectToCanonical(Request $request, string $slug): ?RedirectResponse
+    private function redirectToCanonical(Request $request, string $raw, string $slug): ?RedirectResponse
     {
+        // Compared against the request as sent, not the decoded slug: the
+        // canonical is encoded, so decoded-vs-encoded would 301 every non-ASCII
+        // URL to itself forever.
         $canonical = $this->cms->canonicalPath($slug);
-        if ($slug === $canonical || !$request->isMethodSafe()) {
+        if ($raw === $canonical || !$request->isMethodSafe()) {
             return null;
         }
 

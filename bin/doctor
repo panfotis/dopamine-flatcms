@@ -780,6 +780,11 @@ foreach (glob($pagesDir . '/*.yml') ?: [] as $file) {
         if ($slug === '' || !str_starts_with($slug, '/')) {
             $fail(sprintf('page "%s": slug must start with "/" (got "%s")', $id, $slug));
         }
+        // The request is decoded before lookup, so an encoded slug can never
+        // match again — it was only ever a workaround for that missing decode.
+        if (str_contains($slug, '%')) {
+            $fail(sprintf('page "%s": slug "%s" is percent-encoded — write it literally (%s)', $id, $slug, rawurldecode($slug)));
+        }
         $key = rtrim($slug, '/') ?: '/';
         if (isset($slugs[$key])) {
             // findBySlug returns the first match, so the second page is simply
@@ -787,7 +792,9 @@ foreach (glob($pagesDir . '/*.yml') ?: [] as $file) {
             $fail(sprintf('pages "%s" and "%s" share the slug "%s"', $slugs[$key], $id, $slug));
         }
         $slugs[$key] = $id;
-        $liveUrls[rtrim($cms->localeUrl($slug), '/') ?: '/'] = $localeCode . '/' . $id;
+        // Decoded, like redirects.yml is written, so a Greek `from:` still
+        // finds the Greek page it shadows.
+        $liveUrls[rtrim(rawurldecode($cms->localeUrl($slug)), '/') ?: '/'] = $localeCode . '/' . $id;
     }
 
     $seen = [];
@@ -994,6 +1001,10 @@ if (is_file($redirectFile)) {
         $from = '/' . trim((string) $from, '/');
         $to = (string) $to;
 
+        if (str_contains($from, '%')) {
+            $fail(sprintf('redirect "%s" is percent-encoded — the request is decoded before matching, write it literally', $from));
+        }
+
         if (isset($liveUrls[rtrim($from, '/') ?: '/'])) {
             // The redirect is checked only after findBySlug misses, so this one
             // can never fire — and whoever wrote it believes it does.
@@ -1001,7 +1012,7 @@ if (is_file($redirectFile)) {
         }
 
         $resolved = str_starts_with($to, 'http') ? $to
-            : (str_starts_with($to, '/') ? $to : ($cms->pageUrl($to) ?: null));
+            : (str_starts_with($to, '/') ? $to : (rawurldecode($cms->pageUrl($to)) ?: null));
 
         if ($resolved === null) {
             $fail(sprintf('redirect "%s" points at page id "%s", which does not exist', $from, $to));

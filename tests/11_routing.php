@@ -22,6 +22,7 @@ require __DIR__ . '/lib.php';
 use Dopamine\FlatCms\Cms;
 use Dopamine\FlatCms\Site;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Yaml\Yaml;
 
 putenv('AUTH_DEV_BYPASS=1');
 
@@ -219,6 +220,35 @@ $r = site(
 );
 ok($r->getStatusCode() === 303, 'the post-submit redirect is still a 303');
 ok($r->headers->get('X-Robots-Tag') === $expect, 'and it carries the header too');
+
+// ── Non-ASCII slugs ─────────────────────────────────────────────────────────
+
+section('A Greek slug is written literally and served from its encoded URL');
+
+// Stored the way a human writes it. The browser sends the percent-encoded
+// form; before the decode at the entrypoint neither spelling ever matched.
+file_put_contents(content_root() . '/pages/el/frena.yml', Yaml::dump([
+    'title' => 'Φρένα', 'slug' => '/φρένα-αυτοκινήτων/ποιοι-είμαστε', 'blocks' => [],
+]));
+$redirectsFile = content_root() . '/redirects.yml';
+$redirectsBefore = (string) file_get_contents($redirectsFile);
+file_put_contents($redirectsFile, Yaml::dump(['/παλιά-σελίδα' => 'frena']));
+
+$encoded = '/' . implode('/', array_map(rawurlencode(...), ['φρένα-αυτοκινήτων', 'ποιοι-είμαστε']));
+$r = site_get($encoded);
+ok($r->getStatusCode() === 200, 'the encoded request finds the literal slug: ' . $r->getStatusCode());
+$r = site_get($encoded . '/');
+ok($r->getStatusCode() === 301 && $r->headers->get('Location') === $encoded,
+    'the trailing-slash 301 lands on the encoded canonical, not the raw bytes');
+$r = site_get('/' . rawurlencode('παλιά-σελίδα'));
+ok($r->getStatusCode() === 301 && $r->headers->get('Location') === $encoded,
+    'a literal redirect key matches the encoded request and points at the encoded page');
+contains(site_get('/sitemap.xml')->getContent(), 'https://dopamine-flatcms.ddev.site' . $encoded,
+    'the sitemap carries the encoded URL');
+missing(site_get('/sitemap.xml')->getContent(), 'φρένα', 'and never the raw bytes');
+
+@unlink(content_root() . '/pages/el/frena.yml');
+file_put_contents($redirectsFile, $redirectsBefore);
 
 // ── The generated files ─────────────────────────────────────────────────────
 

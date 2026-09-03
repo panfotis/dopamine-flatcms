@@ -394,7 +394,12 @@ final class Cms
     {
         $prefix = $this->locales()[$locale ?? $this->locale]['prefix'] ?? '';
 
-        return $prefix . '/' . ltrim($slug, '/');
+        // Slugs are stored literally — `/φρένα` — and this is the one place
+        // they become URLs, so it is the one place they are encoded. Per
+        // segment, so the slashes survive.
+        $path = implode('/', array_map(rawurlencode(...), explode('/', ltrim($slug, '/'))));
+
+        return $prefix . '/' . $path;
     }
 
     /**
